@@ -1,0 +1,12 @@
+{
+  "name": "evolve-searcher-universal-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ui/serve.mjs",
+    "test": "node --test ui/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

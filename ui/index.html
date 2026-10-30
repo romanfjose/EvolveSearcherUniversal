@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EvolveSearcher Universal · Read-Only Multi-Lane Hub</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <span class="eyebrow">EVOLVESEARCHER UNIVERSAL · READ-ONLY HUB</span>
+      <h1>All project lanes. Three engines each. One opportunity shelf.</h1>
+    </div>
+    <div class="refresh">
+      <span class="readonly-pill" title="Projects are never modified by this UI">Read-Only Mode</span>
+      <span id="sync" role="status">Connecting…</span>
+      <button id="refresh">Refresh</button>
+    </div>
+  </header>
+
+  <section class="lane-bar" aria-label="Project lane selector">
+    <div class="lane-bar-label">Project Lanes</div>
+    <div id="lanes" class="lane-pills" role="tablist" aria-label="Select project lane"></div>
+  </section>
+
+  <section class="controls" aria-label="SelfEvolve prompt controls">
+    <div class="iteration">
+      <label for="iterations">SelfEvolve Iterations (N)</label>
+      <input id="iterations" type="number" min="1" max="1000" step="1" value="1">
+      <span>Copies prompt for Claude, Gemini, or ChatGPT chat</span>
+    </div>
+    <div id="projects" class="projects"></div>
+  </section>
+
+  <div id="error" role="alert" hidden></div>
+  <div id="format-banner" class="format-banner" role="region" aria-label="Format warnings" hidden></div>
+
+  <nav aria-label="Dashboard views">
+    <button data-tab="leads" aria-selected="true">Opportunities <span id="lead-count" class="count-pill">0</span></button>
+    <button data-tab="files" aria-selected="false">Project Documents</button>
+    <button data-tab="diagnostics" aria-selected="false">Format Diagnostics <span id="diag-count" class="count-pill">0</span></button>
+  </nav>
+
+  <main>
+    <section id="leads" class="workspace">
+      <aside class="lead-list">
+        <div class="filters">
+          <input id="search" type="search" aria-label="Search opportunities" placeholder="Search title, ID, status, lane…">
+          <div>
+            <select id="project-filter" aria-label="Filter architecture">
+              <option value="">All engines</option>
+              <option value="claude">Claude</option>
+              <option value="gemini">Gemini</option>
+              <option value="gpt">ChatGPT</option>
+            </select>
+            <select id="status-filter" aria-label="Filter status">
+              <option value="">All statuses</option>
+              <option value="ready">Ready</option>
+              <option value="try-worthy">Try-worthy</option>
+              <option value="verify">Verify</option>
+              <option value="waiting">Waiting on Commander</option>
+            </select>
+            <select id="sort" aria-label="Sort opportunities">
+              <option value="fit">Highest fit</option>
+              <option value="shared">Shared first</option>
+              <option value="updated">Recently updated</option>
+              <option value="title">Name</option>
+            </select>
+          </div>
+          <div>
+            <label><input id="rejected" type="checkbox"> Include rejected</label>
+            <label><input id="shared" type="checkbox"> Shared only</label>
+            <label><input id="malformed" type="checkbox"> Format issues only</label>
+          </div>
+          <span id="list-count" class="muted"></span>
+        </div>
+        <div id="rows" class="rows" aria-label="Opportunity list"></div>
+      </aside>
+      <section class="detail" aria-label="Opportunity details">
+        <div id="detail">
+          <div class="empty">
+            <h2>Select an opportunity</h2>
+            <p>Assessments with the same opportunity ID, canonical URL, or subject share one row inside their lane. Each architecture keeps its own evidence and conclusions.</p>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="files" class="documents" hidden>
+      <div class="document-controls">
+        <label for="doc-lane-select">Lane</label>
+        <select id="doc-lane-select"></select>
+        <label for="file-select">Document</label>
+        <select id="file-select"><option value="">Select a document…</option></select>
+        <span class="muted">Compare Claude, Gemini, and ChatGPT versions side by side.</span>
+      </div>
+      <div id="file-detail" class="comparison"></div>
+    </section>
+
+    <section id="diagnostics" class="diagnostics-view" hidden>
+      <div class="diag-header">
+        <div>
+          <h2>Read-Only Format Diagnostics</h2>
+          <p class="muted">Projects are never modified by this UI. If an engine outputs an unexpected file or markdown structure, it is flagged below so you can ask an AI to update this frontend parser.</p>
+        </div>
+        <button id="copy-all-diag" class="copy-diag-btn" hidden>Copy AI Frontend Fix Prompt (All Issues)</button>
+      </div>
+      <div id="diag-list" class="diag-list"></div>
+    </section>
+  </main>
+
+  <footer>Strictly read-only universal dashboard. All project folders remain untouched; copy SelfEvolve prompts directly to Claude, Gemini, or ChatGPT.</footer>
+</body>
+</html>

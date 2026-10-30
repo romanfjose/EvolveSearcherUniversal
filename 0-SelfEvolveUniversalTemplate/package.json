@@ -1,0 +1,11 @@
+{
+  "name": "self-evolving-universal-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tools/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

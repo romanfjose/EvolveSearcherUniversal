@@ -1,10 +1,12 @@
 {
-  "name": "evolve-searcher-universal-ui",
-  "private": true,
+  "name": "evolve-searcher-universal",
+  "version": "1.0.0",
+  "description": "Autonomous self-evolving search and discovery framework with Ring-0 verification harnesses, full-tree rollback checkpoints, and multi-engine telemetry.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "start": "node ui/serve.mjs",
-    "test": "node --test ui/*.test.mjs"
+    "test": "node --test ui/*.test.mjs 0-SelfEvolveUniversalTemplate/tools/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

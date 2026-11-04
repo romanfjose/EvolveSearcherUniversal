@@ -1,0 +1,25 @@
+{
+  "name": "llm-app-hardening-kit",
+  "version": "0.1.0",
+  "description": "Zero-dependency guards and a static scanner that harden LLM apps before launch: cost circuit breaker, output sanitizer, and a 12-rule production-failure audit.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": { "types": "./src/index.d.ts", "default": "./src/index.mjs" },
+    "./budget-breaker": "./src/budget-breaker.mjs",
+    "./output-guard": "./src/output-guard.mjs",
+    "./repo-scanner": "./src/repo-scanner.mjs",
+    "./report": "./src/report.mjs"
+  },
+  "bin": { "llm-harden": "bin/llm-harden.mjs" },
+  "files": ["bin", "src", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "node --test",
+    "bench": "node evals/benchmark.mjs",
+    "report": "node evals/benchmark.mjs --report docs/demo-report.html"
+  },
+  "keywords": ["llm", "ai", "security", "static-analysis", "cost", "guardrails", "prompt-injection", "json-repair"],
+  "engines": { "node": ">=20" }
+}

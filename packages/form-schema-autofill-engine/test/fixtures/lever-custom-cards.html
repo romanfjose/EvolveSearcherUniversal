@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-expect-platform="lever">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.eu.lever.co/acme/7c1e/apply"><title>Custom cards</title></head>
+<body>
+<form id="application-form" class="application-form" method="POST">
+  <div class="section application-form">
+    <h4>Additional questions</h4>
+    <input type="hidden" name="cards[5f1d2a][baseTemplate]" value="{}">
+    <ul>
+      <li class="application-question custom-question">
+        <div class="application-label full-width"><div class="text">Are you legally authorized to work in the United Kingdom?<span class="required">✱</span></div></div>
+        <div class="application-field full-width"><ul data-qa="multiple-choice">
+          <li><label><input type="radio" name="cards[5f1d2a][field0]" value="Yes" data-expect="work_authorization" data-expect-checked="true"><span class="application-answer-alternative">Yes</span></label></li>
+          <li><label><input type="radio" name="cards[5f1d2a][field0]" value="No"><span class="application-answer-alternative">No</span></label></li>
+        </ul></div>
+      </li>
+      <li class="application-question custom-question">
+        <div class="application-label full-width"><div class="text">Will you now or in the future require visa sponsorship?<span class="required">✱</span></div></div>
+        <div class="application-field full-width"><ul data-qa="multiple-choice">
+          <li><label><input type="radio" name="cards[5f1d2a][field1]" value="Yes" data-expect="sponsorship"><span class="application-answer-alternative">Yes</span></label></li>
+          <li><label><input type="radio" name="cards[5f1d2a][field1]" value="No" data-expect-checked="true"><span class="application-answer-alternative">No</span></label></li>
+        </ul></div>
+      </li>
+      <li class="application-question custom-question">
+        <div class="application-label full-width"><div class="text">What excites you about this role?</div></div>
+        <div class="application-field full-width"><textarea name="cards[5f1d2a][field2]" class="card-field-input" data-expect="-" data-expect-value=""></textarea></div>
+      </li>
+      <li class="application-question custom-question">
+        <div class="application-label full-width"><div class="text">Which of these languages do you use professionally?</div></div>
+        <div class="application-field full-width"><ul data-qa="checkboxes">
+          <li><label><input type="checkbox" name="cards[5f1d2a][field3]" value="Python" data-expect="-"><span>Python</span></label></li>
+          <li><label><input type="checkbox" name="cards[5f1d2a][field3]" value="Rust"><span>Rust</span></label></li>
+          <li><label><input type="checkbox" name="cards[5f1d2a][field3]" value="Go"><span>Go</span></label></li>
+        </ul></div>
+      </li>
+      <li class="application-question custom-question">
+        <div class="application-label full-width"><div class="text">What is your notice period?</div></div>
+        <div class="application-field full-width"><input type="text" name="cards[5f1d2a][field4]" class="card-field-input" data-expect="notice_period" data-expect-value="1 month"></div>
+      </li>
+    </ul>
+  </div>
+  <button type="submit" id="btn-submit" class="template-btn-submit" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

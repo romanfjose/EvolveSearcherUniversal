@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>Phone and pronouns</title></head>
+<body>
+<div class="ashby-application-form-container">
+  <form>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_name">Legal Name</label><input id="_systemfield_name" type="text" data-expect="full_name" data-expect-value="Ada Lovelace"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="7a1b-pref">Preferred First Name</label><input id="7a1b-pref" type="text" data-expect="preferred_name" data-expect-value="Ada"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="7a1b-pron">Pronouns</label><input id="7a1b-pron" type="text" placeholder="e.g. she/her" data-expect="pronouns" data-expect-value="she/her"></div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="_systemfield_phone">Phone</label>
+      <div class="_phoneRow_9k2m1_4">
+        <select aria-label="Country code" class="_countrySelect_9k2m1_12" data-expect="phone_country_code" data-expect-value="GB">
+          <option value="US">🇺🇸 +1</option><option value="CA">🇨🇦 +1</option><option value="GB">🇬🇧 +44</option><option value="IE">🇮🇪 +353</option><option value="DE">🇩🇪 +49</option>
+        </select>
+        <input id="_systemfield_phone" type="tel" data-expect="phone" data-expect-value="7700 900123">
+      </div>
+    </div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

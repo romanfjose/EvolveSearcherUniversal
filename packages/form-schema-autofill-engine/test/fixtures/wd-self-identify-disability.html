@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/Austin/Staff-Engineer_R-10234/apply/applyManually"><title>Self Identify</title></head>
+<body>
+<div data-automation-id="applyFlowSelfIdentifyPage">
+  <h2 data-automation-id="applyFlowPageTitle">Self Identify</h2>
+  <h3>Voluntary Self-Identification of Disability</h3>
+  <p>Form CC-305 · OMB Control Number 1250-0005 · Expires 04/30/2026</p>
+  <div data-automation-id="formField-name"><label for="selfIdentifiedDisabilityData--name">Name<abbr title="required">*</abbr></label><input type="text" id="selfIdentifiedDisabilityData--name" data-expect="signature" data-expect-value=""></div>
+  <div data-automation-id="formField-dateSignedOn"><label>Date<abbr title="required">*</abbr></label><div data-automation-id="dateInputWrapper"><input type="text" id="selfIdentifiedDisabilityData--dateSignedOn-dateSectionMonth-input" aria-label="Month" data-expect="signature" data-expect-value=""><input type="text" id="selfIdentifiedDisabilityData--dateSignedOn-dateSectionDay-input" aria-label="Day" data-expect="signature"><input type="text" id="selfIdentifiedDisabilityData--dateSignedOn-dateSectionYear-input" aria-label="Year" data-expect="signature"></div></div>
+  <div data-automation-id="formField-disabilityStatus" role="group" aria-labelledby="disability-question">
+    <p id="disability-question">Please check one of the boxes below:</p>
+    <div><input type="checkbox" id="disabilityStatus-yes" name="disabilityStatus" data-expect="eeo.disability" data-expect-checked="false"><label for="disabilityStatus-yes">Yes, I have a disability, or have had one in the past</label></div>
+    <div><input type="checkbox" id="disabilityStatus-no" name="disabilityStatus"><label for="disabilityStatus-no">No, I do not have a disability and have not had one in the past</label></div>
+    <div><input type="checkbox" id="disabilityStatus-decline" name="disabilityStatus" data-expect-checked="true"><label for="disabilityStatus-decline">I do not want to answer</label></div>
+  </div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="advance">Save and Continue</button>
+  </div>
+</div>
+</body>
+</html>

@@ -101,3 +101,12 @@ Throughput comes from one run on Node 22 in a cloud container, so timings depend
 | `assay` (full Assayer, per dossier) | 2,000 | 362.6 | 5,516 |
 | `lintCorpus` (port, whole folder) | 2,000 | 19.9 | 100,732 |
 | `lintLeads` (canonical, filesystem) | 2,000 | 74.0 | 27,023 |
+
+## Companion Packages (packages/)
+
+| Package | Description | Demo / Docs |
+|---|---|---|
+| [packages/llm-app-hardening-kit](packages/llm-app-hardening-kit/README.md) | Cost circuit breaker (5h/7d rolling windows), streaming/batch output guard, and llm-harden static scanner CLI (12 rules, 25 broken/hardened fixture pairs) | [docs/demo-report.html](packages/llm-app-hardening-kit/docs/demo-report.html) |
+| [packages/webchat-batch-packer](packages/webchat-batch-packer/README.md) | Zero-token prompt packet compiler, deterministic HTML noise stripper (90–98.5% reduction), and strict multi-file reply unpacker | [docs/index.html](packages/webchat-batch-packer/docs/index.html) |
+| [packages/multi-model-routing-bench](packages/multi-model-routing-bench/README.md) | Normalized Cost-Unit (CU) routing calculator, multi-cycle studio simulator, and failure-mode evaluation harness | [docs/index.html](packages/multi-model-routing-bench/docs/index.html) |
+| [packages/form-schema-autofill-engine](packages/form-schema-autofill-engine/README.md) | Pure-JS DOM form classifier, ATS adapters (Greenhouse, Lever, Ashby, Workday, Generic), and 55 HTML replay fixtures | [docs/index.html](packages/form-schema-autofill-engine/docs/index.html) |

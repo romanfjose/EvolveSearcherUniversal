@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>Dates and salary</title></head>
+<body>
+<div class="ashby-application-form-container">
+  <form>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="f1-start">When is the earliest you could start?</label><input id="f1-start" type="date" data-expect="start_date" data-expect-value="2027-01-04"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="f1-salary">What are your salary expectations (GBP)?</label><input id="f1-salary" type="text" data-expect="salary" data-expect-value="£120,000"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="f1-notice">Notice period</label>
+      <select id="f1-notice" data-expect="notice_period" data-expect-value="1m"><option value="">Select...</option><option value="0">Immediately</option><option value="2w">2 weeks</option><option value="1m">1 month</option><option value="3m">3 months</option></select></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="f1-dob">Date of birth</label><input id="f1-dob" type="date" data-expect="dob" data-expect-value=""></div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

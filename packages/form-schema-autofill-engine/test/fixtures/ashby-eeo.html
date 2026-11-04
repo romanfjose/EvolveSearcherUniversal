@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>EEO survey</title></head>
+<body>
+<div class="ashby-application-form-container">
+  <form>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_name">Name</label><input id="_systemfield_name" type="text" data-expect="full_name"></div>
+    <div class="ashby-eeoc-form">
+      <h3 class="ashby-application-form-section-header-title">U.S. Equal Employment Opportunity Information</h3>
+      <p>We are an equal opportunity employer. Submission of this information is voluntary.</p>
+      <fieldset class="_fieldset_1t5ft_1"><legend class="ashby-application-form-question-title">Gender</legend>
+        <label><input type="radio" name="eeo_gender" value="Male" data-expect="eeo.gender">Male</label>
+        <label><input type="radio" name="eeo_gender" value="Female">Female</label>
+        <label><input type="radio" name="eeo_gender" value="Decline to self-identify" data-expect-checked="true">Decline to self-identify</label>
+      </fieldset>
+      <fieldset class="_fieldset_1t5ft_1"><legend class="ashby-application-form-question-title">Race</legend>
+        <label><input type="radio" name="eeo_race" value="Hispanic or Latino" data-expect="eeo.race">Hispanic or Latino</label>
+        <label><input type="radio" name="eeo_race" value="White (Not Hispanic or Latino)">White (Not Hispanic or Latino)</label>
+        <label><input type="radio" name="eeo_race" value="Black or African American">Black or African American</label>
+        <label><input type="radio" name="eeo_race" value="Asian">Asian</label>
+        <label><input type="radio" name="eeo_race" value="Decline to self-identify" data-expect-checked="true">Decline to self-identify</label>
+      </fieldset>
+      <fieldset class="_fieldset_1t5ft_1"><legend class="ashby-application-form-question-title">Veteran Status</legend>
+        <label><input type="radio" name="eeo_veteran" value="I am a veteran" data-expect="eeo.veteran">I am a veteran</label>
+        <label><input type="radio" name="eeo_veteran" value="I am not a veteran">I am not a veteran</label>
+        <label><input type="radio" name="eeo_veteran" value="Decline to self-identify" data-expect-checked="true">Decline to self-identify</label>
+      </fieldset>
+    </div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

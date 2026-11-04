@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Before vs. After Production Hardening</title>
+<style>
+:root{--bg:#0b0d12;--panel:#12151c;--panel2:#181c25;--line:#252a36;--text:#e6e8ee;--muted:#9aa3b5;--good:#3ecf8e;--warn:#f0b429;--bad:#f2555a;--accent:#7aa2ff;
+--critical:#f2555a;--high:#f2884b;--medium:#f0b429;--low:#8fa3c7;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:32px 16px 64px}
+header{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:space-between;margin-bottom:28px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}h2{font-size:17px;margin:0 0 14px}.muted,.sub{color:var(--muted)}
+.hero{display:flex;gap:12px;align-items:center}.big{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.arrow{color:var(--muted);font-size:22px}.delta{font-size:13px;padding:2px 8px;border-radius:99px;background:#163a2b;color:var(--good)}
+.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px}
+.row{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:16px;padding:12px 0;border-top:1px solid var(--line)}.row:first-of-type{border-top:0}
+.label{font-weight:600}.sub{display:block;font-weight:400;font-size:13px}
+.bar{display:grid;grid-template-columns:52px 1fr 36px;align-items:center;gap:10px;margin:3px 0}.tag{font-size:12px;color:var(--muted)}
+.track{height:10px;background:var(--panel2);border-radius:99px;overflow:hidden}.fill{height:100%;border-radius:99px;transition:width .6s}
+.fill.good{background:var(--good)}.fill.warn{background:var(--warn)}.fill.bad{background:var(--bad)}.bar b{text-align:right;font-variant-numeric:tabular-nums}
+.pills{display:flex;flex-wrap:wrap;gap:6px}.pill{font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);background:var(--panel2)}
+.sev-critical{color:var(--critical)}.sev-high{color:var(--high)}.sev-medium{color:var(--medium)}.sev-low{color:var(--low)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.stat{background:var(--panel2);border-radius:10px;padding:14px}.stat .n{font-size:28px;font-weight:700}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+button,select,input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+button[aria-pressed=true]{border-color:var(--accent);background:#1b2540}input{flex:1;min-width:160px}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+details{border-top:1px solid var(--line);padding:10px 0}summary{cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;list-style:none}
+summary::-webkit-details-marker{display:none}code,pre{font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.loc{color:var(--muted);font-size:13px}pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+.fix{border-left:3px solid var(--good);padding-left:10px;margin:8px 0 0}.empty{color:var(--good);padding:16px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500}
+footer{color:var(--muted);font-size:13px;text-align:center}
+@media (max-width:640px){.row,.grid2{grid-template-columns:1fr}.big{font-size:36px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1>Before vs. After Production Hardening</h1><div class="muted">Sample app: Next.js support agent with tool calls, Stripe refunds and a billing webhook</div></div>
+  <div class="hero" aria-label="Overall score">
+    <span class="big bad">35</span>
+    <span class="arrow">→</span><span class="big good">100</span><span class="delta">+65 pts</span>
+  </div>
+</header>
+
+<section>
+  <h2>Production readiness scorecard</h2>
+  <div class="row">
+      <div class="label">Cost Ceiling Protection<span class="sub">2 findings before</span></div>
+      <div class="bars">
+        <div class="bar"><span class="tag">Before</span><div class="track"><div class="fill bad" style="width:35%"></div></div><b class="bad">35</b></div>
+        <div class="bar"><span class="tag">After</span><div class="track"><div class="fill good" style="width:100%"></div></div><b class="good">100</b></div>
+      </div></div><div class="row">
+      <div class="label">Prompt/Key Leak Surface<span class="sub">2 findings before</span></div>
+      <div class="bars">
+        <div class="bar"><span class="tag">Before</span><div class="track"><div class="fill bad" style="width:0%"></div></div><b class="bad">0</b></div>
+        <div class="bar"><span class="tag">After</span><div class="track"><div class="fill good" style="width:100%"></div></div><b class="good">100</b></div>
+      </div></div><div class="row">
+      <div class="label">Tool-Call Injection<span class="sub">1 finding before</span></div>
+      <div class="bars">
+        <div class="bar"><span class="tag">Before</span><div class="track"><div class="fill warn" style="width:50%"></div></div><b class="warn">50</b></div>
+        <div class="bar"><span class="tag">After</span><div class="track"><div class="fill good" style="width:100%"></div></div><b class="good">100</b></div>
+      </div></div><div class="row">
+      <div class="label">Schema Reliability<span class="sub">1 finding before</span></div>
+      <div class="bars">
+        <div class="bar"><span class="tag">Before</span><div class="track"><div class="fill warn" style="width:70%"></div></div><b class="warn">70</b></div>
+        <div class="bar"><span class="tag">After</span><div class="track"><div class="fill good" style="width:100%"></div></div><b class="good">100</b></div>
+      </div></div><div class="row">
+      <div class="label">Idempotency &amp; Webhook Integrity<span class="sub">2 findings before</span></div>
+      <div class="bars">
+        <div class="bar"><span class="tag">Before</span><div class="track"><div class="fill bad" style="width:20%"></div></div><b class="bad">20</b></div>
+        <div class="bar"><span class="tag">After</span><div class="track"><div class="fill good" style="width:100%"></div></div><b class="good">100</b></div>
+      </div></div>
+  <p class="muted" style="margin:12px 0 0;font-size:13px">Score per category = 100 − Σ severity weight of its findings (critical 50, high 30, medium 15, low 5), floored at 0. Overall = mean of categories.</p>
+</section>
+
+<section class="grid2">
+  <div class="stat"><div class="muted">Before · 4 files</div><div class="n bad">8</div><div class="pills"><span class="pill sev-critical">5 critical</span><span class="pill sev-high">2 high</span><span class="pill sev-medium">1 medium</span><span class="pill sev-low">0 low</span></div></div>
+  <div class="stat"><div class="muted">After · 4 files</div><div class="n good">0</div><div class="pills"><span class="pill sev-critical">0 critical</span><span class="pill sev-high">0 high</span><span class="pill sev-medium">0 medium</span><span class="pill sev-low">0 low</span></div></div>
+</section>
+
+<section>
+  <h2>Findings</h2>
+  <div class="controls" role="toolbar" aria-label="Filters">
+    <button data-side="before" aria-pressed="true">Before</button>
+    <button data-side="after" aria-pressed="false">After</button>
+    <select id="sev" aria-label="Severity"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
+    <select id="cat" aria-label="Category"><option value="">All categories</option><option value="cost">Cost Ceiling Protection</option><option value="leak">Prompt/Key Leak Surface</option><option value="injection">Tool-Call Injection</option><option value="schema">Schema Reliability</option><option value="idempotency">Idempotency &amp; Webhook Integrity</option></select>
+    <input id="q" type="search" placeholder="Filter by file, rule or text" aria-label="Search findings">
+  </div>
+  <div id="list" aria-live="polite"></div>
+</section>
+
+<section>
+  <h2>Rule catalog</h2>
+  <table><thead><tr><th>Rule</th><th>Detects</th><th>Severity</th><th>Category</th></tr></thead><tbody>
+  <tr><td><code>HK001</code></td><td>LLM provider key exposed to the browser bundle</td><td class="sev-critical">critical</td><td>Prompt/Key Leak Surface</td></tr><tr><td><code>HK002</code></td><td>Hard-coded LLM provider secret</td><td class="sev-critical">critical</td><td>Prompt/Key Leak Surface</td></tr><tr><td><code>HK003</code></td><td>Provider SDK shipped to the browser</td><td class="sev-high">high</td><td>Prompt/Key Leak Surface</td></tr><tr><td><code>HK004</code></td><td>Unbounded agent loop (no max turns or cost ceiling)</td><td class="sev-critical">critical</td><td>Cost Ceiling Protection</td></tr><tr><td><code>HK005</code></td><td>Model call without an output token cap</td><td class="sev-medium">medium</td><td>Cost Ceiling Protection</td></tr><tr><td><code>HK006</code></td><td>Raw provider fetch without timeout</td><td class="sev-medium">medium</td><td>Cost Ceiling Protection</td></tr><tr><td><code>HK007</code></td><td>Webhook handler without signature verification</td><td class="sev-critical">critical</td><td>Idempotency &amp; Webhook Integrity</td></tr><tr><td><code>HK008</code></td><td>Shell command built from tool-call input</td><td class="sev-critical">critical</td><td>Tool-Call Injection</td></tr><tr><td><code>HK009</code></td><td>SQL built from tool-call input</td><td class="sev-critical">critical</td><td>Tool-Call Injection</td></tr><tr><td><code>HK010</code></td><td>Model output executed as code</td><td class="sev-critical">critical</td><td>Tool-Call Injection</td></tr><tr><td><code>HK011</code></td><td>Unguarded JSON.parse of model output</td><td class="sev-high">high</td><td>Schema Reliability</td></tr><tr><td><code>HK012</code></td><td>Side-effecting payment call without idempotency key</td><td class="sev-high">high</td><td>Idempotency &amp; Webhook Integrity</td></tr>
+  </tbody></table>
+</section>
+<footer>llm-app-hardening-kit · deterministic static analysis</footer>
+</main>
+<script type="application/json" id="data">{"before":{"root":"evals/sample-app/before","filesScanned":4,"score":{"categories":{"cost":35,"leak":0,"injection":50,"schema":70,"idempotency":20},"overall":35},"summary":{"total":8,"bySeverity":{"critical":5,"high":2,"medium":1,"low":0},"byRule":{"HK001":2,"HK004":1,"HK005":1,"HK011":1,"HK007":1,"HK009":1,"HK012":1}},"findings":[{"rule":"HK001","severity":"critical","category":"leak","path":".env.local","line":1,"col":1,"snippet":"NEXT_PUBLIC_OPENAI_API_KEY=sk-proj-Q8vX2mN4kL7pR1tY6wZ3bC5dF9gH0jK2","message":"NEXT_PUBLIC_OPENAI_API_KEY is inlined into client code"},{"rule":"HK001","severity":"critical","category":"leak","path":"app/api/agent/route.ts","line":4,"col":49,"snippet":"const openai = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY });","message":"NEXT_PUBLIC_OPENAI_API_KEY is inlined into client code"},{"rule":"HK004","severity":"critical","category":"cost","path":"app/api/agent/route.ts","line":8,"col":3,"snippet":"while (true) {","message":"Model is called inside a loop with no turn or spend bound"},{"rule":"HK005","severity":"medium","category":"cost","path":"app/api/agent/route.ts","line":9,"col":30,"snippet":"const res = await openai.chat.completions.create({ model: 'gpt-5', messages, tools });","message":"No output token cap on this call"},{"rule":"HK011","severity":"high","category":"schema","path":"app/api/agent/route.ts","line":14,"col":20,"snippet":"const args = JSON.parse(call.function.arguments);","message":"Truncated or fenced model JSON throws here"},{"rule":"HK007","severity":"critical","category":"idempotency","path":"app/api/webhooks/stripe/route.ts","line":3,"col":1,"snippet":"export async function POST(req: Request) {","message":"Anyone can POST forged events to this endpoint"},{"rule":"HK009","severity":"critical","category":"injection","path":"lib/tools.ts","line":12,"col":48,"snippet":"find_orders: async ({ email }) => (await sql.query(`SELECT id, total FROM orders WHERE email = '${email}'`)).rows,","message":"Interpolated SQL string"},{"rule":"HK012","severity":"high","category":"idempotency","path":"lib/tools.ts","line":13,"col":40,"snippet":"refund: async ({ paymentIntent }) => stripe.refunds.create({ payment_intent: paymentIntent }),","message":"Retried agent turns repeat this side effect"}]},"after":{"root":"evals/sample-app/after","filesScanned":4,"score":{"categories":{"cost":100,"leak":100,"injection":100,"schema":100,"idempotency":100},"overall":100},"summary":{"total":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0},"byRule":{}},"findings":[]},"rules":{"HK001":{"title":"LLM provider key exposed to the browser bundle","severity":"critical","category":"leak","fix":"Drop the public prefix and call the provider from a server route; the bundler inlines every NEXT_PUBLIC_/VITE_/REACT_APP_ variable into client JavaScript."},"HK002":{"title":"Hard-coded LLM provider secret","severity":"critical","category":"leak","fix":"Load the key from a server-only environment variable or secret manager and rotate the leaked key."},"HK003":{"title":"Provider SDK shipped to the browser","severity":"high","category":"leak","fix":"Keep provider SDKs server-side and expose a narrow, authenticated /api route; never set dangerouslyAllowBrowser."},"HK004":{"title":"Unbounded agent loop (no max turns or cost ceiling)","severity":"critical","category":"cost","fix":"Bound the loop with a MAX_TURNS counter and gate each model call through a budget breaker."},"HK005":{"title":"Model call without an output token cap","severity":"medium","category":"cost","fix":"Set max_tokens / maxOutputTokens on every call so one runaway completion cannot exhaust the budget."},"HK006":{"title":"Raw provider fetch without timeout","severity":"medium","category":"cost","fix":"Pass signal: AbortSignal.timeout(ms) and retry 429/5xx with capped exponential backoff, or use the official SDK (built-in timeout and retries)."},"HK007":{"title":"Webhook handler without signature verification","severity":"critical","category":"idempotency","fix":"Verify the provider signature over the raw body (e.g. stripe.webhooks.constructEvent, HMAC + timingSafeEqual) before acting on the event, and dedupe by event id."},"HK008":{"title":"Shell command built from tool-call input","severity":"critical","category":"injection","fix":"Use execFile/spawn with an argument array (no shell) and validate tool arguments against an allow-list."},"HK009":{"title":"SQL built from tool-call input","severity":"critical","category":"injection","fix":"Use parameterized queries ($1 / ? placeholders) or a tagged sql`` template; never interpolate model-chosen values."},"HK010":{"title":"Model output executed as code","severity":"critical","category":"injection","fix":"Never eval model output. Parse it as data, or run generated code only in an isolated sandbox (separate process/container, no secrets, no network)."},"HK011":{"title":"Unguarded JSON.parse of model output","severity":"high","category":"schema","fix":"Extract and repair JSON (output-guard extractJson), validate it against a schema, and handle failure explicitly instead of crashing the request."},"HK012":{"title":"Side-effecting payment call without idempotency key","severity":"high","category":"idempotency","fix":"Pass a deterministic idempotencyKey (e.g. derived from the tool-call id) so agent retries cannot double-charge or double-refund."}},"categories":{"cost":"Cost Ceiling Protection","leak":"Prompt/Key Leak Surface","injection":"Tool-Call Injection","schema":"Schema Reliability","idempotency":"Idempotency & Webhook Integrity"},"severities":["critical","high","medium","low"]}</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const $ = (s) => document.querySelector(s), list = $('#list');
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  let side = 'before';
+  function render() {
+    const sev = $('#sev').value, cat = $('#cat').value, q = $('#q').value.toLowerCase();
+    const rows = D[side].findings.filter((f) => (!sev || f.severity === sev) && (!cat || f.category === cat) &&
+      (!q || (f.path + f.rule + f.message + f.snippet + D.rules[f.rule].title).toLowerCase().includes(q)));
+    if (!rows.length) { list.innerHTML = '<div class="empty">' + (D[side].findings.length ? 'No findings match the filters.' : '✓ No findings. Every rule passes.') + '</div>'; return; }
+    list.innerHTML = rows.map((f) => {
+      const r = D.rules[f.rule];
+      return '<details><summary><span class="pill sev-' + f.severity + '">' + f.severity + '</span><code>' + f.rule + '</code><strong>' + esc(r.title) +
+        '</strong><span class="loc">' + esc(f.path) + ':' + f.line + ':' + f.col + '</span></summary>' +
+        '<p>' + esc(f.message) + ' · <span class="muted">' + esc(D.categories[f.category]) + '</span></p><pre>' + esc(f.snippet) + '</pre><p class="fix">' + esc(r.fix) + '</p></details>';
+    }).join('');
+  }
+  document.querySelectorAll('[data-side]').forEach((btn) => btn.addEventListener('click', () => {
+    side = btn.dataset.side;
+    document.querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    render();
+  }));
+  ['#sev', '#cat', '#q'].forEach((s) => $(s).addEventListener('input', render));
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "multi-model-routing-bench",
+  "version": "1.0.0",
+  "description": "Zero-dependency Cost-Unit routing calculator, workflow simulator and failure-mode harness for multi-agent studios.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./cu-engine": "./src/cu-engine.mjs",
+    "./role-eval": "./src/role-eval.mjs"
+  },
+  "scripts": {
+    "start": "node serve.mjs",
+    "bench": "node bench.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

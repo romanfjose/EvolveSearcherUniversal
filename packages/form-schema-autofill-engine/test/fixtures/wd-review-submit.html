@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/London/Staff-Engineer_R-10234/apply/applyManually"><title>Review</title></head>
+<body>
+<div data-automation-id="applyFlowReviewPage">
+  <h2 data-automation-id="applyFlowPageTitle">Review</h2>
+  <section><h3>My Information</h3><dl><dt>Given Name(s)</dt><dd>Ada</dd><dt>Family Name</dt><dd>Lovelace</dd><dt>Email</dt><dd>ada.lovelace@example.com</dd></dl>
+    <button type="button" data-automation-id="editButton" aria-label="Edit My Information">Edit</button></section>
+  <section><h3>My Experience</h3><p>Principal Engineer · Analytical Engines Ltd</p></section>
+  <div data-automation-id="formField-certify">
+    <input type="checkbox" id="certify" data-automation-id="certifyCheckbox" data-expect="consent" data-expect-checked="false">
+    <label for="certify">I certify that the information provided is true and complete to the best of my knowledge.</label>
+  </div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="redline">Submit</button>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://job-boards.greenhouse.io/acme/jobs/4012345"><title>Voluntary self-identification</title></head>
+<body>
+<form id="application-form" class="application--form">
+  <div class="demographic-questions">
+    <h3 class="section-header">Voluntary Self-Identification</h3>
+    <p>Acme is committed to building a diverse team. Responses are voluntary and kept separate from your application.</p>
+    <fieldset class="demographic-question">
+      <legend>How would you describe your racial/ethnic background? (Select all that apply)</legend>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4001][]" value="1" data-expect="eeo.race">Black or African American</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4001][]" value="2">East Asian</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4001][]" value="3">Hispanic or Latinx</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4001][]" value="4">White</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4001][]" value="5" data-expect-checked="true">I don't wish to answer</label>
+    </fieldset>
+    <fieldset class="demographic-question">
+      <legend>How would you describe your gender identity?</legend>
+      <label class="radio"><input type="radio" name="demographic_answers[4002]" value="1" data-expect="eeo.gender">Man</label>
+      <label class="radio"><input type="radio" name="demographic_answers[4002]" value="2">Woman</label>
+      <label class="radio"><input type="radio" name="demographic_answers[4002]" value="3">Non-binary</label>
+      <label class="radio"><input type="radio" name="demographic_answers[4002]" value="4" data-expect-checked="true">I don't wish to answer</label>
+    </fieldset>
+    <fieldset class="demographic-question">
+      <legend>Do you identify as transgender?</legend>
+      <label class="radio"><input type="radio" name="demographic_answers[4003]" value="1" data-expect="-" data-expect-checked="false">Yes</label>
+      <label class="radio"><input type="radio" name="demographic_answers[4003]" value="2">No</label>
+      <label class="radio"><input type="radio" name="demographic_answers[4003]" value="3">I don't wish to answer</label>
+    </fieldset>
+    <fieldset class="demographic-question">
+      <legend>What are your pronouns?</legend>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4004][]" value="1" data-expect="pronouns">He/him</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4004][]" value="2" data-expect-checked="true">She/her</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4004][]" value="3">They/them</label>
+      <label class="checkbox"><input type="checkbox" name="demographic_answers[4004][]" value="4">I prefer to self-describe</label>
+    </fieldset>
+  </div>
+  <button type="submit" class="btn btn--pill" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

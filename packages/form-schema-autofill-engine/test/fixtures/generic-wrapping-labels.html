@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/wrapping"><title>Wrapping labels</title></head>
+<body>
+<form>
+  <label>First name <input name="a1" data-expect="first_name"></label>
+  <label>Surname <input name="a2" data-expect="last_name" data-expect-value="Lovelace"></label>
+  <label>Email <input name="a3" type="email" data-expect="email"></label>
+  <label>Portfolio <input name="a4" type="url" data-expect="website"></label>
+  <label><input type="checkbox" name="relocate" data-expect="relocation" data-expect-checked="true"> I am willing to relocate</label>
+  <button data-expect="redline">Send</button>
+</form>
+</body></html>

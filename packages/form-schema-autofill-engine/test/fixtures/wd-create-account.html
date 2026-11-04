@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/London/Staff-Engineer_R-10234/apply/applyManually"><title>Create Account</title></head>
+<body>
+<div data-automation-id="createAccountPage" role="dialog" aria-labelledby="ca-title">
+  <h2 id="ca-title">Create Account</h2>
+  <div data-automation-id="formField-email"><label for="input-4">Email Address<abbr title="required">*</abbr></label><input type="text" id="input-4" data-automation-id="email" data-expect="email" data-expect-value="ada.lovelace@example.com"></div>
+  <div data-automation-id="formField-password"><label for="input-5">Password<abbr title="required">*</abbr></label><input type="password" id="input-5" data-automation-id="password" data-expect="credential" data-expect-value=""></div>
+  <div data-automation-id="formField-verifyPassword"><label for="input-6">Verify New Password<abbr title="required">*</abbr></label><input type="password" id="input-6" data-automation-id="verifyPassword" data-expect="credential" data-expect-value=""></div>
+  <div data-automation-id="formField-createAccountCheckbox"><input type="checkbox" id="input-7" data-automation-id="createAccountCheckbox" data-expect="consent" data-expect-checked="false"><label for="input-7">Yes, I have read and consent to the terms and conditions</label></div>
+  <div role="button" tabindex="0" data-automation-id="createAccountSubmitButton" aria-label="Create Account" data-expect="redline">Create Account</div>
+  <p>Already have an account? <button type="button" data-automation-id="signInLink" data-expect="redline">Sign In</button></p>
+</div>
+</body>
+</html>

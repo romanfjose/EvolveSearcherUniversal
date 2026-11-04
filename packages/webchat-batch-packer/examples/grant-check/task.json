@@ -1,0 +1,11 @@
+{
+  "task": "You are verifying one funding lead for {{lane}}.\nRead the SOURCE pages and write leads/{{slug}}.md as a dossier. Grade gates G1-G4 as pass, fail or unknown.\nA gate may be `pass` only when a line naming it carries a citation quoting the SOURCE text verbatim.",
+  "vars": { "lane": "independent research teams", "slug": "open-science-fund" },
+  "schema": "# Lead: <title>\n- **Canonical URL:** <url>\n- **Status:** Verify | Try-worthy\n- **Gates:** G1 <v>; G2 <v>; G3 <v>; G4 <v>\n- **Fit %:** <0-100>%\n\n## Gate evidence\n- G1 [verified: <url> \"<quote>\"]\n- G2 ...",
+  "exclude": ["https://grants.example.org/programs/legacy-fund"],
+  "outputs": ["leads/*.md", "notes/"],
+  "budget": 6000,
+  "sources": [
+    { "file": "program-page.html", "path": "raw/program-page.html", "url": "https://grants.example.org/programs/open-science" }
+  ]
+}

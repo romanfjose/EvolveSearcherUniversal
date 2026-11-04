@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-expect-platform="lever">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.lever.co/acme/2b6f/apply"><title>Pronouns</title></head>
+<body>
+<form id="application-form" class="application-form" method="POST">
+  <div class="section application-form">
+    <ul>
+      <li class="application-question"><label><div class="application-label">Full name✱</div><div class="application-field"><input type="text" name="name" data-expect="full_name"></div></label></li>
+      <li class="application-question"><label><div class="application-label">Email✱</div><div class="application-field"><input type="email" name="email" data-expect="email"></div></label></li>
+      <li class="application-question pronouns">
+        <div class="application-label">Pronouns</div>
+        <div class="application-field">
+          <ul class="pronouns-list">
+            <li><label><input type="checkbox" name="pronouns" value="He/him" data-expect="pronouns" data-expect-checked="false">He/him</label></li>
+            <li><label><input type="checkbox" name="pronouns" value="She/her" data-expect-checked="true">She/her</label></li>
+            <li><label><input type="checkbox" name="pronouns" value="They/them">They/them</label></li>
+            <li><label><input type="checkbox" name="pronouns" value="Xe/xem">Xe/xem</label></li>
+            <li><label><input type="checkbox" name="pronouns" value="Use name only">Use name only</label></li>
+            <li><label><input type="checkbox" name="pronouns" value="Custom" class="custom-pronouns-checkbox">Custom</label></li>
+          </ul>
+          <input type="text" name="customPronounsInput" class="custom-pronouns-input" placeholder="Custom pronouns" style="display: none" data-expect="hidden">
+        </div>
+      </li>
+    </ul>
+  </div>
+  <button type="submit" id="btn-submit" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

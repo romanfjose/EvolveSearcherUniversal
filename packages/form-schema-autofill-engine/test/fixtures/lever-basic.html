@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-expect-platform="lever">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.lever.co/acme/2b6f1c4e-8a0d-4f3e-9c1a-5d7e8f9a0b1c/apply"><title>Acme - Staff Engineer</title></head>
+<body>
+<div class="content-wrapper"><div class="section-wrapper page-full-width">
+<form id="application-form" class="application-form" method="POST" enctype="multipart/form-data">
+  <div class="section application-form">
+    <h4>Submit your application</h4>
+    <ul>
+      <li class="application-question resume">
+        <label>
+          <div class="application-label">Resume/CV<span class="required">✱</span></div>
+          <div class="application-field"><a class="visible-resume-upload"><input type="file" id="resume-upload-input" name="resume" data-qa="input-resume" data-expect="resume"><span class="default-label">ATTACH RESUME/CV</span></a></div>
+        </label>
+      </li>
+      <li class="application-question">
+        <label><div class="application-label">Full name<span class="required">✱</span></div>
+          <div class="application-field"><input type="text" name="name" required data-qa="name-input" data-expect="full_name" data-expect-value="Ada Lovelace"></div></label>
+      </li>
+      <li class="application-question">
+        <label><div class="application-label">Email<span class="required">✱</span></div>
+          <div class="application-field"><input type="email" name="email" required data-qa="email-input" data-expect="email" data-expect-value="ada.lovelace@example.com"></div></label>
+      </li>
+      <li class="application-question">
+        <label><div class="application-label">Phone</div>
+          <div class="application-field"><input type="text" name="phone" data-qa="phone-input" data-expect="phone" data-expect-value="7700 900123"></div></label>
+      </li>
+      <li class="application-question">
+        <label><div class="application-label">Current location</div>
+          <div class="application-field"><input type="text" name="location" id="location-input" class="location-input" autocomplete="off" data-qa="location-input" data-expect="location" data-expect-value="London, United Kingdom"><input type="hidden" name="selectedLocation"></div></label>
+      </li>
+      <li class="application-question">
+        <label><div class="application-label">Current company</div>
+          <div class="application-field"><input type="text" name="org" data-qa="org-input" data-expect="current_company" data-expect-value="Analytical Engines Ltd"></div></label>
+      </li>
+    </ul>
+  </div>
+  <div class="section application-form">
+    <h4>Links</h4>
+    <ul>
+      <li class="application-question"><label><div class="application-label">LinkedIn URL</div><div class="application-field"><input type="text" name="urls[LinkedIn]" data-expect="linkedin" data-expect-value="https://www.linkedin.com/in/ada-example"></div></label></li>
+      <li class="application-question"><label><div class="application-label">Twitter URL</div><div class="application-field"><input type="text" name="urls[Twitter]" data-expect="twitter" data-expect-value=""></div></label></li>
+      <li class="application-question"><label><div class="application-label">GitHub URL</div><div class="application-field"><input type="text" name="urls[GitHub]" data-expect="github" data-expect-value="https://github.com/ada-example"></div></label></li>
+      <li class="application-question"><label><div class="application-label">Portfolio URL</div><div class="application-field"><input type="text" name="urls[Portfolio]" data-expect="website" data-expect-value="https://ada.example.com"></div></label></li>
+      <li class="application-question"><label><div class="application-label">Other website</div><div class="application-field"><input type="text" name="urls[Other]" data-expect="website" data-expect-value="https://ada.example.com"></div></label></li>
+    </ul>
+  </div>
+  <div class="section application-form">
+    <h4>Additional information</h4>
+    <textarea name="comments" class="card-field-input" placeholder="Add a cover letter or anything else you want to share." data-expect="additional_info" data-expect-value=""></textarea>
+  </div>
+  <div class="section page-centered last-section-submit">
+    <button type="submit" class="postings-btn template-btn-submit" id="btn-submit" data-qa="btn-submit" data-expect="redline">Submit application</button>
+  </div>
+</form>
+</div></div>
+</body>
+</html>

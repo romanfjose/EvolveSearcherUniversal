@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>Yes/No questions</title></head>
+<body>
+<div class="ashby-application-form-container">
+  <form class="_form_1x8q2_1">
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title _required_101oc_92" for="b3f1a2c4-0001">Are you legally authorized to work in the United Kingdom?</label>
+      <div class="_yesno_hkyf8_143" data-expect="work_authorization">
+        <button class="_option_1v5e2_35" type="button" data-expect-clicked>Yes</button>
+        <button class="_option_1v5e2_35" type="button">No</button>
+      </div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title _required_101oc_92" for="b3f1a2c4-0002">Will you now or in the future require sponsorship for a work visa?</label>
+      <div class="_yesno_hkyf8_143" data-expect="sponsorship">
+        <button class="_option_1v5e2_35" type="button">Yes</button>
+        <button class="_option_1v5e2_35" type="button" data-expect-clicked>No</button>
+      </div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="b3f1a2c4-0003">Are you willing to relocate to London?</label>
+      <div class="_yesno_hkyf8_143" data-expect="relocation">
+        <button class="_option_1v5e2_35" type="button" data-expect-clicked>Yes</button>
+        <button class="_option_1v5e2_35" type="button">No</button>
+      </div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="b3f1a2c4-0004">Have you previously worked at Acme?</label>
+      <div class="_yesno_hkyf8_143" data-expect="-">
+        <button class="_option_1v5e2_35" type="button">Yes</button>
+        <button class="_option_1v5e2_35" type="button">No</button>
+      </div>
+    </div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

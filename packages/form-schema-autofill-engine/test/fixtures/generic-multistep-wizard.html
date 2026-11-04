@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/wizard"><title>Multi-step wizard</title></head>
+<body>
+<div class="wizard">
+  <ol class="steps"><li aria-current="step">About you</li><li>Experience</li><li>Review</li></ol>
+  <form>
+    <section data-step="1">
+      <h2>Step 1 of 3: About you</h2>
+      <label for="fn">First name</label><input id="fn" data-expect="first_name">
+      <label for="ln">Last name</label><input id="ln" data-expect="last_name">
+      <label for="em">Email</label><input id="em" type="email" data-expect="email">
+      <div class="nav"><button type="button" class="btn">Save draft</button><button type="button" class="btn btn-primary" data-expect="advance">Next</button></div>
+    </section>
+    <section data-step="2" hidden>
+      <h2>Step 2 of 3: Experience</h2>
+      <label for="co">Current employer</label><input id="co" data-expect="hidden">
+      <button type="button" data-expect="hidden">Next</button>
+    </section>
+    <section data-step="3" style="display: none">
+      <h2>Step 3 of 3: Review</h2>
+      <button type="submit" data-expect="hidden">Submit application</button>
+    </section>
+  </form>
+</div>
+</body></html>

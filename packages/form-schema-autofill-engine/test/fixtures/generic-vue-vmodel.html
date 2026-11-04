@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/vue"><title>Vue v-model</title></head>
+<body>
+<div id="app" data-v-app="">
+  <form>
+    <div class="form-group"><label for="fullName">Full name</label><input id="fullName" class="form-control" data-framework="vue" data-expect="full_name" data-expect-state="Ada Lovelace"></div>
+    <div class="form-group"><label for="email">Email</label><input id="email" type="email" class="form-control" data-framework="vue" data-expect="email" data-expect-state="ada.lovelace@example.com"></div>
+    <div class="form-group"><label for="country">Country</label><select id="country" class="form-control" data-framework="vue" data-expect="country" data-expect-state="gb"><option disabled value="">Please select one</option><option value="us">United States</option><option value="gb">United Kingdom</option></select></div>
+    <div class="form-check"><input id="adult" type="checkbox" class="form-check-input" data-framework="vue" data-expect="age_18" data-expect-state="true"><label for="adult" class="form-check-label">I am over 18</label></div>
+    <button type="button" class="btn btn-primary" data-expect="redline">Submit</button>
+  </form>
+</div>
+</body></html>

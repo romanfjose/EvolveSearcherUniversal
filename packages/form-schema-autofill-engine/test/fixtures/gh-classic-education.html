@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://boards.greenhouse.io/acme/jobs/4012345"><title>Education</title></head>
+<body>
+<form id="application_form" method="post">
+  <div id="education_section">
+    <h3>Education</h3>
+    <div class="education">
+      <div class="field"><label>School</label><input type="text" name="job_application[educations][][school_name]" data-expect="education.school#0" data-expect-value="University of London"></div>
+      <div class="field"><label>Degree</label>
+        <select name="job_application[educations][][degree_id]" data-expect="education.degree#0" data-expect-value="2">
+          <option value="">Select a Degree</option><option value="1">Bachelor's Degree</option><option value="2">Master's Degree</option><option value="3">Doctor of Philosophy (Ph.D.)</option>
+        </select></div>
+      <div class="field"><label>Discipline</label>
+        <select name="job_application[educations][][discipline_id]" data-expect="education.discipline#0" data-expect-value="11">
+          <option value="">Select a Discipline</option><option value="10">Computer Science</option><option value="11">Mathematics</option><option value="12">Physics</option>
+        </select></div>
+      <div class="field">
+        <label>Start Date</label>
+        <input type="text" name="job_application[educations][][start_date][month]" placeholder="MM" maxlength="2" data-expect="education.start:month#0" data-expect-value="09">
+        <input type="text" name="job_application[educations][][start_date][year]" placeholder="YYYY" maxlength="4" data-expect="education.start:year#0" data-expect-value="2015">
+      </div>
+      <div class="field">
+        <label>End Date</label>
+        <input type="text" name="job_application[educations][][end_date][month]" placeholder="MM" maxlength="2" data-expect="education.end:month#0" data-expect-value="06">
+        <input type="text" name="job_application[educations][][end_date][year]" placeholder="YYYY" maxlength="4" data-expect="education.end:year#0" data-expect-value="2017">
+      </div>
+    </div>
+    <div class="education">
+      <div class="field"><label>School</label><input type="text" name="job_application[educations][][school_name]" data-expect="education.school#1" data-expect-value="Imperial College London"></div>
+      <div class="field"><label>Degree</label>
+        <select name="job_application[educations][][degree_id]" data-expect="education.degree#1" data-expect-value="1">
+          <option value="">Select a Degree</option><option value="1">Bachelor's Degree</option><option value="2">Master's Degree</option><option value="3">Doctor of Philosophy (Ph.D.)</option>
+        </select></div>
+      <div class="field"><label>Discipline</label>
+        <select name="job_application[educations][][discipline_id]" data-expect="education.discipline#1" data-expect-value="10">
+          <option value="">Select a Discipline</option><option value="10">Computer Science</option><option value="11">Mathematics</option><option value="12">Physics</option>
+        </select></div>
+      <div class="field">
+        <label>Start Date</label>
+        <input type="text" name="job_application[educations][][start_date][month]" placeholder="MM" data-expect="education.start:month#1" data-expect-value="09">
+        <input type="text" name="job_application[educations][][start_date][year]" placeholder="YYYY" data-expect="education.start:year#1" data-expect-value="2012">
+      </div>
+      <div class="field">
+        <label>End Date</label>
+        <input type="text" name="job_application[educations][][end_date][month]" placeholder="MM" data-expect="education.end:month#1" data-expect-value="06">
+        <input type="text" name="job_application[educations][][end_date][year]" placeholder="YYYY" data-expect="education.end:year#1" data-expect-value="2015">
+      </div>
+    </div>
+    <a href="#" class="add_education">+ Add another education</a>
+  </div>
+  <input type="button" id="submit_app" value="Submit Application" data-expect="redline">
+</form>
+</body>
+</html>

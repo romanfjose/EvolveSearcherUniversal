@@ -1,0 +1,30 @@
+{
+  "description": "Each fixture has a broken/ tree (must yield exactly `expect`) and a hardened/ tree (must yield no findings).",
+  "fixtures": [
+    { "id": "01-public-env-key", "expect": ["HK001"] },
+    { "id": "02-vite-browser-anthropic", "expect": ["HK001", "HK003"] },
+    { "id": "03-next-public-groq", "expect": ["HK001"] },
+    { "id": "04-hardcoded-openai-key", "expect": ["HK002"] },
+    { "id": "05-hardcoded-anthropic-config", "expect": ["HK002"] },
+    { "id": "06-client-component-sdk", "expect": ["HK003"] },
+    { "id": "07-while-true-agent", "expect": ["HK004"] },
+    { "id": "08-for-ever-anthropic", "expect": ["HK004"] },
+    { "id": "09-while-not-done", "expect": ["HK004"] },
+    { "id": "10-route-no-max-tokens", "expect": ["HK005"] },
+    { "id": "11-generate-text-no-cap", "expect": ["HK005"] },
+    { "id": "12-gemini-no-output-cap", "expect": ["HK005"] },
+    { "id": "13-raw-fetch-openai", "expect": ["HK006"] },
+    { "id": "14-raw-fetch-anthropic-edge", "expect": ["HK006"] },
+    { "id": "15-stripe-webhook-unverified", "expect": ["HK007"] },
+    { "id": "16-express-webhook-unverified", "expect": ["HK007"] },
+    { "id": "17-tool-exec-template", "expect": ["HK008"] },
+    { "id": "18-tool-execsync-concat", "expect": ["HK008"] },
+    { "id": "19-tool-sql-template", "expect": ["HK009"] },
+    { "id": "20-tool-sql-prisma-unsafe", "expect": ["HK009"] },
+    { "id": "21-tool-eval-calculator", "expect": ["HK010"] },
+    { "id": "22-codegen-new-function", "expect": ["HK010"] },
+    { "id": "23-unguarded-json-parse", "expect": ["HK011"] },
+    { "id": "24-unguarded-tool-arguments", "expect": ["HK011"] },
+    { "id": "25-refund-no-idempotency", "expect": ["HK012"] }
+  ]
+}

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/contenteditable"><title>Rich text</title></head>
+<body>
+<form>
+  <div class="field">
+    <span id="cl-label">Cover letter</span>
+    <div class="toolbar"><button type="button" aria-label="Bold">B</button><button type="button" aria-label="Italic">I</button></div>
+    <div class="ProseMirror" role="textbox" contenteditable="true" aria-multiline="true" aria-labelledby="cl-label" data-expect="cover_letter" data-expect-value="Dear hiring team, I build reliable numerical systems."><p></p></div>
+  </div>
+  <div class="field"><label for="extra">Additional information</label><textarea id="extra" data-expect="additional_info" data-expect-value=""></textarea></div>
+  <button type="submit" data-expect="redline">Submit</button>
+</form>
+</body></html>

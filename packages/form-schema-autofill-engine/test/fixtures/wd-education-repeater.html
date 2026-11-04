@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/London/Staff-Engineer_R-10234/apply/applyManually"><title>Education</title></head>
+<body>
+<div data-automation-id="applyFlowMyExpPage">
+  <div role="group" aria-labelledby="Education-section" data-automation-id="educationSection">
+    <h3 id="Education-section">Education</h3>
+    <div data-automation-id="education-1" role="group" aria-labelledby="education-1-panel">
+      <h4 id="education-1-panel">Education 1</h4>
+      <div data-automation-id="formField-schoolName"><label for="education-1--schoolName">School or University<abbr title="required">*</abbr></label><input type="text" id="education-1--schoolName" data-automation-id="school" data-expect="education.school#0" data-expect-value="University of London"></div>
+      <div data-automation-id="formField-degree">
+        <label id="education-1--degree-label">Degree<abbr title="required">*</abbr></label>
+        <button type="button" aria-haspopup="listbox" id="education-1--degree" aria-labelledby="education-1--degree-label" aria-controls="education-1--degree-popup" data-expect="education.degree#0">Select One</button>
+        <ul role="listbox" id="education-1--degree-popup"><li role="option">Bachelor's Degree</li><li role="option" data-expect-clicked>Master's Degree</li><li role="option">Doctorate</li></ul>
+      </div>
+      <div data-automation-id="formField-fieldOfStudy"><label for="education-1--fieldOfStudy">Field of Study</label><input type="text" id="education-1--fieldOfStudy" data-automation-id="fieldOfStudy" data-expect="education.discipline#0" data-expect-value="Mathematics"></div>
+      <div data-automation-id="formField-gradeAverage"><label for="education-1--gradeAverage">Overall Result (GPA)</label><input type="text" id="education-1--gradeAverage" data-automation-id="gpa" data-expect="education.gpa#0" data-expect-value="3.9"></div>
+      <div data-automation-id="formField-firstYearAttended"><label>From</label><div data-automation-id="dateInputWrapper"><input type="text" id="education-1--firstYearAttended-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="education.start:year#0" data-expect-value="2015"></div></div>
+      <div data-automation-id="formField-lastYearAttended"><label>To (Actual or Expected)</label><div data-automation-id="dateInputWrapper"><input type="text" id="education-1--lastYearAttended-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="education.end:year#0" data-expect-value="2017"></div></div>
+    </div>
+    <div data-automation-id="education-2" role="group" aria-labelledby="education-2-panel">
+      <h4 id="education-2-panel">Education 2</h4>
+      <div data-automation-id="formField-schoolName"><label for="education-2--schoolName">School or University<abbr title="required">*</abbr></label><input type="text" id="education-2--schoolName" data-automation-id="school" data-expect="education.school#1" data-expect-value="Imperial College London"></div>
+      <div data-automation-id="formField-degree">
+        <label id="education-2--degree-label">Degree<abbr title="required">*</abbr></label>
+        <button type="button" aria-haspopup="listbox" id="education-2--degree" aria-labelledby="education-2--degree-label" aria-controls="education-2--degree-popup" data-expect="education.degree#1">Select One</button>
+        <ul role="listbox" id="education-2--degree-popup"><li role="option" data-expect-clicked>Bachelor's Degree</li><li role="option">Master's Degree</li><li role="option">Doctorate</li></ul>
+      </div>
+      <div data-automation-id="formField-fieldOfStudy"><label for="education-2--fieldOfStudy">Field of Study</label><input type="text" id="education-2--fieldOfStudy" data-automation-id="fieldOfStudy" data-expect="education.discipline#1" data-expect-value="Computer Science"></div>
+      <div data-automation-id="formField-gradeAverage"><label for="education-2--gradeAverage">Overall Result (GPA)</label><input type="text" id="education-2--gradeAverage" data-automation-id="gpa" data-expect="education.gpa#1" data-expect-value="3.8"></div>
+      <div data-automation-id="formField-firstYearAttended"><label>From</label><div data-automation-id="dateInputWrapper"><input type="text" id="education-2--firstYearAttended-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="education.start:year#1" data-expect-value="2012"></div></div>
+      <div data-automation-id="formField-lastYearAttended"><label>To (Actual or Expected)</label><div data-automation-id="dateInputWrapper"><input type="text" id="education-2--lastYearAttended-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="education.end:year#1" data-expect-value="2015"></div></div>
+    </div>
+    <button type="button" data-automation-id="add-button">Add Another</button>
+  </div>
+  <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="advance">Save and Continue</button>
+</div>
+</body>
+</html>

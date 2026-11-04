@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a-1111-4e2d-8c3b-0a1b2c3d4e5f/application"><title>Staff Engineer @ Acme</title></head>
+<body>
+<div id="root"><div class="ashby-job-posting-right-pane"><div class="ashby-application-form-container">
+  <form class="_form_1x8q2_1">
+    <div class="ashby-application-form-field-entry _fieldEntry_hkyf8_29">
+      <label class="ashby-application-form-question-title _heading_101oc_53 _required_101oc_92" for="_systemfield_name">Name</label>
+      <input class="_input_1wkz4_28 _input_1fb8s_33" id="_systemfield_name" name="_systemfield_name" placeholder="Type here..." required type="text" value="" data-framework="react" data-expect="full_name" data-expect-state="Ada Lovelace">
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title _required_101oc_92" for="_systemfield_email">Email</label>
+      <input class="_input_1wkz4_28" id="_systemfield_email" name="_systemfield_email" placeholder="hello@example.com..." required type="email" value="" data-framework="react" data-expect="email" data-expect-state="ada.lovelace@example.com">
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title _required_101oc_92" for="_systemfield_resume">Resume</label>
+      <div class="_container_6k3nb_71">
+        <button class="_button_8wvgw_29 _secondary_8wvgw_105" type="button"><span>Upload File</span></button>
+        <input id="_systemfield_resume" name="_systemfield_resume" type="file" accept=".pdf,.doc,.docx" style="display: none;" data-expect="resume">
+        <p class="_instructions_6k3nb_88">or drag and drop here</p>
+      </div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="_systemfield_location">Location</label>
+      <div class="_container_1ex7e_29">
+        <input id="_systemfield_location" class="_input_1wkz4_28" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="_systemfield_location-listbox" placeholder="Start typing..." autocomplete="off" type="text" value="" data-expect="location">
+        <div role="listbox" id="_systemfield_location-listbox" class="_resultContainer_1ex7e_59">
+          <div role="option" class="_result_1ex7e_59" data-expect-clicked>London, England, United Kingdom</div>
+          <div role="option" class="_result_1ex7e_59">London, Ontario, Canada</div>
+        </div>
+      </div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="2c4e6a8b-1d3f-4a5b-9c7d-0e1f2a3b4c5d">LinkedIn Profile</label>
+      <input class="_input_1wkz4_28" id="2c4e6a8b-1d3f-4a5b-9c7d-0e1f2a3b4c5d" name="2c4e6a8b-1d3f-4a5b-9c7d-0e1f2a3b4c5d" type="text" value="" data-framework="react" data-expect="linkedin" data-expect-state="https://www.linkedin.com/in/ada-example">
+    </div>
+    <button class="_button_8wvgw_29 _primary_8wvgw_83 ashby-application-form-submit-button" type="submit" data-expect="redline"><span>Submit Application</span></button>
+  </form>
+</div></div></div>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/fieldset"><title>Fieldset radios</title></head>
+<body>
+<form>
+  <fieldset><legend>Are you legally entitled to work in the UK?</legend>
+    <input type="radio" id="r1y" name="rtw" value="1" data-expect="work_authorization" data-expect-checked="true"><label for="r1y">Yes</label>
+    <input type="radio" id="r1n" name="rtw" value="0"><label for="r1n">No</label>
+  </fieldset>
+  <fieldset><legend>Will you now or in the future require sponsorship to work in the UK?</legend>
+    <input type="radio" id="r2y" name="sp" value="1" data-expect="sponsorship"><label for="r2y">Yes</label>
+    <input type="radio" id="r2n" name="sp" value="0" data-expect-checked="true"><label for="r2n">No</label>
+  </fieldset>
+  <fieldset><legend>Are you 18 years of age or older?</legend>
+    <input type="radio" id="r3y" name="age" value="1" data-expect="age_18" data-expect-checked="true"><label for="r3y">Yes</label>
+    <input type="radio" id="r3n" name="age" value="0"><label for="r3n">No</label>
+  </fieldset>
+  <button type="submit" data-expect="redline">Submit application</button>
+</form>
+</body></html>

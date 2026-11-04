@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/dropzone"><title>File dropzones</title></head>
+<body>
+<form>
+  <h3>Documents</h3>
+  <div class="upload">
+    <div class="dropzone" data-testid="resume-dropzone" role="button" tabindex="0" aria-label="Upload resume">
+      <input type="file" accept=".pdf,.docx" tabindex="-1" style="display:none" data-expect="resume">
+      <p>Drag &amp; drop your CV here, or <u>browse</u></p>
+    </div>
+  </div>
+  <div class="upload">
+    <div class="dropzone" data-testid="cover-dropzone" role="button" tabindex="0" aria-label="Upload cover letter">
+      <input type="file" accept=".pdf,.docx" tabindex="-1" style="display:none" data-expect="cover_letter">
+      <p>Drop your cover letter here</p>
+    </div>
+  </div>
+  <div class="upload">
+    <div class="dropzone" data-testid="extra-dropzone" role="button" tabindex="0" aria-label="Upload additional files">
+      <input type="file" multiple tabindex="-1" style="display:none" data-expect="-">
+      <p>Anything else you'd like to share (optional)</p>
+    </div>
+  </div>
+  <button type="submit" data-expect="redline">Submit</button>
+</form>
+</body></html>

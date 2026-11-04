@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/headless"><title>Headless UI listbox</title></head>
+<body>
+<form>
+  <div class="field">
+    <label id="hl-gender-label">Gender</label>
+    <button type="button" id="headlessui-listbox-button-1" aria-haspopup="listbox" aria-expanded="true" aria-labelledby="hl-gender-label headlessui-listbox-button-1" aria-controls="headlessui-listbox-options-2" data-expect="eeo.gender"><span>Select…</span></button>
+    <ul role="listbox" id="headlessui-listbox-options-2" aria-labelledby="hl-gender-label" tabindex="0"><li role="option">Woman</li><li role="option">Man</li><li role="option">Non-binary</li><li role="option" data-expect-clicked>Prefer not to say</li></ul>
+  </div>
+  <div class="field">
+    <label id="hl-years-label">Years of experience</label>
+    <button type="button" id="headlessui-listbox-button-3" aria-haspopup="listbox" aria-labelledby="hl-years-label headlessui-listbox-button-3" data-expect="-"><span>Select…</span></button>
+  </div>
+  <button type="submit" data-expect="redline">Submit</button>
+</form>
+</body></html>

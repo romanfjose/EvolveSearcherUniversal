@@ -1,0 +1,19 @@
+{
+  "name": "form-schema-autofill-engine",
+  "version": "0.1.0",
+  "description": "Zero-dependency DOM form-field classifier, ATS adapter registry, dry-run preview overlay and deterministic replay harness.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./replay": "./src/replay.mjs",
+    "./mini-dom": "./src/mini-dom.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/adapters.test.mjs",
+    "playground": "python3 -m http.server 8137"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

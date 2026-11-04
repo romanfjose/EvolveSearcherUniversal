@@ -12,6 +12,7 @@ Autonomous self-evolving search and discovery framework with isolated verificati
   - [`SelfEvolvingArchitectureGpt`](0-SelfEvolveUniversalTemplate/SelfEvolvingArchitectureGpt/README.md): GPT discovery engine.
 - **[`ui/`](ui/serve.mjs)**: zero-dependency Node.js (`>=20`) telemetry, prompt orchestration, and multi-lane comparison dashboard (`http://127.0.0.1:4489/`).
 - **[`docs/demo/`](docs/demo/index.html)**: static, GitHub Pages-ready demo. [`demo-app.js`](docs/demo/demo-app.js) holds a parity-tested port of lead-lint plus the Assayer diagnostics; [`demo-data.json`](docs/demo/demo-data.json) holds the synthetic lanes, dossiers and source snapshots.
+- **[`packages/multi-model-routing-bench/`](packages/multi-model-routing-bench/README.md)**: zero-dependency Cost-Unit routing calculator, 24-hour studio simulator (single-model loop vs. tri-cameral role routing) and failure-mode harness.
 - **[`0-SelfEvolveUniversalTemplate/PERSONALIZE.md`](0-SelfEvolveUniversalTemplate/PERSONALIZE.md)**: lane personalization guide and verification gates.
 - **[`0-SelfEvolveUniversalTemplate/PROVENANCE.md`](0-SelfEvolveUniversalTemplate/PROVENANCE.md)**: architecture provenance and retained reliability fixes.
 

@@ -1,0 +1,811 @@
+{
+  "schema": 1,
+  "asOf": "2026-11-04",
+  "notice": "100% synthetic demo data. Organisations, programs, people and URLs are fictional; every host uses RFC 2606 reserved names (example.com/.net/.org, .example).",
+  "engines": [
+    {
+      "id": "claude",
+      "name": "Claude"
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini"
+    },
+    {
+      "id": "gpt",
+      "name": "ChatGPT"
+    }
+  ],
+  "lanes": [
+    {
+      "id": "ai-engineering-grants",
+      "name": "AI Engineering Grants",
+      "subtitle": "Non-dilutive grants and compute credits for independent AI engineers"
+    },
+    {
+      "id": "open-source-bounties",
+      "name": "Open-Source Bounties",
+      "subtitle": "Paid bounties on public open-source projects"
+    },
+    {
+      "id": "technical-rfps",
+      "name": "Technical RFPs",
+      "subtitle": "Public-sector and enterprise technical requests for proposals open to small firms"
+    }
+  ],
+  "sources": {
+    "https://grants.example.org/programs/open-inference-2027": "Northwind Research Fund: Open Inference Infrastructure Grant 2027. Applications open through 15 January 2027. Awards of up to USD 40,000 plus 25,000 GPU-hours of donated compute. Open to independent researchers and teams of up to five people in any country. Submit through the online portal; no institutional sponsor is required. Funded work must be released under an OSI-approved license.",
+    "https://grants.example.org/programs/open-inference-2027/office-hours-2026-10-28": "Office hours notes, 28 October 2026. Program staff confirmed that solo applicants with prior open-source inference work are in scope.",
+    "https://evals.example.org/microgrants": "Evaluation Tooling Microgrants. Rolling program: microgrants of USD 5,000 to USD 15,000 for open evaluation harnesses. Applicants submit a two-page proposal by email to the program inbox. Eligibility details are published in the program handbook.",
+    "https://evals.example.org/microgrants/handbook": "Program handbook. Applicants must be affiliated with a registered non-profit or academic institution. Proposals are reviewed monthly.",
+    "https://compute.example.com/edge-robotics-credits": "Edge Robotics Compute Credits. Up to 2,000 accelerator-hours per accepted project, valid for 12 months. Open to individual developers and startups with fewer than 10 employees. Access is granted after identity verification in the member portal. Applications are reviewed until 31 March 2027.",
+    "https://consortium.example.org/fellowship": "Consortium Research Fellowship. Stipend of USD 70,000 per year. Fellowship candidates must hold a faculty or postdoctoral appointment at a member university.",
+    "https://bounties.example.net/libtoml-lite/fuzzing": "libtoml-lite Parser Fuzzing Bounty. Reward: USD 500 per unique crash with a minimized reproducer, capped at USD 6,000 per researcher. Anyone may participate except project maintainers. Submit findings as private security advisories on the project tracker. The program closes 2027-02-28.",
+    "https://bounties.example.net/wasm-runtime/perf": "WASM Runtime Performance Bounty. A USD 3,000 bounty is paid for a merged change that improves the cold-start benchmark by at least 20 percent. Contributors must sign the project's contributor license agreement. Work is coordinated in the public issue tracker; claim the issue before starting.",
+    "https://bounties.example.net/wasm-runtime/perf/issue-412": "Maintainer comment, 30 October 2026: claim acknowledged, the bounty is reserved for you until 2027-01-10.",
+    "https://docs-sprint.example.org/i18n-2026": "Docs Localization Sprint. Translators are paid a stipend per merged page. Any contributor with a public account may join. Submissions closed on 15 October 2026.",
+    "https://bounties.example.net/token-quest": "Token Quest. Rewards are paid only to wallets that complete identity verification with the issuer.",
+    "https://procurement.example/riverton/rfp-2026-114": "City of Riverton RFP 2026-114: Open-Data Pipeline Modernization. Proposals due 2027-01-20. Estimated contract value USD 180,000 over 18 months. Small businesses and sole proprietors are eligible; no prior municipal contract is required. Proposals are submitted through the public e-procurement portal.",
+    "https://procurement.example/transit/rfp-rt-api": "Regional Transit Authority: Realtime Arrivals API Integration. Fixed-price award of USD 260,000. Respondents must demonstrate two prior GTFS-Realtime deployments. Questions close 2026-12-01; proposals due 2026-12-15 via the authority's bid portal.",
+    "https://rfp.example.com/health/triage-audit": "Clinical Triage Model Audit. The buyer seeks an independent audit of a deployed triage model. Budget: USD 95,000. Independent auditors and small firms may respond; bidders must have no financial relationship with the model vendor. Submissions are accepted on a rolling basis through Q1 2027 via the listed procurement mailbox.",
+    "https://rfp.example.com/defense/onsite-sim": "Simulation Support Services. Personnel must hold an active government security clearance and work on site five days a week."
+  },
+  "dossiers": [
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "claude",
+      "file": "leads/open-inference-grant-2027.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Open Inference Infrastructure Grant 2027",
+        "- **Opportunity ID:** AIG-OPEN-INFER-27",
+        "- **Canonical URL:** https://grants.example.org/programs/open-inference-2027",
+        "- **Status:** Ready",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 40,000 + 25,000 GPU-hours",
+        "- **Deadline:** 2027-01-15",
+        "- **Fit %:** 80% — inference systems match; licence requirement fine",
+        "- **Fit confidence:** high",
+        "- **Fit assessed:** 2026-11-02",
+        "- **Ready evidence:** 2026-10-28 office hours, attributable to program staff [verified: https://grants.example.org/programs/open-inference-2027/office-hours-2026-10-28 \"Program staff confirmed that solo applicants with prior open-source inference work are in scope\"]",
+        "",
+        "## Gate evidence",
+        "- G1 Live & Direct Source [verified: https://grants.example.org/programs/open-inference-2027 \"Applications open through 15 January 2027\"]",
+        "- G2 Relevant Value [verified: https://grants.example.org/programs/open-inference-2027 \"Awards of up to USD 40,000 plus 25,000 GPU-hours of donated compute\"]",
+        "- G3 Eligibility [verified: https://grants.example.org/programs/open-inference-2027 \"Open to independent researchers and teams of up to five people in any country\"]",
+        "- G4 Feasible Access [verified: https://grants.example.org/programs/open-inference-2027 \"no institutional sponsor is required\"]",
+        "",
+        "## Notes",
+        "- Decision date \"by 31 March 2027\" is a note, not a gate."
+      ],
+      "expect": {
+        "tier": "Ready",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "gemini",
+      "file": "leads/open-inference-grant-2027.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Open Inference Infrastructure Grant 2027",
+        "- **Opportunity ID:** AIG-OPEN-INFER-27",
+        "- **Canonical URL:** https://grants.example.org/programs/open-inference-2027",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 40,000 + 25,000 GPU-hours",
+        "- **Deadline:** 2027-01-15",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 Live & Direct Source [verified: https://grants.example.org/programs/open-inference-2027 \"Applications open through 15 January 2027\"]",
+        "- G2 Relevant Value [verified: https://grants.example.org/programs/open-inference-2027 \"Awards of up to USD 40,000 plus 25,000 GPU-hours of donated compute\"]",
+        "- G3 Eligibility [verified: https://grants.example.org/programs/open-inference-2027 \"Open to independent researchers and teams of up to five people in any country\"]",
+        "- G4 Feasible Access [verified: https://grants.example.org/programs/open-inference-2027 \"no institutional sponsor is required\"]",
+        "",
+        "## Notes",
+        "- No dated validation yet: stays Try-worthy until office-hours confirmation is cited."
+      ],
+      "expect": {
+        "tier": "Try-worthy",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "gpt",
+      "file": "leads/open-inference-grant-2027.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Open Inference Infrastructure Grant 2027",
+        "- **Opportunity ID:** AIG-OPEN-INFER-27",
+        "- **Canonical URL:** https://grants.example.org/programs/open-inference-2027",
+        "- **Status:** Ready",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 40,000 + 25,000 GPU-hours",
+        "- **Deadline:** 2027-01-15",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 Live & Direct Source [verified: https://grants.example.org/programs/open-inference-2027 \"Applications open through 15 January 2027\"]",
+        "- G2 Relevant Value [verified: https://grants.example.org/programs/open-inference-2027 \"Awards of up to USD 40,000 plus 25,000 GPU-hours of donated compute\"]",
+        "- G3 Eligibility [verified: https://grants.example.org/programs/open-inference-2027 \"Open to independent researchers and teams of up to five people in any country\"]",
+        "- G4 Feasible Access [verified: https://grants.example.org/programs/open-inference-2027 \"no institutional sponsor is required\"]",
+        "",
+        "## Notes",
+        "- Marked Ready because the program \"looks very likely\"."
+      ],
+      "expect": {
+        "tier": "Try-worthy",
+        "flags": [],
+        "errors": [
+          "READY_UNVALIDATED"
+        ],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "claude",
+      "file": "leads/eval-tooling-microgrants.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Evaluation Tooling Microgrants",
+        "- **Opportunity ID:** AIG-EVAL-MICRO",
+        "- **Canonical URL:** https://evals.example.org/microgrants",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 pass; G3 unknown; G4 pass",
+        "- **Verification gaps:** G3 unknown: handbook eligibility section not read yet",
+        "- **Value:** USD 5,000–15,000",
+        "- **Fit %:** 60%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://evals.example.org/microgrants \"Rolling program\"]",
+        "- G2 [verified: https://evals.example.org/microgrants \"microgrants of USD 5,000 to USD 15,000 for open evaluation harnesses\"]",
+        "- G3 unknown: eligibility lives in the program handbook.",
+        "- G4 [verified: https://evals.example.org/microgrants \"Applicants submit a two-page proposal by email to the program inbox\"]"
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [
+          "CLOSABLE"
+        ],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "gpt",
+      "file": "leads/eval-tooling-microgrants.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Evaluation Tooling Microgrants",
+        "- **Opportunity ID:** AIG-EVAL-MICRO",
+        "- **Canonical URL:** https://evals.example.org/microgrants",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 5,000–15,000",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://evals.example.org/microgrants \"Rolling program\"]",
+        "- G2 [verified: https://evals.example.org/microgrants \"microgrants of USD 5,000 to USD 15,000\"]",
+        "- G3 [verified: https://evals.example.org/microgrants/handbook \"Independent applicants are welcome\"]",
+        "- G4 [verified: https://evals.example.org/microgrants \"Applicants submit a two-page proposal by email\"]",
+        "",
+        "## Notes",
+        "- G3 quote was paraphrased from memory."
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [],
+        "errors": [
+          "QUOTE_NOT_IN_SOURCE",
+          "STATUS_SMUGGLING"
+        ],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "claude",
+      "file": "leads/edge-robotics-credits.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Edge Robotics Compute Credits",
+        "- **Opportunity ID:** AIG-EDGE-ROBO",
+        "- **Canonical URL:** https://compute.example.com/edge-robotics-credits",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 unknown",
+        "- **Verification gaps:** G4 unknown: fast-paste requested, portal FAQ behind login",
+        "- **Value:** 2,000 accelerator-hours / 12 months",
+        "- **Deadline:** 2027-03-31",
+        "- **Fit %:** 60% — compute only, no cash",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://compute.example.com/edge-robotics-credits \"Applications are reviewed until 31 March 2027\"]",
+        "- G2 [verified: https://compute.example.com/edge-robotics-credits \"Up to 2,000 accelerator-hours per accepted project, valid for 12 months\"]",
+        "- G3 [verified: https://compute.example.com/edge-robotics-credits \"Open to individual developers and startups with fewer than 10 employees\"]",
+        "- G4 unknown: access needs identity verification in a member portal whose FAQ is login-walled."
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [
+          "PARKED"
+        ],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "gemini",
+      "file": "leads/edge-robotics-credits.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Edge Robotics Compute Credits",
+        "- **Opportunity ID:** AIG-EDGE-ROBO",
+        "- **Canonical URL:** https://compute.example.com/edge-robotics-credits",
+        "- **Status:** Waiting on Commander",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 unknown",
+        "- **Verification gaps:** G4 unknown: waiting on Commander paste of the portal FAQ",
+        "- **Value:** 2,000 accelerator-hours / 12 months",
+        "- **Deadline:** 2027-03-31",
+        "- **Fit %:** 60% — compute only, no cash",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://compute.example.com/edge-robotics-credits \"Applications are reviewed until 31 March 2027\"]",
+        "- G2 [verified: https://compute.example.com/edge-robotics-credits \"Up to 2,000 accelerator-hours per accepted project, valid for 12 months\"]",
+        "- G3 [verified: https://compute.example.com/edge-robotics-credits \"Open to individual developers and startups with fewer than 10 employees\"]",
+        "- G4 unknown: access needs identity verification in a member portal whose FAQ is login-walled."
+      ],
+      "expect": {
+        "tier": "Waiting on Commander",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "ai-engineering-grants",
+      "engine": "claude",
+      "file": "leads/rejected/consortium-fellowship.md",
+      "rejected": true,
+      "markdown": [
+        "# Lead: Consortium Research Fellowship",
+        "- **Opportunity ID:** AIG-CONSORT-FELLOW",
+        "- **Canonical URL:** https://consortium.example.org/fellowship",
+        "- **Status:** Rejected",
+        "- **Rejection Reason:** G3 fail [verified: https://consortium.example.org/fellowship \"Fellowship candidates must hold a faculty or postdoctoral appointment at a member university\"]",
+        "- **Gates:** G1 pass; G2 pass; G3 fail; G4 unknown",
+        "- **Value:** USD 70,000 / year",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://consortium.example.org/fellowship \"Consortium Research Fellowship\"]",
+        "- G2 [verified: https://consortium.example.org/fellowship \"Stipend of USD 70,000 per year\"]"
+      ],
+      "expect": {
+        "tier": "Rejected",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "open-source-bounties",
+      "engine": "gpt",
+      "file": "leads/libtoml-lite-fuzzing.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: libtoml-lite Parser Fuzzing Bounty",
+        "- **Opportunity ID:** OSB-TOML-FUZZ",
+        "- **Canonical URL:** https://bounties.example.net/libtoml-lite/fuzzing",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 500 per crash, cap USD 6,000",
+        "- **Deadline:** 2027-02-28",
+        "- **Fit %:** 80% — fuzzing experience, Rust parser familiarity",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"The program closes 2027-02-28\"]",
+        "- G2 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Reward: USD 500 per unique crash with a minimized reproducer\"]",
+        "- G3 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Anyone may participate except project maintainers\"]",
+        "- G4 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Submit findings as private security advisories on the project tracker\"]"
+      ],
+      "expect": {
+        "tier": "Try-worthy",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "open-source-bounties",
+      "engine": "gemini",
+      "file": "leads/libtoml-lite-fuzzing.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: libtoml-lite Parser Fuzzing Bounty",
+        "- **Opportunity ID:** OSB-TOML-FUZZ",
+        "- **Canonical URL:** https://bounties.example.net/libtoml-lite/fuzzing",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass, G2 pass, G3 pass, G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 500 per crash, cap USD 6,000",
+        "- **Deadline:** 2027-02-28",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"The program closes 2027-02-28\"]",
+        "- G2 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Reward: USD 500 per unique crash with a minimized reproducer\"]",
+        "- G3 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Anyone may participate except project maintainers\"]",
+        "- G4 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Submit findings as private security advisories on the project tracker\"]"
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [],
+        "errors": [
+          "STATUS_SMUGGLING"
+        ],
+        "warns": [
+          "GATE_UNPARSED",
+          "GATE_UNPARSED",
+          "GATE_UNPARSED"
+        ]
+      }
+    },
+    {
+      "lane": "open-source-bounties",
+      "engine": "claude",
+      "file": "leads/wasm-runtime-perf.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: WASM Runtime Cold-Start Performance Bounty",
+        "- **Opportunity ID:** OSB-WASM-PERF",
+        "- **Canonical URL:** https://bounties.example.net/wasm-runtime/perf",
+        "- **Status:** Ready",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 3,000 on merge",
+        "- **Deadline:** 2027-01-10",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** high",
+        "- **Fit assessed:** 2026-11-02",
+        "- **Ready evidence:** 2026-10-30 maintainer acknowledgement [verified: https://bounties.example.net/wasm-runtime/perf/issue-412 \"claim acknowledged, the bounty is reserved for you until 2027-01-10\"]",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/wasm-runtime/perf \"WASM Runtime Performance Bounty\"]",
+        "- G2 [verified: https://bounties.example.net/wasm-runtime/perf \"A USD 3,000 bounty is paid for a merged change\"]",
+        "- G3 [verified: https://bounties.example.net/wasm-runtime/perf \"Contributors must sign the project's contributor license agreement\"]",
+        "- G4 [verified: https://bounties.example.net/wasm-runtime/perf \"claim the issue before starting\"]"
+      ],
+      "expect": {
+        "tier": "Ready",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "open-source-bounties",
+      "engine": "gpt",
+      "file": "leads/wasm-runtime-perf.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: WASM Runtime Cold-Start Performance Bounty",
+        "- **Opportunity ID:** OSB-WASM-PERF",
+        "- **Canonical URL:** https://bounties.example.net/wasm-runtime/perf",
+        "- **Status:** Ready",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass [verified: https://bounties.example.net/wasm-runtime/perf \"A USD 3,000 bounty is paid for a merged change\"]",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 3,000 on merge",
+        "- **Deadline:** 2027-01-10",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "- **Ready evidence:** 2026-10-30 maintainer acknowledgement [verified: https://bounties.example.net/wasm-runtime/perf/issue-412 \"claim acknowledged, the bounty is reserved for you until 2027-01-10\"]",
+        "",
+        "## Gate evidence",
+        "- All gates: see the citation on the Gates line."
+      ],
+      "expect": {
+        "tier": "Ready",
+        "flags": [],
+        "errors": [],
+        "warns": [
+          "CITATION_SHARED"
+        ]
+      }
+    },
+    {
+      "lane": "open-source-bounties",
+      "engine": "gemini",
+      "file": "leads/docs-i18n-sprint.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Docs Localization Sprint 2026",
+        "- **Opportunity ID:** OSB-DOCS-I18N",
+        "- **Canonical URL:** https://docs-sprint.example.org/i18n-2026",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 unknown; G3 pass; G4 pass",
+        "- **Verification gaps:** G2 unknown: stipend amount not published",
+        "- **Value:** Per-page stipend (amount unpublished)",
+        "- **Deadline:** 2026-10-15",
+        "- **Fit %:** 60%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://docs-sprint.example.org/i18n-2026 \"Docs Localization Sprint\"]",
+        "- G2 unknown: \"a stipend per merged page\" with no amount.",
+        "- G3 [verified: https://docs-sprint.example.org/i18n-2026 \"Any contributor with a public account may join\"]",
+        "- G4 [verified: https://docs-sprint.example.org/i18n-2026 \"Translators are paid a stipend per merged page\"]"
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [
+          "CLOSABLE",
+          "DEADLINE_PAST_REVIEW"
+        ],
+        "errors": [
+          "DEADLINE_PAST_REVIEW"
+        ],
+        "warns": []
+      }
+    },
+    {
+      "lane": "open-source-bounties",
+      "engine": "gpt",
+      "file": "leads/rejected/token-quest.md",
+      "rejected": true,
+      "markdown": [
+        "# Lead: Token Quest Rewards",
+        "- **Opportunity ID:** OSB-TOKEN-QUEST",
+        "- **Canonical URL:** https://bounties.example.net/token-quest",
+        "- **Status:** Rejected",
+        "- **Rejection Reason:** G4 fail: third-party identity verification is outside the access rule [verified: https://bounties.example.net/token-quest \"Rewards are paid only to wallets that complete identity verification with the issuer\"]",
+        "- **Gates:** G1 pass; G2 unknown; G3 unknown; G4 fail",
+        "- **Value:** Token rewards",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/token-quest \"Token Quest\"]"
+      ],
+      "expect": {
+        "tier": "Rejected",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "technical-rfps",
+      "engine": "claude",
+      "file": "leads/riverton-open-data-rfp.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Riverton Open-Data Pipeline Modernization (RFP 2026-114)",
+        "- **Opportunity ID:** RFP-RIV-2026-114",
+        "- **Canonical URL:** https://procurement.example/riverton/rfp-2026-114?utm_source=newsletter&utm_medium=email",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 180,000 / 18 months",
+        "- **Deadline:** 2027-01-20",
+        "- **Fit %:** 80% — data pipelines, solo-eligible",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://procurement.example/riverton/rfp-2026-114 \"Proposals due 2027-01-20\"]",
+        "- G2 [verified: https://procurement.example/riverton/rfp-2026-114 \"Estimated contract value USD 180,000 over 18 months\"]",
+        "- G3 [verified: https://procurement.example/riverton/rfp-2026-114 \"Small businesses and sole proprietors are eligible; no prior municipal contract is required\"]",
+        "- G4 [verified: https://procurement.example/riverton/rfp-2026-114 \"Proposals are submitted through the public e-procurement portal\"]"
+      ],
+      "expect": {
+        "tier": "Try-worthy",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "technical-rfps",
+      "engine": "gemini",
+      "file": "leads/riverton-open-data-rfp.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Riverton Open-Data Pipeline Modernization (RFP 2026-114)",
+        "- **Opportunity ID:** RFP-RIV-2026-114",
+        "- **Canonical URL:** https://procurement.example/riverton/rfp-2026-114",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 fail; G3 unknown; G4 pass",
+        "- **Verification gaps:** G2 fail: below the USD 250,000 lane minimum; G3 unknown",
+        "- **Value:** USD 180,000 / 18 months",
+        "- **Deadline:** 2027-01-20",
+        "- **Fit %:** 60%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://procurement.example/riverton/rfp-2026-114 \"Proposals due 2027-01-20\"]",
+        "- G2 fail [verified: https://procurement.example/riverton/rfp-2026-114 \"Estimated contract value USD 180,000 over 18 months\"]",
+        "- G3 unknown: insurance requirements not read.",
+        "- G4 [verified: https://procurement.example/riverton/rfp-2026-114 \"Proposals are submitted through the public e-procurement portal\"]"
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    },
+    {
+      "lane": "technical-rfps",
+      "engine": "gpt",
+      "file": "leads/transit-realtime-api.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Transit Realtime Arrivals API Integration",
+        "- **Summary:** Carried over from a previous pass, **Status:** Ready",
+        "- **Opportunity ID:** RFP-TRANSIT-RT",
+        "- **Canonical URL:** https://procurement.example/transit/rfp-rt-api",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 pass; G3 unknown; G4 pass",
+        "- **Verification gaps:** G3 unknown: needs two prior GTFS-Realtime deployments",
+        "- **Value:** USD 260,000 fixed price",
+        "- **Deadline:** 2026-12-15",
+        "- **Fit %:** 60%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://procurement.example/transit/rfp-rt-api \"proposals due 2026-12-15\"]",
+        "- G2 [verified: https://procurement.example/transit/rfp-rt-api \"Fixed-price award of USD 260,000\"]",
+        "- G3 unknown: deployment history requirement.",
+        "- G4 [verified: https://procurement.example/transit/rfp-rt-api \"via the authority's bid portal\"]"
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [
+          "CLOSABLE"
+        ],
+        "errors": [
+          "STATUS_DIVERGENT",
+          "STATUS_SMUGGLING"
+        ],
+        "warns": []
+      }
+    },
+    {
+      "lane": "technical-rfps",
+      "engine": "claude",
+      "file": "leads/transit-realtime-api.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Transit Realtime Arrivals API Integration",
+        "- **Opportunity ID:** RFP-TRANSIT-RT",
+        "- **Canonical URL:** https://procurement.example/transit/rfp-rt-api",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 pass; G3 unknown; G4 unknown",
+        "- **Verification gaps:** G3, G4 unknown",
+        "- **Value:** USD 260,000 fixed price",
+        "- **Deadline:** 2026-12-15",
+        "- **Fit %:** 60%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://procurement.example/transit/rfp-rt-api]",
+        "- G2 [verified: https://procurement.example/transit/rfp-rt-api \"Fixed-price award of USD 260,000\"]",
+        "- G3 unknown.",
+        "- G4 unknown."
+      ],
+      "expect": {
+        "tier": "Verify",
+        "flags": [
+          "STALE_GRADE",
+          "CLOSABLE"
+        ],
+        "errors": [
+          "CITATION_MISSING_QUOTE",
+          "GATE_UNSOURCED"
+        ],
+        "warns": []
+      }
+    },
+    {
+      "lane": "technical-rfps",
+      "engine": "gemini",
+      "file": "leads/clinical-triage-audit.md",
+      "rejected": false,
+      "markdown": [
+        "# Lead: Clinical Triage Model Audit",
+        "- **Opportunity ID:** RFP-HEALTH-AUDIT",
+        "- **Canonical URL:** https://rfp.example.com/health/triage-audit",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 95,000",
+        "- **Deadline:** Rolling (Q1 2027)",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://rfp.example.com/health/triage-audit \"Submissions are accepted on a rolling basis through Q1 2027\"]",
+        "- G2 [verified: https://rfp.example.com/health/triage-audit \"Budget: USD 95,000\"]",
+        "- G3 [verified: https://rfp.example.com/health/triage-audit \"Independent auditors and small firms may respond\"]",
+        "- G4 [verified: https://rfp.example.com/health/triage-audit \"via the listed procurement mailbox\"]"
+      ],
+      "expect": {
+        "tier": "Try-worthy",
+        "flags": [],
+        "errors": [],
+        "warns": [
+          "DEADLINE_UNPARSED"
+        ]
+      }
+    },
+    {
+      "lane": "technical-rfps",
+      "engine": "gemini",
+      "file": "leads/rejected/onsite-simulation-support.md",
+      "rejected": true,
+      "markdown": [
+        "# Lead: Simulation Support Services (on-site)",
+        "- **Opportunity ID:** RFP-ONSITE-SIM",
+        "- **Canonical URL:** https://rfp.example.com/defense/onsite-sim",
+        "- **Status:** Rejected",
+        "- **Rejection Reason:** G3 fail [verified: https://rfp.example.com/defense/onsite-sim \"Personnel must hold an active government security clearance\"]",
+        "- **Gates:** G1 pass; G2 unknown; G3 fail; G4 fail",
+        "- **Value:** Undisclosed",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://rfp.example.com/defense/onsite-sim \"Simulation Support Services\"]"
+      ],
+      "expect": {
+        "tier": "Rejected",
+        "flags": [],
+        "errors": [],
+        "warns": []
+      }
+    }
+  ],
+  "presets": [
+    {
+      "label": "Clean Try-worthy dossier (break it!)",
+      "markdown": [
+        "# Lead: libtoml-lite Parser Fuzzing Bounty",
+        "- **Opportunity ID:** OSB-TOML-FUZZ",
+        "- **Canonical URL:** https://bounties.example.net/libtoml-lite/fuzzing",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 500 per crash, cap USD 6,000",
+        "- **Deadline:** 2027-02-28",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"The program closes 2027-02-28\"]",
+        "- G2 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Reward: USD 500 per unique crash with a minimized reproducer\"]",
+        "- G3 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Anyone may participate except project maintainers\"]",
+        "- G4 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Submit findings as private security advisories on the project tracker\"]"
+      ]
+    },
+    {
+      "label": "Malformed gates: commas, \"passed\", duplicates",
+      "markdown": [
+        "# Lead: Malformed Gates Example",
+        "- **Opportunity ID:** DEMO-GATES",
+        "- **Canonical URL:** https://bounties.example.net/libtoml-lite/fuzzing",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass, G2 pass; G3 passed; G3 fail",
+        "- **Verification gaps:** G4 missing from the Gates line",
+        "- **Fit %:** 60%",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"The program closes 2027-02-28\"]",
+        "- G2 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Reward: USD 500 per unique crash with a minimized reproducer\"]",
+        "- G3 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Anyone may participate except project maintainers\"]",
+        "- G4 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"Submit findings as private security advisories on the project tracker\"]"
+      ]
+    },
+    {
+      "label": "Broken citations: no quote, empty, case, scheme",
+      "markdown": [
+        "# Lead: Citation Hygiene Example",
+        "- **Opportunity ID:** DEMO-CITES",
+        "- **Canonical URL:** https://bounties.example.net/libtoml-lite/fuzzing",
+        "- **Status:** Verify",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass",
+        "- **Fit %:** 60%",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://bounties.example.net/libtoml-lite/fuzzing]",
+        "- G2 [verified: https://bounties.example.net/libtoml-lite/fuzzing \"\"]",
+        "- G3 [Verified: https://bounties.example.net/libtoml-lite/fuzzing \"Anyone may participate except project maintainers\"]",
+        "- G4 [verified: ftp://files.example.net/rules.txt \"rules\"]"
+      ]
+    },
+    {
+      "label": "Status smuggling: Ready with open gates",
+      "markdown": [
+        "# Lead: Status Smuggling Example",
+        "- **Opportunity ID:** DEMO-SMUGGLE",
+        "- **Canonical URL:** https://evals.example.org/microgrants",
+        "- **Notes:** reviewer wrote **Status:** Ready in chat",
+        "- **Status:** Ready (pending G3)",
+        "- **Gates:** G1 pass; G2 pass; G3 unknown; G4 pass",
+        "- **Fit %:** 80%",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://evals.example.org/microgrants \"Rolling program\"]",
+        "- G2 [verified: https://evals.example.org/microgrants \"microgrants of USD 5,000 to USD 15,000\"]",
+        "- G4 [verified: https://evals.example.org/microgrants \"Applicants submit a two-page proposal by email\"]"
+      ]
+    },
+    {
+      "label": "Citation smuggling via the Gates line",
+      "markdown": [
+        "# Lead: WASM Runtime Cold-Start Performance Bounty",
+        "- **Opportunity ID:** OSB-WASM-PERF",
+        "- **Canonical URL:** https://bounties.example.net/wasm-runtime/perf",
+        "- **Status:** Try-worthy",
+        "- **Gates:** G1 pass; G2 pass; G3 pass; G4 pass [verified: https://bounties.example.net/wasm-runtime/perf \"WASM Runtime Performance Bounty\"]",
+        "- **Verification gaps:** None",
+        "- **Value:** USD 3,000 on merge",
+        "- **Deadline:** 2027-01-10",
+        "- **Fit %:** 80%",
+        "- **Fit confidence:** medium",
+        "- **Fit assessed:** 2026-11-02",
+        "",
+        "## Gate evidence",
+        "- (no per-gate evidence)"
+      ]
+    },
+    {
+      "label": "BOM, invalid and past deadlines",
+      "markdown": [
+        "﻿- **Status:** Verify",
+        "# Lead: Encoding & Date Example",
+        "- **Opportunity ID:** DEMO-DATES",
+        "- **Canonical URL:** https://www.procurement.example/riverton/rfp-2026-114/#top",
+        "- **Gates:** G1 pass; G2 unknown; G3 unknown; G4 unknown",
+        "- **Deadline:** 2026-02-30",
+        "- **Fit %:** unknown",
+        "",
+        "## Gate evidence",
+        "- G1 [verified: https://procurement.example/riverton/rfp-2026-114 \"Proposals due 2027-01-20\"]"
+      ]
+    }
+  ]
+}

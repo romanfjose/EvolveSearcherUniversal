@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Static demo of the EvolveSearcher Universal dashboard and the deterministic Assayer / lead-lint pipeline on 100% synthetic data.">
+  <title>EvolveSearcher Universal · Static Demo</title>
+  <style>
+    /* Tokens and components mirror ui/style.css (the canonical dashboard); this copy exists so the page runs standalone on GitHub Pages. */
+    :root {
+      color-scheme: dark;
+      --bg: #0f141b; --panel: #17202a; --surface: #222f3e; --ink: #e5ebf3; --muted: #9ba9bc; --line: #2d3b4d;
+      --accent: #7cd4ba; --warn: #f5b95f; --warn-bg: #362815; --bad: #ff8f9f; --bad-bg: #3c242c; --info: #8bd2df;
+      --claude: #e7a67d; --gemini: #a7b4ff; --gpt: #68c9ad;
+      --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 "Segoe UI", system-ui, sans-serif; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button, select, input[type=search] { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 7px 11px; }
+    button { cursor: pointer; transition: background .15s, border-color .15s; }
+    button:hover:not(:disabled) { border-color: var(--accent); background: #213634; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    a { color: var(--info); }
+    code { font-family: var(--mono); }
+
+    header { display: flex; align-items: center; justify-content: space-between; padding: 20px 32px 14px; gap: 20px; flex-wrap: wrap; }
+    .eyebrow { font-size: 10px; letter-spacing: 2px; font-weight: 750; color: var(--accent); }
+    h1 { font-size: 24px; letter-spacing: -.5px; margin: 3px 0 0; }
+    h2 { font-size: 19px; line-height: 1.4; margin: 0 0 6px; }
+    h3 { font-size: 15px; margin: 0; }
+    .refresh { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+    .readonly-pill { background: #1b332d; color: var(--accent); border: 1px solid #2e594e; padding: 3px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; }
+
+    .lane-bar { padding: 0 32px 14px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .lane-bar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .lane-pills { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+    .lane-pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 8px; font-size: 13px; }
+    .lane-pill.selected { background: #1e3732; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .lane-pill-name { font-weight: 650; }
+    .lane-pill-meta { font-size: 11px; color: var(--muted); }
+    .warn-badge { font-size: 11px; background: var(--warn-bg); color: var(--warn); border: 1px solid #6b4c1b; padding: 1px 6px; border-radius: 5px; font-weight: 650; }
+
+    .claude { --project: var(--claude); } .gemini { --project: var(--gemini); } .gpt { --project: var(--gpt); }
+    .projects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0 32px 18px; }
+    .project { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--project); border-radius: 9px; padding: 12px 16px; }
+    .project-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .project-lane-tag { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+    .project-name { font-weight: 700; font-size: 16px; }
+    .state { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+    .ready-state { background: #1a332c; color: var(--accent); }
+    .warn-state { background: var(--bad-bg); color: var(--bad); }
+    .tier-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tier { font-size: 11px; color: var(--muted); background: var(--surface); padding: 2px 7px; border-radius: 5px; }
+    .tier b { color: var(--ink); margin-left: 3px; }
+
+    #error { margin: 0 32px 14px; padding: 11px 14px; border: 1px solid #804753; border-radius: 7px; background: var(--bad-bg); color: #ffc0c9; }
+    nav { display: flex; gap: 22px; padding: 0 32px; background: var(--panel); border-block: 1px solid var(--line); overflow-x: auto; }
+    nav button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 12px 2px; background: transparent; color: var(--muted); font-size: 13px; white-space: nowrap; }
+    nav button:hover:not(:disabled) { background: transparent; color: var(--ink); }
+    nav button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 650; }
+    .count-pill { font-size: 11px; background: var(--surface); padding: 2px 6px; border-radius: 5px; margin-left: 5px; }
+    .count-pill.has-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #6b4c1b; }
+    .new-pill { font-size: 10px; background: #1b332d; color: var(--accent); border: 1px solid #2e594e; padding: 1px 6px; border-radius: 999px; margin-left: 5px; font-weight: 700; }
+
+    .workspace { display: grid; grid-template-columns: minmax(300px, 30%) minmax(0, 1fr); height: calc(100vh - 290px); min-height: 560px; }
+    .lead-list { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+    .filters { padding: 14px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 9px; font-size: 12px; }
+    .filters input[type=search] { width: 100%; }
+    .filters > div { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filters select { flex: 1; min-width: 95px; font-size: 12px; padding: 5px; }
+    .filters label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+    .rows { overflow-y: auto; }
+    .lead-row { width: 100%; text-align: left; border: 0; border-radius: 0; border-bottom: 1px solid var(--line); padding: 13px 16px; display: block; background: var(--panel); }
+    .lead-row.selected { background: #1f3933; box-shadow: inset 3px 0 var(--accent); }
+    .row-top-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+    .lane-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; background: var(--surface); color: var(--accent); padding: 1px 6px; border-radius: 4px; }
+    .shared-label { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+    .row-title { font-weight: 600; font-size: 13px; margin-bottom: 7px; display: block; }
+    .badges { display: flex; gap: 5px; flex-wrap: wrap; }
+    .badge { border-radius: 5px; font-size: 11px; padding: 2px 6px; background: #222d3a; color: var(--project); border: 1px solid color-mix(in srgb, var(--project) 35%, var(--panel)); font-weight: 600; }
+    .badge.rejected { text-decoration: line-through; opacity: .65; }
+
+    .detail { padding: 22px 24px; overflow: auto; min-width: 0; }
+    .detail-header { margin-bottom: 16px; }
+    .detail-header p { color: var(--muted); font-size: 12px; margin: 5px 0 10px; }
+    .engine-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .engine-tab { border-top: 3px solid var(--project); display: inline-flex; align-items: center; gap: 6px; font-weight: 650; font-size: 13px; }
+    .engine-tab[aria-selected=true] { background: #1e3732; border-color: var(--accent); border-top-color: var(--project); }
+    .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
+    .assessment { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--project, var(--accent)); border-radius: 9px; overflow: hidden; min-width: 0; }
+    .assessment-head { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .assessment-head h3 { color: var(--project, var(--accent)); }
+    .assessment-head p { margin: 6px 0 0; }
+    .filename { font-size: 11px; color: var(--muted); word-break: break-all; margin: 6px 0 8px; font-family: var(--mono); }
+    .ghost-btn { font-size: 12px; padding: 5px 10px; border-style: dashed; border-color: var(--accent); color: var(--accent); background: transparent; }
+    .md { font-size: 13px; overflow-wrap: anywhere; padding: 6px 16px 18px; }
+    .md h1 { font-size: 18px; } .md h2 { font-size: 15px; margin-top: 18px; }
+    .md ul { padding-left: 20px; } .md li { margin: 6px 0; } .md p { margin: 9px 0; }
+    .md code { background: var(--surface); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+    .md pre { white-space: pre-wrap; background: var(--surface); padding: 12px; border-radius: 6px; }
+    .cite { display: inline; background: #17302b; border: 1px solid #2e594e; border-radius: 5px; padding: 0 5px; font-size: 12px; }
+    .cite a { color: var(--accent); }
+    q { color: var(--ink); font-style: italic; }
+    .inspector-body { padding: 14px 16px 18px; }
+    .section-h { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 18px 0 8px; }
+    .verdict-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; align-items: start; }
+    .verdict-bar > div { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+    .verdict-bar .counts { flex-direction: row; flex-wrap: wrap; gap: 5px; grid-column: 1 / -1; }
+    .c { font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; background: var(--surface); }
+    .c.error { color: var(--bad); } .c.warn { color: var(--warn); } .c.info { color: var(--info); }
+    .tierpill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; background: var(--surface); width: fit-content; }
+    .tierpill.ready { background: #183a2f; color: #8ff0c9; } .tierpill.try { background: #1c3340; color: #9fd8ff; }
+    .tierpill.verify { background: #352d17; color: #f5d27f; } .tierpill.waiting { background: #2d2540; color: #c8b5ff; }
+    .tierpill.rejected { background: #2a2f37; color: var(--muted); text-decoration: line-through; } .tierpill.unknown { background: var(--bad-bg); color: var(--bad); }
+    .gate-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .gate-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 650; padding: 0 8px 6px 0; }
+    .gate-table td { border-top: 1px solid var(--line); padding: 8px 8px 8px 0; vertical-align: top; }
+    .gate-table td:first-child { width: 120px; }
+    .gv { font-family: var(--mono); font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--surface); }
+    .gv.pass { color: #8ff0c9; } .gv.fail { color: var(--bad); } .gv.unknown { color: var(--warn); }
+    .ev { margin-bottom: 6px; }
+    .ev-host { font-family: var(--mono); font-size: 11px; color: var(--info); }
+    .ev-check { display: inline-block; font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 4px; margin-left: 4px; background: var(--surface); color: var(--muted); }
+    .ev.found .ev-check { color: #8ff0c9; } .ev.missing .ev-check { color: var(--bad); background: var(--bad-bg); }
+    .verdict { font-weight: 700; white-space: nowrap; } .verdict.ok { color: #8ff0c9; } .verdict.open { color: var(--warn); } .verdict.bad { color: var(--bad); }
+    .findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .finding-inner { display: grid; grid-template-columns: 18px auto auto 1fr; gap: 4px 8px; align-items: baseline; width: 100%; text-align: left; padding: 8px 10px; border-radius: 7px; background: var(--surface); border: 1px solid transparent; font-size: 12px; }
+    button.finding-inner:hover { border-color: var(--accent); background: #213634; }
+    .finding.error .finding-inner { border-left: 3px solid var(--bad); } .finding.warn .finding-inner { border-left: 3px solid var(--warn); } .finding.info .finding-inner { border-left: 3px solid var(--info); }
+    .sev { font-weight: 800; text-align: center; }
+    .finding.error .sev, .code.error { color: var(--bad); } .finding.warn .sev, .code.warn { color: var(--warn); } .finding.info .sev, .code.info { color: var(--info); }
+    .code { font-size: 11px; font-weight: 700; }
+    .loc { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .msg { grid-column: 2 / -1; color: var(--ink); }
+    .msg code { background: #2b3a4c; padding: 0 4px; border-radius: 4px; }
+    details.raw { margin-top: 16px; font-size: 12px; } details.raw summary { cursor: pointer; color: var(--muted); }
+    pre.json, details.raw pre { font-family: var(--mono); font-size: 11.5px; background: var(--surface); padding: 12px; border-radius: 7px; overflow: auto; margin: 8px 0 0; }
+    .empty { padding: 40px 20px; color: var(--muted); max-width: 560px; }
+    .empty h2 { color: var(--ink); }
+    .muted { color: var(--muted); font-size: 12px; }
+
+    .sandbox { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 20px 32px; }
+    .sb-head { grid-column: 1 / -1; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+    .sb-head select { min-width: 280px; font-size: 12px; }
+    .sb-head label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .editor-wrap { display: grid; grid-template-columns: auto 1fr; background: #0b1016; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; height: calc(100vh - 300px); min-height: 460px; }
+    #sb-gutter, #editor { font: 12.5px/19px var(--mono); padding: 12px 10px; margin: 0; }
+    #sb-gutter { color: #4f6178; text-align: right; user-select: none; overflow: hidden; border-right: 1px solid var(--line); min-width: 42px; white-space: pre; }
+    #editor { background: transparent; border: 0; resize: none; color: var(--ink); white-space: pre; overflow: auto; tab-size: 2; }
+    #editor:focus-visible { outline: none; }
+    #editor::selection { background: #6b4c1b; color: #fff; }
+    #sb-timing { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+    .sb-panel { overflow: auto; height: calc(100vh - 300px); min-height: 460px; }
+
+    .diagnostics-view, .report-view { padding: 22px 32px; }
+    .diag-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .chip { font-size: 11px; font-family: var(--mono); padding: 3px 8px; }
+    .chip b { color: var(--warn); margin-left: 4px; }
+    .diag-list { display: grid; gap: 10px; }
+    .diag-card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; }
+    .diag-card.error { border-left-color: var(--bad); } .diag-card.info { border-left-color: var(--info); }
+    .diag-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+    .diag-issue { margin-top: 8px; font-size: 13px; }
+    .diag-issue code:not(.code) { background: var(--surface); padding: 0 4px; border-radius: 4px; }
+    .diag-snippet { margin: 8px 0 0; background: var(--surface); padding: 8px 10px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .diag-ok { background: var(--panel); border: 1px solid #2b5448; border-radius: 8px; padding: 16px 18px; }
+    .diag-ok h3 { color: var(--accent); margin-bottom: 4px; }
+    .report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 14px; align-items: start; }
+    .report-grid pre.json { margin: 0; border-radius: 0; max-height: 420px; }
+
+    footer { padding: 12px 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    input[type=checkbox] { accent-color: var(--accent); }
+    ::selection { background: #355a61; color: #fff; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 1250px) { .split { grid-template-columns: 1fr; } }
+    @media (max-width: 1050px) {
+      header, .lane-bar, .projects, .sandbox, .diagnostics-view, .report-view, footer { padding-inline: 16px; }
+      nav { padding-inline: 16px; }
+      .projects { grid-template-columns: 1fr; }
+      .workspace { grid-template-columns: 40% 60%; }
+      .sandbox { grid-template-columns: 1fr; }
+      .editor-wrap, .sb-panel { height: auto; min-height: 380px; }
+    }
+    @media (max-width: 720px) {
+      .workspace { display: block; height: auto; }
+      .lane-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+      .rows { max-height: 360px; border-bottom: 1px solid var(--line); }
+      .detail { padding: 16px; }
+      h1 { font-size: 20px; }
+    }
+  </style>
+  <script type="module" src="demo-app.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <span class="eyebrow">EVOLVESEARCHER UNIVERSAL · STATIC DEMO</span>
+      <h1>Three synthetic lanes. Three engines. One deterministic Assayer.</h1>
+    </div>
+    <div class="refresh">
+      <span class="readonly-pill" title="Every organisation, program and URL is fictional (RFC 2606 reserved domains)">100% Synthetic Data</span>
+      <span class="readonly-pill" title="Nothing leaves your browser">Read-Only · No Network</span>
+      <span id="sync" role="status">Loading…</span>
+    </div>
+  </header>
+
+  <section class="lane-bar" aria-label="Project lane selector">
+    <div class="lane-bar-label">Project Lanes</div>
+    <div id="lanes" class="lane-pills" role="tablist" aria-label="Select project lane"></div>
+  </section>
+
+  <section id="projects" class="projects" aria-label="Engine tier summary"></section>
+
+  <div id="error" role="alert" hidden></div>
+
+  <nav aria-label="Demo views">
+    <button data-tab="leads" aria-selected="true">Opportunities <span id="lead-count" class="count-pill">0</span></button>
+    <button data-tab="sandbox" aria-selected="false">Try the Deterministic Linter <span class="new-pill">LIVE</span></button>
+    <button data-tab="diagnostics" aria-selected="false">Assayer Diagnostics <span id="diag-count" class="count-pill">0</span></button>
+    <button data-tab="report" aria-selected="false">lead-lint Report</button>
+  </nav>
+
+  <main>
+    <section id="leads" class="workspace">
+      <aside class="lead-list">
+        <div class="filters">
+          <input id="search" type="search" aria-label="Search opportunities" placeholder="Search title, ID, status, engine, diagnostic code…  (press /)">
+          <div>
+            <select id="project-filter" aria-label="Filter engine">
+              <option value="">All engines</option><option value="claude">Claude</option><option value="gemini">Gemini</option><option value="gpt">ChatGPT</option>
+            </select>
+            <select id="status-filter" aria-label="Filter declared status">
+              <option value="">All statuses</option><option value="ready">Ready</option><option value="try">Try-worthy</option>
+              <option value="verify">Verify</option><option value="waiting">Waiting on Commander</option><option value="rejected">Rejected</option>
+            </select>
+            <select id="sort" aria-label="Sort opportunities">
+              <option value="fit">Highest fit</option><option value="issues">Most Assayer errors</option><option value="shared">Shared first</option><option value="title">Name</option>
+            </select>
+          </div>
+          <div>
+            <label><input id="rejected" type="checkbox"> Include rejected</label>
+            <label><input id="shared" type="checkbox"> Shared only</label>
+            <label><input id="malformed" type="checkbox"> Assayer errors only</label>
+          </div>
+          <span id="list-count" class="muted"></span>
+        </div>
+        <div id="rows" class="rows" aria-label="Opportunity list"></div>
+      </aside>
+      <section class="detail" aria-label="Opportunity details">
+        <div id="detail">
+          <div class="empty">
+            <h2>Select an opportunity</h2>
+            <p>Each engine files its own dossier. The Assayer re-derives every grade from cited sources: a gate only holds when its <code>[verified: &lt;url&gt; "&lt;quote&gt;"]</code> exists and the quote is really in the cached source.</p>
+            <p>The demo clock is fixed at <b id="clock">…</b> so deadlines and flags are reproducible.</p>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="sandbox" class="sandbox" hidden aria-label="Deterministic linter sandbox">
+      <div class="sb-head">
+        <label for="preset">Load</label>
+        <select id="preset"></select>
+        <label><input id="sb-snapshots" type="checkbox" checked> Check quotes against cached source snapshots</label>
+        <label><input id="sb-rejected" type="checkbox"> Treat as rejected dossier</label>
+        <span id="sb-timing" role="status"></span>
+      </div>
+      <div class="editor-wrap">
+        <pre id="sb-gutter" aria-hidden="true">1</pre>
+        <textarea id="editor" spellcheck="false" aria-label="Markdown dossier editor" autocomplete="off"></textarea>
+      </div>
+      <div class="assessment sb-panel">
+        <div class="assessment-head"><h3>Live Assayer verdict</h3><p class="muted">Updates on every keystroke. Click a finding to select its exact source span.</p></div>
+        <div id="sb-result" class="inspector-body"></div>
+      </div>
+    </section>
+
+    <section id="diagnostics" class="diagnostics-view" hidden>
+      <div class="diag-header">
+        <div>
+          <h2>Assayer Diagnostics</h2>
+          <p class="muted">Every finding is pinned to a line, column and exact source span. Click a code to filter opportunities by it.</p>
+        </div>
+        <select id="sev-filter" aria-label="Severity">
+          <option value="">Errors + warnings</option><option value="error">Errors only</option><option value="warn">Warnings only</option><option value="info">Notes only</option>
+        </select>
+      </div>
+      <div id="diag-summary" class="chips"></div>
+      <div id="diag-list" class="diag-list"></div>
+    </section>
+
+    <section id="report" class="report-view" hidden>
+      <div class="diag-header">
+        <div>
+          <h2>lead-lint Report</h2>
+          <p class="muted">The exact JSON <code>node tools/preflight-and-verify.mjs lead-lint</code> prints for each engine's <code>leads/</code> folder (rejected dossiers excluded), computed in-browser by a port that <code>npm test</code> proves identical.</p>
+        </div>
+      </div>
+      <div id="report-body" class="report-grid"></div>
+    </section>
+  </main>
+
+  <footer>Static demo on 100% synthetic data. Nothing is fetched beyond this folder, nothing is stored, and no project files exist here; the real dashboard is <code>npm start</code>.</footer>
+</body>
+</html>

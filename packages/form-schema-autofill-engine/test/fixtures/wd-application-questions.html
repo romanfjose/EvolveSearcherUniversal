@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/London/Staff-Engineer_R-10234/apply/applyManually"><title>Application Questions</title></head>
+<body>
+<div data-automation-id="applyFlowPrimaryQuestionsPage">
+  <h2 data-automation-id="applyFlowPageTitle">Application Questions</h2>
+  <div data-automation-id="formField-q1">
+    <label id="q1-label">Are you legally authorized to work in the country for which you are applying?<abbr title="required">*</abbr></label>
+    <button type="button" aria-haspopup="listbox" id="primaryQuestionnaire--q1" aria-labelledby="q1-label" aria-controls="q1-popup" data-expect="work_authorization">Select One</button>
+    <ul role="listbox" id="q1-popup"><li role="option" data-expect-clicked>Yes</li><li role="option">No</li></ul>
+  </div>
+  <div data-automation-id="formField-q2">
+    <label id="q2-label">Will you now, or in the future, require sponsorship for employment visa status?<abbr title="required">*</abbr></label>
+    <button type="button" aria-haspopup="listbox" id="primaryQuestionnaire--q2" aria-labelledby="q2-label" aria-controls="q2-popup" data-expect="sponsorship">Select One</button>
+    <ul role="listbox" id="q2-popup"><li role="option">Yes</li><li role="option" data-expect-clicked>No</li></ul>
+  </div>
+  <div data-automation-id="formField-q3">
+    <label id="q3-label">Are you at least 18 years of age?<abbr title="required">*</abbr></label>
+    <button type="button" aria-haspopup="listbox" id="primaryQuestionnaire--q3" aria-labelledby="q3-label" aria-controls="q3-popup" data-expect="age_18">Select One</button>
+    <ul role="listbox" id="q3-popup"><li role="option" data-expect-clicked>Yes</li><li role="option">No</li></ul>
+  </div>
+  <div data-automation-id="formField-q4">
+    <label for="primaryQuestionnaire--q4">Please describe your experience with distributed systems.</label>
+    <textarea id="primaryQuestionnaire--q4" data-expect="-" data-expect-value=""></textarea>
+  </div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="advance">Save and Continue</button>
+  </div>
+</div>
+</body>
+</html>

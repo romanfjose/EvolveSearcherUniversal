@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/London/Staff-Engineer_R-10234/apply/applyManually"><title>Apply - Workday</title></head>
+<body>
+<div data-automation-id="applyFlowMyInfoPage">
+  <h2 data-automation-id="applyFlowPageTitle">My Information</h2>
+  <div data-automation-id="sourceSection">
+    <div data-automation-id="formField-sourceDropdown">
+      <label for="input-1">How Did You Hear About Us?<abbr title="required">*</abbr></label>
+      <div data-automation-id="multiselectInputContainer">
+        <input id="input-1" data-automation-id="searchBox" data-uxi-widget-type="selectinput" role="combobox" aria-expanded="true" aria-controls="source-popup" placeholder="Search" type="text" data-expect="source">
+      </div>
+      <div data-automation-id="activeListContainer" role="listbox" id="source-popup">
+        <div role="option" data-automation-id="promptOption">Indeed</div>
+        <div role="option" data-automation-id="promptOption" data-expect-clicked>LinkedIn</div>
+        <div role="option" data-automation-id="promptOption">Company Website</div>
+      </div>
+    </div>
+  </div>
+  <div data-automation-id="formField-countryDropdown">
+    <label id="label-country">Country<abbr title="required">*</abbr></label>
+    <button type="button" aria-haspopup="listbox" data-automation-id="countryDropdown" aria-labelledby="label-country" aria-controls="country-popup" data-expect="country">United States of America</button>
+    <ul role="listbox" id="country-popup"><li role="option"><div>United States of America</div></li><li role="option" data-expect-clicked><div>United Kingdom</div></li><li role="option"><div>Ireland</div></li></ul>
+  </div>
+  <div data-automation-id="legalNameSection">
+    <h3>Legal Name</h3>
+    <div data-automation-id="formField-legalNameSection_firstName"><label for="input-3">Given Name(s)<abbr title="required">*</abbr></label><input type="text" id="input-3" data-automation-id="legalNameSection_firstName" data-expect="first_name" data-expect-value="Ada"></div>
+    <div data-automation-id="formField-legalNameSection_lastName"><label for="input-4">Family Name<abbr title="required">*</abbr></label><input type="text" id="input-4" data-automation-id="legalNameSection_lastName" data-expect="last_name" data-expect-value="Lovelace"></div>
+  </div>
+  <div data-automation-id="addressSection">
+    <h3>Address</h3>
+    <div data-automation-id="formField-addressSection_addressLine1"><label for="input-6">Address Line 1</label><input type="text" id="input-6" data-automation-id="addressSection_addressLine1" data-expect="address_line1" data-expect-value="12 Analytical Row"></div>
+    <div data-automation-id="formField-addressSection_city"><label for="input-7">City</label><input type="text" id="input-7" data-automation-id="addressSection_city" data-expect="city" data-expect-value="London"></div>
+    <div data-automation-id="formField-addressSection_countryRegion">
+      <label id="label-region">County</label>
+      <button type="button" aria-haspopup="listbox" data-automation-id="addressSection_countryRegion" aria-labelledby="label-region" aria-controls="region-popup" data-expect="state">Select One</button>
+      <ul role="listbox" id="region-popup"><li role="option">Greater Manchester</li><li role="option" data-expect-clicked>Greater London</li><li role="option">West Midlands</li></ul>
+    </div>
+    <div data-automation-id="formField-addressSection_postalCode"><label for="input-9">Postal Code</label><input type="text" id="input-9" data-automation-id="addressSection_postalCode" data-expect="postal_code" data-expect-value="EC1A 1BB"></div>
+  </div>
+  <div data-automation-id="phoneSection">
+    <h3>Phone</h3>
+    <div data-automation-id="formField-phone-device-type">
+      <label id="label-device">Phone Device Type<abbr title="required">*</abbr></label>
+      <button type="button" aria-haspopup="listbox" data-automation-id="phone-device-type" aria-labelledby="label-device" aria-controls="device-popup" data-expect="phone_type">Select One</button>
+      <ul role="listbox" id="device-popup"><li role="option">Landline</li><li role="option" data-expect-clicked>Mobile</li></ul>
+    </div>
+    <div data-automation-id="formField-countryPhoneCode">
+      <label for="input-11">Country Phone Code<abbr title="required">*</abbr></label>
+      <div data-automation-id="multiselectInputContainer"><input id="input-11" data-automation-id="countryPhoneCode" role="combobox" aria-controls="dial-popup" aria-expanded="true" placeholder="Search" type="text" data-expect="phone_country_code"></div>
+      <div role="listbox" id="dial-popup"><div role="option">United States of America (+1)</div><div role="option" data-expect-clicked>United Kingdom (+44)</div><div role="option">Ireland (+353)</div></div>
+    </div>
+    <div data-automation-id="formField-phone-number"><label for="input-12">Phone Number<abbr title="required">*</abbr></label><input type="text" id="input-12" data-automation-id="phone-number" data-expect="phone" data-expect-value="7700 900123"></div>
+    <div data-automation-id="formField-phone-extension"><label for="input-13">Phone Extension</label><input type="text" id="input-13" data-automation-id="phone-extension" data-expect="-" data-expect-value=""></div>
+  </div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="advance">Save and Continue</button>
+  </div>
+</div>
+</body>
+</html>

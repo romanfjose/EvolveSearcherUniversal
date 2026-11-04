@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/placeholder"><title>Placeholder only</title></head>
+<body>
+<form class="minimal">
+  <input type="text" placeholder="First name" data-expect="first_name" data-expect-value="Ada">
+  <input type="text" placeholder="Last name" data-expect="last_name">
+  <input type="email" placeholder="Email address" data-expect="email">
+  <input type="tel" placeholder="Phone (incl. country code)" data-expect="phone">
+  <input type="url" placeholder="LinkedIn URL" data-expect="linkedin">
+  <input type="text" placeholder="City" data-expect="city">
+  <button type="submit" data-expect="redline">Apply</button>
+</form>
+</body></html>

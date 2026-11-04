@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>Autofill from resume</title></head>
+<body>
+<div class="ashby-application-form-container">
+  <div class="ashby-application-form-autofill-pane">
+    <h3>Autofill from resume</h3>
+    <p>Upload your resume here to autofill key application fields.</p>
+    <div class="ashby-application-form-autofill-uploader _dropzone_1sx5y_1" role="presentation" tabindex="0">
+      <input type="file" accept=".pdf,.docx" tabindex="-1" style="display:none" data-expect="resume">
+      <button type="button" class="_button_8wvgw_29"><span>Upload file</span></button>
+      <p>or drag and drop here</p>
+    </div>
+  </div>
+  <form>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_name">Name</label><input id="_systemfield_name" type="text" data-expect="full_name"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_email">Email</label><input id="_systemfield_email" type="email" data-expect="email"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_phone">Phone Number</label><input id="_systemfield_phone" type="tel" data-expect="phone" data-expect-value="7700 900123"></div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="4d6f8a0c-cover">Cover Letter</label>
+      <div class="_container_6k3nb_71">
+        <button type="button" class="_button_8wvgw_29"><span>Upload File</span></button>
+        <input id="4d6f8a0c-cover" type="file" style="display:none" data-expect="cover_letter">
+        <p>or drag and drop here</p>
+      </div>
+    </div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

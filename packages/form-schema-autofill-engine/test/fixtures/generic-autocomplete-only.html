@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/autocomplete"><title>Autocomplete only</title></head>
+<body>
+<form class="grid" method="post" action="/apply">
+  <div class="row"><input id="f1" name="f1" autocomplete="given-name" data-expect="first_name" data-expect-value="Ada"><input id="f2" name="f2" autocomplete="family-name" data-expect="last_name" data-expect-value="Lovelace"></div>
+  <div class="row"><input id="f3" name="f3" type="email" autocomplete="email" data-expect="email"><input id="f4" name="f4" type="tel" autocomplete="tel" data-expect="phone"></div>
+  <div class="row"><input id="f5" name="f5" autocomplete="address-line1" data-expect="address_line1"><input id="f6" name="f6" autocomplete="address-level2" data-expect="city"></div>
+  <div class="row"><input id="f7" name="f7" autocomplete="postal-code" data-expect="postal_code"><select id="f8" name="f8" autocomplete="country" data-expect="country" data-expect-value="GB"><option value="">—</option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="DE">Germany</option></select></div>
+  <div class="row"><input id="f9" name="f9" autocomplete="organization" data-expect="current_company"><input id="f10" name="f10" type="url" autocomplete="url" data-expect="website"></div>
+  <button type="submit" data-expect="redline">→</button>
+</form>
+</body></html>

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/ambiguous"><title>Ambiguous and unmapped</title></head>
+<body>
+<form>
+  <div><label for="u1">Name of your previous manager</label><input id="u1" data-expect="-" data-expect-value=""></div>
+  <div><label for="u2">Details</label><textarea id="u2" data-expect="-"></textarea></div>
+  <div><input id="u3" data-expect="-"></div>
+  <div><label for="u4">Link</label><input id="u4" type="url" data-expect="-"></div>
+  <div><label for="u5">City or postcode</label><input id="u5" data-expect="?" data-expect-value=""></div>
+  <button type="submit" data-expect="redline">Apply</button>
+</form>
+</body></html>

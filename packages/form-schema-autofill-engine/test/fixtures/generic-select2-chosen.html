@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/select2"><title>select2 and chosen</title></head>
+<body>
+<form>
+  <div class="form-group">
+    <label for="country">Country</label>
+    <select id="country" name="country" class="select2-hidden-accessible" aria-hidden="true" tabindex="-1" data-expect="country" data-expect-value="GB"><option value=""></option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="FR">France</option></select>
+    <span class="select2 select2-container select2-container--bootstrap"><span class="selection"><span class="select2-selection select2-selection--single" role="combobox" aria-haspopup="true" aria-expanded="false" aria-labelledby="select2-country-container"><span class="select2-selection__rendered" id="select2-country-container"></span></span></span></span>
+  </div>
+  <div class="form-group">
+    <label for="source">How did you hear about us?</label>
+    <select id="source" name="source" class="chosen-select" style="display: none;" data-expect="source" data-expect-value="li"><option value=""></option><option value="ind">Indeed</option><option value="li">LinkedIn</option></select>
+    <div class="chosen-container chosen-container-single" title="" id="source_chosen"><a class="chosen-single chosen-default"><span>Select an Option</span><div><b></b></div></a><div class="chosen-drop"><div class="chosen-search"><input class="chosen-search-input" type="text" autocomplete="off" tabindex="-1" readonly data-expect="hidden"></div><ul class="chosen-results"></ul></div></div>
+  </div>
+  <button type="submit" data-expect="redline">Submit</button>
+</form>
+</body></html>

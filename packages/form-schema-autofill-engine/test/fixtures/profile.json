@@ -1,0 +1,34 @@
+{
+  "firstName": "Ada",
+  "lastName": "Lovelace",
+  "middleName": null,
+  "preferredName": "Ada",
+  "pronouns": "she/her",
+  "email": "ada.lovelace@example.com",
+  "phone": { "country": "GB", "number": "7700 900123", "type": "Mobile" },
+  "address": { "line1": "12 Analytical Row", "line2": null, "city": "London", "region": "Greater London", "postalCode": "EC1A 1BB", "country": "GB" },
+  "location": "London, United Kingdom",
+  "links": { "linkedin": "https://www.linkedin.com/in/ada-example", "github": "https://github.com/ada-example", "website": "https://ada.example.com", "twitter": null },
+  "work": [
+    { "company": "Analytical Engines Ltd", "title": "Principal Engineer", "location": "London", "start": "2021-03", "end": null, "current": true, "description": "Led the compiler team." },
+    { "company": "Difference Labs", "title": "Software Engineer", "location": "Cambridge", "start": "2017-09", "end": "2021-02", "current": false, "description": "Built numerical libraries." }
+  ],
+  "education": [
+    { "school": "University of London", "degree": "Master's Degree", "discipline": "Mathematics", "start": "2015-09", "end": "2017-06", "gpa": "3.9" },
+    { "school": "Imperial College London", "degree": "Bachelor's Degree", "discipline": "Computer Science", "start": "2012-09", "end": "2015-06", "gpa": "3.8" }
+  ],
+  "workAuthorized": true,
+  "requiresSponsorship": false,
+  "willingToRelocate": true,
+  "over18": true,
+  "salaryExpectation": "£120,000",
+  "noticePeriod": "1 month",
+  "startDate": "2027-01-04",
+  "source": "LinkedIn",
+  "referral": null,
+  "additionalInfo": null,
+  "coverLetter": "Dear hiring team, I build reliable numerical systems.",
+  "resumeText": null,
+  "eeo": { "gender": "decline", "race": "decline", "hispanic": "decline", "veteran": "decline", "disability": "decline", "orientation": "decline" },
+  "files": {}
+}

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/table"><title>Table layout</title></head>
+<body>
+<form method="post" action="/cgi-bin/apply.pl">
+  <table class="form" cellpadding="4">
+    <tbody>
+      <tr><td class="lbl">First name:</td><td><input name="f_01" size="30" data-expect="first_name" data-expect-value="Ada"></td></tr>
+      <tr><td class="lbl">Last name:</td><td><input name="f_02" size="30" data-expect="last_name"></td></tr>
+      <tr><td class="lbl">E-mail address:</td><td><input name="f_03" size="40" data-expect="email"></td></tr>
+      <tr><td class="lbl">Mobile:</td><td><input name="f_04" size="20" data-expect="phone"></td></tr>
+      <tr><td class="lbl">Town / City:</td><td><input name="f_05" size="20" data-expect="city"></td></tr>
+      <tr><td class="lbl">Postcode:</td><td><input name="f_06" size="10" data-expect="postal_code" data-expect-value="EC1A 1BB"></td></tr>
+      <tr><td colspan="2"><input type="submit" value="Send application" data-expect="redline"> <input type="reset" value="Clear"></td></tr>
+    </tbody>
+  </table>
+</form>
+</body></html>

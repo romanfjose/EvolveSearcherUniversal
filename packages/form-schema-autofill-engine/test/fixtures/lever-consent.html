@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-expect-platform="lever">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.eu.lever.co/acme/2b6f/apply"><title>Consent</title></head>
+<body>
+<form id="application-form" class="application-form" method="POST">
+  <ul>
+    <li class="application-question"><label><div class="application-label">Full name✱</div><div class="application-field"><input type="text" name="name" data-expect="full_name" data-expect-value="Ada Lovelace"></div></label></li>
+    <li class="application-question"><label><div class="application-label">Email✱</div><div class="application-field"><input type="email" name="email" data-expect="email"></div></label></li>
+  </ul>
+  <div class="section application-form consent">
+    <h4>Privacy Notice</h4>
+    <p>By applying, you confirm that you have read the <a href="https://acme.example/privacy">Acme Candidate Privacy Notice</a>.</p>
+    <label class="application-consent"><input type="checkbox" name="consent[store]" value="true" data-expect="consent" data-expect-checked="false"><span>I agree to Acme storing my personal data for up to two years so I can be considered for future opportunities.</span></label>
+    <label class="application-consent"><input type="checkbox" name="consent[marketing]" value="true" data-expect="consent" data-expect-checked="false"><span>I consent to receiving updates about new roles by email.</span></label>
+  </div>
+  <button type="submit" id="btn-submit" class="template-btn-submit" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

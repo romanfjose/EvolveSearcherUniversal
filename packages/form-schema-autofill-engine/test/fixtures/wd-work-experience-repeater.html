@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/London/Staff-Engineer_R-10234/apply/applyManually"><title>My Experience</title></head>
+<body>
+<div data-automation-id="applyFlowMyExpPage">
+  <h2 data-automation-id="applyFlowPageTitle">My Experience</h2>
+  <div role="group" aria-labelledby="Work-Experience-section" data-automation-id="workExperienceSection">
+    <h3 id="Work-Experience-section">Work Experience</h3>
+    <div data-automation-id="workExperience-1" role="group" aria-labelledby="workExperience-1-panel">
+      <h4 id="workExperience-1-panel">Work Experience 1</h4>
+      <div data-automation-id="formField-jobTitle"><label for="workExperience-1--jobTitle">Job Title<abbr title="required">*</abbr></label><input type="text" id="workExperience-1--jobTitle" data-automation-id="jobTitle" data-expect="work.title#0" data-expect-value="Principal Engineer"></div>
+      <div data-automation-id="formField-companyName"><label for="workExperience-1--companyName">Company<abbr title="required">*</abbr></label><input type="text" id="workExperience-1--companyName" data-automation-id="company" data-expect="work.company#0" data-expect-value="Analytical Engines Ltd"></div>
+      <div data-automation-id="formField-location"><label for="workExperience-1--location">Location</label><input type="text" id="workExperience-1--location" data-automation-id="location" data-expect="work.location#0" data-expect-value="London"></div>
+      <div data-automation-id="formField-currentlyWorkHere"><input type="checkbox" id="workExperience-1--currentlyWorkHere" data-automation-id="currentlyWorkHere" data-expect="work.current#0" data-expect-checked="true"><label for="workExperience-1--currentlyWorkHere">I currently work here</label></div>
+      <div data-automation-id="formField-startDate">
+        <label>From<abbr title="required">*</abbr></label>
+        <div data-automation-id="dateInputWrapper">
+          <div data-automation-id="dateSectionMonth"><input type="text" id="workExperience-1--startDate-dateSectionMonth-input" data-automation-id="dateSectionMonth-input" aria-label="Month" placeholder="MM" data-expect="work.start:month#0" data-expect-value="03"></div>
+          <div data-automation-id="dateSectionYear"><input type="text" id="workExperience-1--startDate-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="work.start:year#0" data-expect-value="2021"></div>
+        </div>
+      </div>
+      <div data-automation-id="formField-endDate">
+        <label>To</label>
+        <div data-automation-id="dateInputWrapper">
+          <div data-automation-id="dateSectionMonth"><input type="text" id="workExperience-1--endDate-dateSectionMonth-input" data-automation-id="dateSectionMonth-input" aria-label="Month" placeholder="MM" data-expect="work.end:month#0" data-expect-value=""></div>
+          <div data-automation-id="dateSectionYear"><input type="text" id="workExperience-1--endDate-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="work.end:year#0" data-expect-value=""></div>
+        </div>
+      </div>
+      <div data-automation-id="formField-roleDescription"><label for="workExperience-1--roleDescription">Role Description</label><textarea id="workExperience-1--roleDescription" data-automation-id="description" data-expect="work.description#0" data-expect-value="Led the compiler team."></textarea></div>
+      <button type="button" data-automation-id="panel-set-delete-button">Delete Work Experience 1</button>
+    </div>
+    <div data-automation-id="workExperience-2" role="group" aria-labelledby="workExperience-2-panel">
+      <h4 id="workExperience-2-panel">Work Experience 2</h4>
+      <div data-automation-id="formField-jobTitle"><label for="workExperience-2--jobTitle">Job Title<abbr title="required">*</abbr></label><input type="text" id="workExperience-2--jobTitle" data-automation-id="jobTitle" data-expect="work.title#1" data-expect-value="Software Engineer"></div>
+      <div data-automation-id="formField-companyName"><label for="workExperience-2--companyName">Company<abbr title="required">*</abbr></label><input type="text" id="workExperience-2--companyName" data-automation-id="company" data-expect="work.company#1" data-expect-value="Difference Labs"></div>
+      <div data-automation-id="formField-location"><label for="workExperience-2--location">Location</label><input type="text" id="workExperience-2--location" data-automation-id="location" data-expect="work.location#1" data-expect-value="Cambridge"></div>
+      <div data-automation-id="formField-currentlyWorkHere"><input type="checkbox" id="workExperience-2--currentlyWorkHere" data-automation-id="currentlyWorkHere" data-expect="work.current#1" data-expect-checked="false"><label for="workExperience-2--currentlyWorkHere">I currently work here</label></div>
+      <div data-automation-id="formField-startDate">
+        <label>From<abbr title="required">*</abbr></label>
+        <div data-automation-id="dateInputWrapper">
+          <div data-automation-id="dateSectionMonth"><input type="text" id="workExperience-2--startDate-dateSectionMonth-input" data-automation-id="dateSectionMonth-input" aria-label="Month" placeholder="MM" data-expect="work.start:month#1" data-expect-value="09"></div>
+          <div data-automation-id="dateSectionYear"><input type="text" id="workExperience-2--startDate-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="work.start:year#1" data-expect-value="2017"></div>
+        </div>
+      </div>
+      <div data-automation-id="formField-endDate">
+        <label>To</label>
+        <div data-automation-id="dateInputWrapper">
+          <div data-automation-id="dateSectionMonth"><input type="text" id="workExperience-2--endDate-dateSectionMonth-input" data-automation-id="dateSectionMonth-input" aria-label="Month" placeholder="MM" data-expect="work.end:month#1" data-expect-value="02"></div>
+          <div data-automation-id="dateSectionYear"><input type="text" id="workExperience-2--endDate-dateSectionYear-input" data-automation-id="dateSectionYear-input" aria-label="Year" placeholder="YYYY" data-expect="work.end:year#1" data-expect-value="2021"></div>
+        </div>
+      </div>
+      <div data-automation-id="formField-roleDescription"><label for="workExperience-2--roleDescription">Role Description</label><textarea id="workExperience-2--roleDescription" data-automation-id="description" data-expect="work.description#1" data-expect-value="Built numerical libraries."></textarea></div>
+      <button type="button" data-automation-id="panel-set-delete-button">Delete Work Experience 2</button>
+    </div>
+    <button type="button" data-automation-id="add-button">Add Another</button>
+  </div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="advance">Save and Continue</button>
+  </div>
+</div>
+</body>
+</html>

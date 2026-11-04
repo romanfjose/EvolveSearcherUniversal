@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/dob"><title>Split DOB</title></head>
+<body>
+<form>
+  <fieldset class="dob">
+    <legend>Date of birth</legend>
+    <select name="dob_d" aria-label="Day" data-expect="dob" data-expect-value=""><option value="">Day</option><option>1</option><option>2</option></select>
+    <select name="dob_m" aria-label="Month" data-expect="dob" data-expect-value=""><option value="">Month</option><option>January</option><option>February</option></select>
+    <select name="dob_y" aria-label="Year" data-expect="dob" data-expect-value=""><option value="">Year</option><option>1990</option><option>1991</option></select>
+  </fieldset>
+  <label for="g">Gender</label>
+  <select id="g" name="gender" data-expect="eeo.gender" data-expect-value="na"><option value="">Select</option><option value="f">Female</option><option value="m">Male</option><option value="na">Prefer not to say</option></select>
+  <button type="submit" data-expect="redline">Continue to payment</button>
+</form>
+</body></html>

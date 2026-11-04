@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>Multi-select</title></head>
+<body>
+<div class="ashby-application-form-container">
+  <form>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="c1d2-offices">Which of our offices would you consider?</label>
+      <div class="_checkboxGroup_2b3c4_1" id="c1d2-offices">
+        <label class="_option_2b3c4_9"><input type="checkbox" name="c1d2-offices" value="London" data-expect="-">London</label>
+        <label class="_option_2b3c4_9"><input type="checkbox" name="c1d2-offices" value="New York">New York</label>
+        <label class="_option_2b3c4_9"><input type="checkbox" name="c1d2-offices" value="Remote (UK)">Remote (UK)</label>
+      </div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="c1d2-reloc">Are you open to relocation?</label>
+      <div class="_yesno_hkyf8_143" data-expect="relocation"><button type="button" data-expect-clicked>Yes</button><button type="button">No</button></div>
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="c1d2-years">Years of professional experience</label>
+      <input id="c1d2-years" type="number" min="0" data-expect="-" data-expect-value="">
+    </div>
+    <div class="ashby-application-form-field-entry">
+      <label class="ashby-application-form-question-title" for="c1d2-li">LinkedIn</label>
+      <input id="c1d2-li" type="url" data-expect="linkedin">
+    </div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

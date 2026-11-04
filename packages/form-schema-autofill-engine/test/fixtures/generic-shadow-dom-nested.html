@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/shadow"><title>Nested shadow DOM</title></head>
+<body>
+<acme-careers-form>
+  <template shadowrootmode="open">
+    <form part="form">
+      <md-outlined-text-field label="First name" name="given">
+        <template shadowrootmode="open"><div class="field"><span class="label" aria-hidden="true">First name</span><input class="input" aria-invalid="false" data-expect="first_name" data-expect-value="Ada"></div></template>
+      </md-outlined-text-field>
+      <md-outlined-text-field label="Last name" name="family">
+        <template shadowrootmode="open"><div class="field"><input class="input" data-expect="last_name" data-expect-value="Lovelace"></div></template>
+      </md-outlined-text-field>
+      <md-outlined-text-field label="Email" type="email">
+        <template shadowrootmode="open"><div class="field"><input class="input" type="email" data-expect="email"></div></template>
+      </md-outlined-text-field>
+      <acme-select label="Country of residence">
+        <template shadowrootmode="open"><select data-expect="country" data-expect-value="United Kingdom"><option>Germany</option><option>United Kingdom</option><option>United States</option></select></template>
+      </acme-select>
+      <button type="submit" data-expect="redline">Send application</button>
+    </form>
+  </template>
+</acme-careers-form>
+</body></html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd5.myworkdayjobs.com/en-US/External/job/Austin/Staff-Engineer_R-10234/apply/applyManually"><title>Voluntary Disclosures</title></head>
+<body>
+<div data-automation-id="applyFlowVoluntaryDisclosuresPage">
+  <h2 data-automation-id="applyFlowPageTitle">Voluntary Disclosures</h2>
+  <div data-automation-id="formField-gender">
+    <label id="label-gender">Gender</label>
+    <button type="button" aria-haspopup="listbox" id="personalInfoUS--gender" aria-labelledby="label-gender" aria-controls="popup-gender" data-expect="eeo.gender">Select One</button>
+    <ul role="listbox" id="popup-gender"><li role="option">Male</li><li role="option">Female</li><li role="option" data-expect-clicked>I do not wish to answer</li></ul>
+  </div>
+  <div data-automation-id="formField-ethnicity">
+    <label id="label-ethnicity">Please select the ethnicity which most accurately describes how you identify yourself</label>
+    <button type="button" aria-haspopup="listbox" id="personalInfoUS--ethnicity" aria-labelledby="label-ethnicity" aria-controls="popup-ethnicity" data-expect="eeo.race">Select One</button>
+    <ul role="listbox" id="popup-ethnicity"><li role="option">Hispanic or Latino (United States of America)</li><li role="option">White (Not Hispanic or Latino) (United States of America)</li><li role="option">Black or African American (Not Hispanic or Latino) (United States of America)</li><li role="option">Asian (Not Hispanic or Latino) (United States of America)</li><li role="option" data-expect-clicked>I do not wish to answer. (United States of America)</li></ul>
+  </div>
+  <div data-automation-id="formField-veteranStatus">
+    <label id="label-veteran">Please select the veteran status which most accurately describes your status</label>
+    <button type="button" aria-haspopup="listbox" id="personalInfoUS--veteranStatus" aria-labelledby="label-veteran" aria-controls="popup-veteran" data-expect="eeo.veteran">Select One</button>
+    <ul role="listbox" id="popup-veteran"><li role="option">I am not a veteran</li><li role="option">I identify as one or more of the classifications of protected veteran</li><li role="option" data-expect-clicked>I do not wish to self-identify</li></ul>
+  </div>
+  <div data-automation-id="formField-acceptTermsAndAgreements">
+    <input type="checkbox" id="termsAndConditions--acceptTermsAndAgreements" data-automation-id="agreementCheckbox" data-expect="consent" data-expect-checked="false">
+    <label for="termsAndConditions--acceptTermsAndAgreements">Yes, I have read and consent to the terms and conditions</label>
+  </div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="bottom-navigation-next-button" data-expect="advance">Save and Continue</button>
+  </div>
+</div>
+</body>
+</html>

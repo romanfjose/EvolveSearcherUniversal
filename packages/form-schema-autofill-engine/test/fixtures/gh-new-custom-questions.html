@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://job-boards.greenhouse.io/acme/jobs/4012345?gh_src=8f2a"><title>Custom questions</title></head>
+<body>
+<form id="application-form" class="application--form">
+  <div class="application--questions">
+    <div class="input-wrapper">
+      <label id="question_30001-label" for="question_30001" class="label">LinkedIn Profile</label>
+      <input id="question_30001" class="input input__single-line" type="text" maxlength="255" aria-required="false" value="" data-expect="linkedin" data-expect-value="https://www.linkedin.com/in/ada-example">
+    </div>
+    <div class="select__container">
+      <label id="question_30002-label" for="question_30002" class="select__label">Are you legally authorized to work in the country in which you are applying?<span aria-hidden="true">*</span></label>
+      <div class="select-shell"><div class="select__control"><div class="select__input-container">
+        <input class="select__input" id="question_30002" type="text" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-haspopup="true" aria-controls="react-select-question_30002-listbox" aria-labelledby="question_30002-label" value="" data-expect="work_authorization">
+      </div></div>
+      <div class="select__menu"><div role="listbox" id="react-select-question_30002-listbox">
+        <div role="option" class="select__option" data-expect-clicked>Yes</div><div role="option" class="select__option">No</div>
+      </div></div></div>
+    </div>
+    <div class="select__container">
+      <label id="question_30003-label" for="question_30003" class="select__label">Will you now or in the future require sponsorship for employment visa status (e.g. H-1B visa status)?<span aria-hidden="true">*</span></label>
+      <div class="select-shell"><div class="select__control"><div class="select__input-container">
+        <input class="select__input" id="question_30003" type="text" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-haspopup="true" aria-controls="react-select-question_30003-listbox" aria-labelledby="question_30003-label" value="" data-expect="sponsorship">
+      </div></div>
+      <div class="select__menu"><div role="listbox" id="react-select-question_30003-listbox">
+        <div role="option" class="select__option">Yes</div><div role="option" class="select__option" data-expect-clicked>No</div>
+      </div></div></div>
+    </div>
+    <div class="input-wrapper">
+      <label id="question_30004-label" for="question_30004" class="label">What are your salary expectations for this role?</label>
+      <textarea id="question_30004" class="input input__multi-line" aria-required="false" data-expect="salary" data-expect-value="£120,000"></textarea>
+    </div>
+    <div class="select__container">
+      <label id="question_30005-label" for="question_30005" class="select__label">How did you hear about this job?</label>
+      <div class="select-shell"><div class="select__control"><div class="select__input-container">
+        <input class="select__input" id="question_30005" type="text" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="react-select-question_30005-listbox" aria-labelledby="question_30005-label" value="" data-expect="source">
+      </div></div>
+      <div class="select__menu"><div role="listbox" id="react-select-question_30005-listbox">
+        <div role="option">Indeed</div><div role="option" data-expect-clicked>LinkedIn</div><div role="option">Employee referral</div><div role="option">Company website</div>
+      </div></div></div>
+    </div>
+    <div class="input-wrapper">
+      <label id="question_30006-label" for="question_30006" class="label">Why do you want to work at Acme?<span aria-hidden="true">*</span></label>
+      <textarea id="question_30006" class="input input__multi-line" data-expect="-" data-expect-value=""></textarea>
+    </div>
+  </div>
+  <button type="submit" class="btn btn--pill" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

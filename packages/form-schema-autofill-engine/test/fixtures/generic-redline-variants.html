@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/redline"><title>Red-line button variants</title></head>
+<body>
+<form>
+  <label for="em">Email</label><input id="em" type="email" data-expect="email">
+  <div class="actions">
+    <button data-expect="redline">Apply now</button>
+    <button type="button" data-expect="redline">Pay application fee ($25)</button>
+    <button type="button" data-expect="redline">Place bid</button>
+    <button type="button" data-expect="redline">Sign up with Google</button>
+    <input type="submit" value="Send" data-expect="redline">
+    <div role="button" tabindex="0" data-expect="redline">Submit</div>
+    <button type="button" aria-label="Submit application" data-expect="redline"><svg viewBox="0 0 16 16"><path d="M0 0h16v16H0z"></path></svg></button>
+    <button type="submit" data-expect="advance">Continue</button>
+    <button type="button" data-expect="advance">Next step</button>
+    <button type="button" data-expect="neutral">Save draft</button>
+    <button type="button" data-expect="neutral">Upload resume</button>
+    <button type="button" data-expect="neutral">Add another</button>
+    <a href="/jobs">Back to jobs</a>
+  </div>
+</form>
+</body></html>

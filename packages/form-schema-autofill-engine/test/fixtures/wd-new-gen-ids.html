@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd3.myworkdaysite.com/recruiting/acme/External/job/Staff-Engineer_R-10234/apply"><title>Apply</title></head>
+<body>
+<main data-automation-id="applyFlowPage">
+  <h2>My Information</h2>
+  <div data-automation-id="formField-legalName--firstName"><label for="name--legalName--firstName">First Name<span aria-hidden="true">*</span></label><input id="name--legalName--firstName" name="legalName--firstName" type="text" aria-required="true" data-expect="first_name" data-expect-value="Ada"></div>
+  <div data-automation-id="formField-legalName--lastName"><label for="name--legalName--lastName">Last Name<span aria-hidden="true">*</span></label><input id="name--legalName--lastName" name="legalName--lastName" type="text" data-expect="last_name" data-expect-value="Lovelace"></div>
+  <div data-automation-id="formField-preferredCheck"><input type="checkbox" id="name--preferredCheck" name="preferredCheck" data-expect="-" data-expect-checked="false"><label for="name--preferredCheck">I have a preferred name</label></div>
+  <div data-automation-id="formField-addressLine1"><label for="address--addressLine1">Address Line 1</label><input id="address--addressLine1" name="addressLine1" type="text" data-expect="address_line1"></div>
+  <div data-automation-id="formField-city"><label for="address--city">City</label><input id="address--city" name="city" type="text" data-expect="city"></div>
+  <div data-automation-id="formField-postalCode"><label for="address--postalCode">Postcode</label><input id="address--postalCode" name="postalCode" type="text" data-expect="postal_code"></div>
+  <div data-automation-id="formField-email"><label for="emailAddress--emailAddress">Email Address</label><input id="emailAddress--emailAddress" name="emailAddress" type="text" data-expect="email" data-expect-value="ada.lovelace@example.com"></div>
+  <div data-automation-id="formField-phoneNumber"><label for="phoneNumber--phoneNumber">Phone Number</label><input id="phoneNumber--phoneNumber" name="phoneNumber" type="text" data-expect="phone"></div>
+  <div data-automation-id="formField-extension"><label for="phoneNumber--extension">Phone Extension</label><input id="phoneNumber--extension" name="extension" type="text" data-expect="-"></div>
+  <div data-automation-id="pageFooter">
+    <button type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button type="button" data-automation-id="pageFooterNextButton" data-expect="advance">Save and Continue</button>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://job-boards.greenhouse.io/acme/jobs/4012345"><title>React-controlled inputs</title></head>
+<body>
+<div id="root">
+<form id="application-form" class="application--form">
+  <div class="input-wrapper"><label for="first_name" class="label">First Name</label><input id="first_name" type="text" value="" data-framework="react" data-expect="first_name" data-expect-state="Ada"></div>
+  <div class="input-wrapper"><label for="last_name" class="label">Last Name</label><input id="last_name" type="text" value="" data-framework="react" data-expect="last_name" data-expect-state="Lovelace"></div>
+  <div class="input-wrapper"><label for="preferred_name" class="label">Preferred First Name</label><input id="preferred_name" type="text" value="" data-framework="react" data-expect="preferred_name" data-expect-state="Ada"></div>
+  <div class="input-wrapper"><label for="question_9001" class="label">Website</label><input id="question_9001" type="url" value="" data-framework="react" data-expect="website" data-expect-state="https://ada.example.com"></div>
+  <div class="input-wrapper"><label for="question_9002" class="label">GitHub</label><input id="question_9002" type="text" value="" data-framework="react" data-expect="github" data-expect-state="https://github.com/ada-example"></div>
+  <div class="checkbox__wrapper"><input type="checkbox" id="question_9003" data-framework="react" data-expect="age_18" data-expect-state="true"><label for="question_9003">I confirm I am 18 years or older</label></div>
+  <div class="input-wrapper"><label for="question_9004" class="label">Do you have the right to work in the UK?</label>
+    <select id="question_9004" data-framework="react" data-expect="work_authorization" data-expect-state="yes"><option value="">Select...</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+  <button type="submit" class="btn btn--pill" data-expect="redline">Submit application</button>
+</form>
+</div>
+</body>
+</html>

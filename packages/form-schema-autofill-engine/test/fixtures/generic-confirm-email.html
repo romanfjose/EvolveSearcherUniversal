@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/confirm"><title>Confirm email</title></head>
+<body>
+<form>
+  <div><label for="e1">Email address</label><input id="e1" type="email" data-expect="email" data-expect-value="ada.lovelace@example.com"></div>
+  <div><label for="e2">Confirm email</label><input id="e2" type="email" data-expect="email_confirm" data-expect-value="ada.lovelace@example.com"></div>
+  <div><label for="e3">Re-enter your email address</label><input id="e3" type="text" data-expect="email_confirm"></div>
+  <button type="submit" data-expect="redline">Register</button>
+</form>
+</body></html>

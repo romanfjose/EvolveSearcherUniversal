@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" data-expect-platform="lever">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.lever.co/acme/2b6f/apply"><title>Location typeahead</title></head>
+<body>
+<form id="application-form" class="application-form" method="POST">
+  <ul>
+    <li class="application-question">
+      <label><div class="application-label">Current location</div></label>
+      <div class="application-field location-question">
+        <input type="text" name="location" id="location-input" class="location-input" role="combobox" aria-autocomplete="list" aria-controls="location-results" aria-expanded="true" autocomplete="off" data-expect="location">
+        <input type="hidden" name="selectedLocation" id="selected-location">
+        <div class="dropdown-container" id="location-results" role="listbox">
+          <div class="dropdown-results">
+            <div role="option" class="dropdown-location" data-expect-clicked>London, England, United Kingdom</div>
+            <div role="option" class="dropdown-location">London, Ontario, Canada</div>
+            <div role="option" class="dropdown-location">Londonderry, Northern Ireland, United Kingdom</div>
+          </div>
+          <div class="dropdown-no-results" style="display:none">No location found. Try entering a different location</div>
+        </div>
+      </div>
+    </li>
+    <li class="application-question"><label><div class="application-label">Current company</div><div class="application-field"><input type="text" name="org" data-expect="current_company"></div></label></li>
+  </ul>
+  <button type="submit" id="btn-submit" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

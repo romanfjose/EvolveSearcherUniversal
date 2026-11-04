@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://job-boards.greenhouse.io/acme/jobs/4012345"><title>Job Application for Staff Engineer at Acme</title></head>
+<body>
+<main class="job-post">
+  <form id="application-form" class="application--form" novalidate>
+    <h2 class="section-header">Apply for this job</h2>
+    <div class="application--questions">
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="first_name-label" for="first_name" class="label">First Name<span aria-hidden="true">*</span></label>
+        <input id="first_name" class="input input__single-line" aria-label="First Name" aria-describedby="first_name-description" aria-invalid="false" aria-required="true" type="text" maxlength="255" autocomplete="given-name" value="" data-framework="react" data-expect="first_name" data-expect-state="Ada">
+      </div></div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="last_name-label" for="last_name" class="label">Last Name<span aria-hidden="true">*</span></label>
+        <input id="last_name" class="input input__single-line" aria-label="Last Name" aria-required="true" type="text" maxlength="255" autocomplete="family-name" value="" data-framework="react" data-expect="last_name" data-expect-state="Lovelace">
+      </div></div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="email-label" for="email" class="label">Email<span aria-hidden="true">*</span></label>
+        <input id="email" class="input input__single-line" aria-label="Email" aria-required="true" type="text" maxlength="255" autocomplete="email" value="" data-framework="react" data-expect="email" data-expect-state="ada.lovelace@example.com">
+      </div></div>
+      <div class="phone-input">
+        <div class="select__container">
+          <label id="country-label" for="country" class="select__label">Country<span aria-hidden="true">*</span></label>
+          <div class="select-shell remix-css-b62m3t-container">
+            <div class="select__control remix-css-13cymwt-control">
+              <div class="select__value-container">
+                <div class="select__placeholder" id="react-select-country-placeholder">Select...</div>
+                <div class="select__input-container" data-value=""><input class="select__input" autocapitalize="none" autocomplete="off" id="country" spellcheck="false" tabindex="0" type="text" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-haspopup="true" aria-controls="react-select-country-listbox" aria-labelledby="country-label" aria-describedby="react-select-country-placeholder" value="" data-expect="country"></div>
+              </div>
+              <div class="select__indicators"><button type="button" class="icon-button" aria-label="Toggle flyout" tabindex="-1"><svg viewBox="0 0 24 24"></svg></button></div>
+            </div>
+            <div class="select__menu"><div class="select__menu-list" role="listbox" id="react-select-country-listbox" aria-multiselectable="false">
+              <div class="select__option" role="option" id="react-select-country-option-0" aria-selected="false">United States +1</div>
+              <div class="select__option" role="option" id="react-select-country-option-1" aria-selected="false">Canada +1</div>
+              <div class="select__option" role="option" id="react-select-country-option-2" aria-selected="false" data-expect-clicked>United Kingdom +44</div>
+              <div class="select__option" role="option" id="react-select-country-option-3" aria-selected="false">Ireland +353</div>
+            </div></div>
+          </div>
+          <input name="country" type="hidden" value="">
+        </div>
+        <div class="input-wrapper">
+          <label id="phone-label" for="phone" class="label">Phone<span aria-hidden="true">*</span></label>
+          <input id="phone" class="input input__single-line" type="tel" autocomplete="tel" aria-required="true" value="" data-framework="react" data-expect="phone" data-expect-state="7700 900123">
+        </div>
+      </div>
+      <div class="select__container">
+        <label id="candidate-location-label" for="candidate-location" class="select__label">Location (City)<span aria-hidden="true">*</span></label>
+        <div class="select-shell"><div class="select__control"><div class="select__value-container">
+          <div class="select__input-container"><input class="select__input" autocomplete="off" id="candidate-location" type="text" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-haspopup="true" aria-controls="react-select-candidate-location-listbox" aria-labelledby="candidate-location-label" value="" data-expect="location"></div>
+        </div></div>
+        <div class="select__menu"><div class="select__menu-list" role="listbox" id="react-select-candidate-location-listbox">
+          <div class="select__option" role="option" data-expect-clicked>London, England, United Kingdom</div>
+          <div class="select__option" role="option">London, Ontario, Canada</div>
+          <div class="select__option" role="option">Londonderry, Northern Ireland, United Kingdom</div>
+        </div></div></div>
+      </div>
+      <div class="file-upload" role="group" aria-labelledby="upload-label-resume">
+        <div class="label upload-label" id="upload-label-resume">Resume/CV<span aria-hidden="true">*</span></div>
+        <div class="file-upload__wrapper">
+          <div class="secondary-button"><button type="button" class="btn btn--pill">Attach</button></div>
+          <div class="secondary-button"><button type="button" class="btn btn--pill">Dropbox</button></div>
+          <input id="resume" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.rtf" data-expect="resume">
+        </div>
+        <p class="file-upload__filetypes" id="accepted-filetypes">Accepted file types: pdf, doc, docx, txt, rtf</p>
+      </div>
+    </div>
+    <div class="application--submit"><button type="submit" class="btn btn--pill" data-expect="redline">Submit application</button></div>
+  </form>
+</main>
+</body>
+</html>

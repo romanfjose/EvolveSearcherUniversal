@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autofill Engine Playground</title>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --ink: #1c1d1f; --muted: #62666d; --line: #e3e3df; --accent: #2f5fd0;
+  --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --violet: #7c3aed; --sky: #0284c7; --slate: #64748b;
+  --code-bg: #f1f1ee; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141517; --panel: #1c1d20; --ink: #e8e8e6; --muted: #9a9ea6; --line: #2e3035; --accent: #7aa2ff;
+    --code-bg: #232428; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] { --bg: #141517; --panel: #1c1d20; --ink: #e8e8e6; --muted: #9a9ea6; --line: #2e3035; --accent: #7aa2ff; --code-bg: #232428; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { padding: 20px 16px 8px; max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+.safety { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px 12px; max-width: 1400px; margin: 0 auto; }
+select, button, textarea { font: inherit; color: inherit; }
+select, button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+select { min-width: 0; max-width: 100%; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 0 16px 24px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+.panel > h2 { margin: 0; padding: 10px 12px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+.panel > h2 span { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+iframe { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.chip b { font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+.tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { border: 0; border-radius: 6px 6px 0 0; background: none; color: var(--muted); padding: 6px 10px; }
+.tabs button[aria-selected="true"] { color: var(--ink); background: var(--code-bg); font-weight: 600; }
+.tab { display: none; max-height: calc(70vh - 40px); overflow: auto; }
+.tab.on { display: block; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; z-index: 1; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+.cand { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.lbl { max-width: 28ch; overflow: hidden; text-overflow: ellipsis; }
+pre { margin: 0; padding: 10px 12px; font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; }
+textarea { width: 100%; min-height: 50vh; border: 0; padding: 10px 12px; background: var(--code-bg); font: 12px/1.5 var(--mono); resize: vertical; }
+.hint { padding: 8px 12px; color: var(--muted); font-size: 12px; }
+.ok { color: var(--ok); } .bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Autofill Engine Playground <span class="safety">dry run · never submits</span></h1>
+  <p>Pick a sample ATS layout (or paste your own HTML), classify it with the deterministic engine, and dry-run a fill with a synthetic profile. The page renders in a sandboxed frame: no scripts run inside it and it cannot submit forms.</p>
+</header>
+<div class="bar">
+  <select id="sample" aria-label="Sample layout"></select>
+  <button class="primary" id="classify">Classify</button>
+  <button id="dryrun">Dry-run fill</button>
+  <button id="reset">Reset</button>
+  <label class="toggle"><input type="checkbox" id="overlay" checked> Overlay</label>
+</div>
+<main>
+  <section class="panel">
+    <h2>Page <span id="url"></span></h2>
+    <iframe id="frame" sandbox="allow-same-origin" title="Sample form"></iframe>
+  </section>
+  <section class="panel">
+    <h2>Engine <span id="platform"></span></h2>
+    <div class="chips" id="chips"></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="fields">Fields</button>
+      <button role="tab" aria-selected="false" data-tab="buttons">Buttons</button>
+      <button role="tab" aria-selected="false" data-tab="events">Event log</button>
+      <button role="tab" aria-selected="false" data-tab="source">HTML</button>
+      <button role="tab" aria-selected="false" data-tab="profile">Profile</button>
+    </div>
+    <div class="tab on" id="tab-fields"></div>
+    <div class="tab" id="tab-buttons"></div>
+    <div class="tab" id="tab-events"><pre id="events">Run “Dry-run fill” to see the exact event sequence the engine dispatches.</pre></div>
+    <div class="tab" id="tab-source"><textarea id="source" spellcheck="false" aria-label="Form HTML"></textarea><div class="hint">Edit, then press Classify. <code>data-expect</code> annotations (as in the test fixtures) are scored in the Fields tab.</div></div>
+    <div class="tab" id="tab-profile"><textarea id="profile" spellcheck="false" aria-label="Profile JSON"></textarea><div class="hint">Synthetic profile used for the dry-run fill.</div></div>
+  </section>
+</main>
+<script type="module">
+import { classify, planFill, fill, renderOverlay, STATUS } from '../src/index.mjs';
+import { describe, walk, attr } from '../src/dom.mjs';
+
+const FIXTURES = '../test/fixtures/';
+const FALLBACK = ['gh-new-react-select.html', 'lever-basic.html', 'ashby-yesno.html', 'wd-my-information.html', 'wd-work-experience-repeater.html', 'generic-redline-variants.html'];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PLATFORM = { gh: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', wd: 'Workday', generic: 'Generic' };
+let result = null, overlay = null, outcomes = new Map(), log = [];
+
+async function listFixtures() {
+  try {
+    const html = await (await fetch(FIXTURES)).text();
+    const names = [...new Set([...html.matchAll(/href="([\w.-]+\.html)"/g)].map((m) => m[1]))].sort();
+    return names.length ? names : FALLBACK;
+  } catch { return FALLBACK; }
+}
+
+function fillSelect(names) {
+  const groups = {};
+  for (const n of names) (groups[PLATFORM[n.split('-')[0]] ?? 'Other'] ??= []).push(n);
+  $('sample').innerHTML = Object.entries(groups).map(([g, list]) => `<optgroup label="${g}">${list.map((n) => `<option value="${n}">${n.replace(/^(gh|lever|ashby|wd|generic)-/, '').replace(/\.html$/, '').replace(/-/g, ' ')}</option>`).join('')}</optgroup>`).join('');
+}
+
+const frameDoc = () => $('frame').contentDocument;
+
+function load(html) {
+  return new Promise((res) => {
+    $('frame').onload = () => res();
+    $('frame').srcdoc = html;
+  });
+}
+
+function expectationOf(f) {
+  const el = [f.el, ...f.members].find((e) => e.hasAttribute?.('data-expect'));
+  const exp = el && attr(el, 'data-expect');
+  if (exp == null) return null;
+  const want = exp === '-' ? 'unmapped' : exp === '?' ? 'ambiguous' : exp.split(/[:#]/)[0];
+  const got = f.key ?? f.status;
+  return { exp, ok: got === want };
+}
+
+function run() {
+  overlay?.remove(); overlay = null;
+  const doc = frameDoc();
+  const url = doc.querySelector('meta[name="fixture-url"]')?.content ?? '';
+  result = classify(doc, { url });
+  $('platform').textContent = `${result.platform}${url ? ` · ${new URL(url).hostname}` : ''}`;
+  $('url').textContent = url;
+  if ($('overlay').checked) overlay = renderOverlay(result, { doc });
+  render();
+}
+
+function statusOf(f) { return f.status !== 'mapped' ? f.status : f.human ? 'human' : f.sensitive ? 'sensitive' : 'mapped'; }
+const dot = (s) => `<span class="dot" style="background:${STATUS[s].color}"></span>`;
+
+function render() {
+  const counts = {};
+  for (const f of result.fields) counts[statusOf(f)] = (counts[statusOf(f)] ?? 0) + 1;
+  for (const b of result.buttons) if (b.status !== 'neutral') counts[b.status] = (counts[b.status] ?? 0) + 1;
+  const exps = result.fields.map(expectationOf).filter(Boolean);
+  $('chips').innerHTML = Object.keys(STATUS).filter((k) => counts[k]).map((k) => `<span class="chip" title="${esc(STATUS[k].note)}">${dot(k)}${k} <b>${counts[k]}</b></span>`).join('')
+    + (exps.length ? `<span class="chip">expectations <b class="${exps.every((e) => e.ok) ? 'ok' : 'bad'}">${exps.filter((e) => e.ok).length}/${exps.length}</b></span>` : '');
+  $('tab-fields').innerHTML = `<table><thead><tr><th>#</th><th>Label</th><th>Kind</th><th>Field</th><th class="num">Score</th><th>Runner-up</th><th>Fill</th>${exps.length ? '<th>Expected</th>' : ''}</tr></thead><tbody>${
+    result.fields.map((f) => {
+      const s = statusOf(f), o = outcomes.get(f.id), e = expectationOf(f);
+      const key = f.key ? `${f.key}${f.part ? `:${f.part}` : ''}${f.index != null ? ` #${f.index}` : ''}` : f.status;
+      const ru = f.candidates[1] ? `${f.candidates[1].key} ${f.candidates[1].score}` : '';
+      const fillCell = o ? `${esc(o.status)}${o.value != null ? ` <span class="mono">${esc(JSON.stringify(o.value))}</span>` : ''}${o.reason ? ` <span class="cand">${esc(o.reason)}</span>` : ''}` : '';
+      return `<tr><td class="mono">${f.id}</td><td class="lbl" title="${esc(f.label)}">${esc(f.label) || '<span class="cand">—</span>'}</td><td class="mono">${f.kind}</td><td>${dot(s)}<span class="mono">${esc(key)}</span></td><td class="num">${f.score}</td><td class="cand">${esc(ru)}</td><td>${fillCell}</td>${exps.length ? `<td class="mono ${e ? (e.ok ? 'ok' : 'bad') : ''}">${e ? `${e.ok ? '✓' : '✗'} ${esc(e.exp)}` : ''}</td>` : ''}</tr>`;
+    }).join('')}</tbody></table>`;
+  $('tab-buttons').innerHTML = `<table><thead><tr><th>Text</th><th>Class</th><th>Submit-like</th></tr></thead><tbody>${
+    result.buttons.map((b) => `<tr><td>${esc(b.text) || '<span class="cand">(icon)</span>'}</td><td>${b.status === 'neutral' ? 'neutral' : dot(b.status) + b.status}</td><td>${b.submitLike ? 'yes' : ''}</td></tr>`).join('') || '<tr><td colspan="3" class="cand">No buttons</td></tr>'
+  }</tbody></table>`;
+  $('events').textContent = log.length ? log.join('\n') : 'Run “Dry-run fill” to see the exact event sequence the engine dispatches.';
+}
+
+const EVENTS = ['focus', 'focusin', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'input', 'change', 'blur', 'focusout', 'submit'];
+async function dryRun() {
+  if (!result) run();
+  let profile;
+  try { profile = JSON.parse($('profile').value); } catch (e) { $('events').textContent = `Profile JSON error: ${e.message}`; return; }
+  const doc = frameDoc();
+  log = [];
+  const rec = (e) => { log.push(`${e.type.padEnd(11)} ${describe(e.composedPath()[0])}`); if (e.type === 'submit') e.preventDefault(); };
+  for (const t of EVENTS) doc.addEventListener(t, rec, true);
+  const plan = planFill(result, profile);
+  const out = await fill(plan, { waitMs: 300 });
+  for (const t of EVENTS) doc.removeEventListener(t, rec, true);
+  outcomes = new Map(out.map((o) => [o.field.id, o]));
+  overlay?.redraw();
+  render();
+}
+
+async function loadSample(name) {
+  const html = await (await fetch(FIXTURES + name)).text();
+  $('source').value = html;
+  outcomes = new Map(); log = [];
+  await load(html);
+  run();
+}
+
+document.querySelector('.tabs').addEventListener('click', (e) => {
+  const t = e.target.closest('button[data-tab]');
+  if (!t) return;
+  for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b === t));
+  for (const p of document.querySelectorAll('.tab')) p.classList.toggle('on', p.id === `tab-${t.dataset.tab}`);
+});
+$('sample').addEventListener('change', () => loadSample($('sample').value));
+$('classify').addEventListener('click', async () => { outcomes = new Map(); log = []; await load($('source').value); run(); });
+$('dryrun').addEventListener('click', dryRun);
+$('reset').addEventListener('click', () => loadSample($('sample').value));
+$('overlay').addEventListener('change', () => { overlay?.remove(); overlay = $('overlay').checked && result ? renderOverlay(result, { doc: frameDoc() }) : null; });
+
+$('profile').value = await (await fetch(FIXTURES + 'profile.json')).text();
+const names = await listFixtures();
+fillSelect(names);
+$('sample').value = names.includes('wd-my-information.html') ? 'wd-my-information.html' : names[0];
+await loadSample($('sample').value);
+</script>
+</body>
+</html>

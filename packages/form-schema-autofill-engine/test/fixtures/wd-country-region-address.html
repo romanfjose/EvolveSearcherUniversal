@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-expect-platform="workday">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://acme.wd1.myworkdayjobs.com/Careers/job/London/Staff-Engineer_R-10234/apply"><title>Address</title></head>
+<body>
+<div data-automation-id="applyFlowMyInfoPage">
+  <h2>My Information</h2>
+  <div data-automation-id="formField-country">
+    <label id="country--country-label">Country<abbr title="required">*</abbr></label>
+    <button type="button" aria-haspopup="listbox" id="country--country" name="country" aria-labelledby="country--country-label" aria-controls="country--country-popup" data-expect="country">United States of America</button>
+    <ul role="listbox" id="country--country-popup"><li role="option">Canada</li><li role="option" data-expect-clicked>United Kingdom</li><li role="option">United States of America</li></ul>
+  </div>
+  <div data-automation-id="formField-addressLine1"><label for="address--addressLine1">Address Line 1<abbr title="required">*</abbr></label><input type="text" id="address--addressLine1" name="addressLine1" data-expect="address_line1" data-expect-value="12 Analytical Row"></div>
+  <div data-automation-id="formField-addressLine2"><label for="address--addressLine2">Address Line 2</label><input type="text" id="address--addressLine2" name="addressLine2" data-expect="address_line2" data-expect-value=""></div>
+  <div data-automation-id="formField-city"><label for="address--city">City<abbr title="required">*</abbr></label><input type="text" id="address--city" name="city" data-expect="city" data-expect-value="London"></div>
+  <div data-automation-id="formField-countryRegion">
+    <label id="address--countryRegion-label">County</label>
+    <button type="button" aria-haspopup="listbox" id="address--countryRegion" name="countryRegion" aria-labelledby="address--countryRegion-label" aria-controls="address--countryRegion-popup" data-expect="state">Select One</button>
+    <ul role="listbox" id="address--countryRegion-popup"><li role="option" data-expect-clicked>Greater London</li><li role="option">Kent</li></ul>
+  </div>
+  <div data-automation-id="formField-postalCode"><label for="address--postalCode">Postal Code<abbr title="required">*</abbr></label><input type="text" id="address--postalCode" name="postalCode" data-expect="postal_code" data-expect-value="EC1A 1BB"></div>
+  <button type="button" data-automation-id="pageFooterNextButton" data-expect="advance">Save and Continue</button>
+</div>
+</body>
+</html>

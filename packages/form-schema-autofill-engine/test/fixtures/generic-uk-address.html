@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/address"><title>UK address</title></head>
+<body>
+<form>
+  <fieldset><legend>Home address</legend>
+    <div><label for="a1">Address line 1</label><input id="a1" autocomplete="off" data-expect="address_line1" data-expect-value="12 Analytical Row"></div>
+    <div><label for="a2">Address line 2 (optional)</label><input id="a2" data-expect="address_line2" data-expect-value=""></div>
+    <div><label for="a3">Town/City</label><input id="a3" data-expect="city" data-expect-value="London"></div>
+    <div><label for="a4">County</label><input id="a4" data-expect="state" data-expect-value="Greater London"></div>
+    <div><label for="a5">Postcode</label><input id="a5" data-expect="postal_code" data-expect-value="EC1A 1BB"></div>
+    <div><label for="a6">Country</label><select id="a6" data-expect="country" data-expect-value="GB"><option value="IE">Ireland</option><option value="GB">United Kingdom of Great Britain and Northern Ireland</option><option value="US">United States of America</option></select></div>
+  </fieldset>
+  <button type="submit" data-expect="redline">Apply</button>
+</form>
+</body></html>

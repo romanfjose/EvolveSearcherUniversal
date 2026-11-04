@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" data-expect-platform="generic">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://careers.example.org/apply/labelledby"><title>aria-labelledby composites</title></head>
+<body>
+<form>
+  <section aria-labelledby="sec-contact">
+    <h2 id="sec-contact">Contact details</h2>
+    <div class="row"><span id="lbl-email">Email</span><input id="i1" aria-labelledby="sec-contact lbl-email" data-expect="email"></div>
+    <div class="row"><span id="lbl-phone">Phone number</span><input id="i2" aria-labelledby="sec-contact lbl-phone" data-expect="phone"></div>
+  </section>
+  <section aria-labelledby="sec-emergency">
+    <h2 id="sec-emergency">Emergency contact</h2>
+    <div class="row"><span id="lbl-ec-name">Name</span><input id="i3" aria-labelledby="sec-emergency lbl-ec-name" data-expect="-" data-expect-value=""></div>
+    <div class="row"><span id="lbl-ec-phone">Phone number</span><input id="i4" aria-labelledby="sec-emergency lbl-ec-phone" data-expect="-" data-expect-value=""></div>
+  </section>
+  <button type="submit" data-expect="redline">Apply</button>
+</form>
+</body></html>

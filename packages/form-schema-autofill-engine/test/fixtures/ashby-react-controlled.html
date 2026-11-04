@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-expect-platform="ashby">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://jobs.ashbyhq.com/acme/9f3c2b1a/application"><title>React state</title></head>
+<body>
+<div id="root"><div class="ashby-application-form-container">
+  <form>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_name">Name</label><input id="_systemfield_name" type="text" value="" data-framework="react" data-expect="full_name" data-expect-state="Ada Lovelace"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_email">Email</label><input id="_systemfield_email" type="email" value="" data-framework="react" data-expect="email" data-expect-state="ada.lovelace@example.com"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="_systemfield_phone">Phone</label><input id="_systemfield_phone" type="tel" value="" data-framework="react" data-expect="phone" data-expect-state="7700 900123"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="e9f0-gh">GitHub</label><input id="e9f0-gh" type="text" value="" data-framework="react" data-expect="github" data-expect-state="https://github.com/ada-example"></div>
+    <div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="e9f0-cl">Cover letter</label><textarea id="e9f0-cl" data-framework="react" data-expect="cover_letter" data-expect-state="Dear hiring team, I build reliable numerical systems."></textarea></div>
+    <div class="ashby-application-form-field-entry">
+      <input type="checkbox" id="e9f0-privacy" data-framework="react" data-expect="consent" data-expect-checked="false" data-expect-state="undefined">
+      <label for="e9f0-privacy">I acknowledge the Acme Candidate Privacy Policy</label>
+    </div>
+    <button class="ashby-application-form-submit-button" type="submit" data-expect="redline">Submit Application</button>
+  </form>
+</div></div>
+</body>
+</html>

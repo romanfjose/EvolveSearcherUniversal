@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://job-boards.eu.greenhouse.io/acme/jobs/4012345"><title>GDPR consent</title></head>
+<body>
+<form id="application-form" class="application--form">
+  <div class="input-wrapper"><label for="first_name" class="label">First Name*</label><input id="first_name" type="text" autocomplete="given-name" data-expect="first_name" data-expect-value="Ada"></div>
+  <div class="input-wrapper"><label for="email" class="label">Email*</label><input id="email" type="text" autocomplete="email" data-expect="email" data-expect-value="ada.lovelace@example.com"></div>
+  <div class="gdpr">
+    <h3 class="section-header">Applicant Privacy</h3>
+    <div class="checkbox__wrapper">
+      <input type="checkbox" id="gdpr_demographic_data_consent_given" name="gdpr_demographic_data_consent_given" data-expect="consent" data-expect-checked="false">
+      <label for="gdpr_demographic_data_consent_given">I consent to Acme collecting, storing and processing my demographic data for equal opportunity monitoring.</label>
+    </div>
+    <div class="checkbox__wrapper">
+      <input type="checkbox" id="gdpr_retention_consent_given" name="gdpr_retention_consent_given" data-expect="consent" data-expect-checked="false">
+      <label for="gdpr_retention_consent_given">I agree to Acme retaining my data for 12 months so I can be considered for future roles. See our <a href="/privacy">Privacy Policy</a>.</label>
+    </div>
+  </div>
+  <button type="submit" class="btn btn--pill" data-expect="redline">Submit application</button>
+</form>
+</body>
+</html>

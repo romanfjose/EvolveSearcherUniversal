@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-expect-platform="greenhouse">
+<head><meta charset="utf-8"><meta name="fixture-url" content="https://boards.greenhouse.io/acme/jobs/4012345"><title>EEO</title></head>
+<body>
+<form id="application_form" method="post">
+  <div class="field"><label for="first_name">First Name *</label><input type="text" id="first_name" name="job_application[first_name]" data-expect="first_name"></div>
+  <div id="eeoc_fields">
+    <h3>U.S. Equal Opportunity Employment Information (Completion is voluntary and will not subject you to adverse treatment)</h3>
+    <p>Our company values diversity. To ensure that we comply with reporting requirements and to learn more about how we can increase diversity in our candidate pool, we invite you to voluntarily provide demographic information.</p>
+    <div class="field">
+      <label for="job_application_gender">Gender</label>
+      <select id="job_application_gender" name="job_application[gender]" class="select2-hidden-accessible" aria-hidden="true" tabindex="-1" data-expect="eeo.gender" data-expect-value="3">
+        <option value="">Please select</option><option value="1">Male</option><option value="2">Female</option><option value="3">Decline To Self Identify</option>
+      </select>
+      <span class="select2 select2-container select2-container--default" dir="ltr"><span class="selection"><span class="select2-selection select2-selection--single" role="combobox" aria-haspopup="true" aria-expanded="false" tabindex="0" aria-labelledby="select2-job_application_gender-container"><span class="select2-selection__rendered" id="select2-job_application_gender-container" title="Please select">Please select</span><span class="select2-selection__arrow" role="presentation"><b role="presentation"></b></span></span></span></span>
+    </div>
+    <div class="field">
+      <label for="job_application_hispanic_ethnicity">Are you Hispanic/Latino?</label>
+      <select id="job_application_hispanic_ethnicity" name="job_application[hispanic_ethnicity]" class="select2-hidden-accessible" aria-hidden="true" data-expect="eeo.hispanic" data-expect-value="Decline To Self Identify">
+        <option value="">Please select</option><option value="Yes">Yes</option><option value="No">No</option><option value="Decline To Self Identify">Decline To Self Identify</option>
+      </select>
+      <span class="select2 select2-container"><span class="selection"><span class="select2-selection" role="combobox" aria-haspopup="true"><span class="select2-selection__rendered">Please select</span></span></span></span>
+    </div>
+    <div class="field">
+      <label for="job_application_race">Race</label>
+      <select id="job_application_race" name="job_application[race]" data-expect="eeo.race" data-expect-value="8">
+        <option value="">Please select</option><option value="1">American Indian or Alaskan Native</option><option value="2">Asian</option><option value="3">Black or African American</option><option value="4">Hispanic or Latino</option><option value="5">White</option><option value="6">Native Hawaiian or Other Pacific Islander</option><option value="7">Two or More Races</option><option value="8">Decline To Self Identify</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="job_application_veteran_status">Veteran Status</label>
+      <select id="job_application_veteran_status" name="job_application[veteran_status]" data-expect="eeo.veteran" data-expect-value="3">
+        <option value="">Please select</option><option value="1">I am not a protected veteran</option><option value="2">I identify as one or more of the classifications of protected veteran</option><option value="3">I don't wish to answer</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="job_application_disability_status">Disability Status</label>
+      <select id="job_application_disability_status" name="job_application[disability_status]" data-expect="eeo.disability" data-expect-value="3">
+        <option value="">Please select</option><option value="1">Yes, I have a disability (or previously had a disability)</option><option value="2">No, I do not have a disability</option><option value="3">I do not want to answer</option>
+      </select>
+    </div>
+  </div>
+  <input type="button" id="submit_app" value="Submit Application" data-expect="redline">
+</form>
+</body>
+</html>

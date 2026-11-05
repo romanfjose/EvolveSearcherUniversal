@@ -19,6 +19,7 @@ import {
     animateAAAEnemies,
     createAAANpcMesh,
 } from './aaa-visuals.js';
+import { createAAAFeverDirector } from './aaa-fever-director.js';
 
 // Real Socket.io server when reachable, otherwise the in-browser loopback with AI bots.
 const socket = createNetSocket();
@@ -390,11 +391,42 @@ const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffccaa });
 const motorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2f36, metalness: 0.4, roughness: 0.5 });
 const propMaterial = new THREE.MeshStandardMaterial({ color: 0xc9d2dc, metalness: 0.7, roughness: 0.3 });
 
+// --- Unified AAA Fever-Dream Director (All 25 Wave 1 & Wave 2 Systems) ---
+const feverDirector = createAAAFeverDirector({
+    THREE,
+    scene,
+    camera,
+    renderer,
+    ambientLight,
+    directionalLight,
+    riverShaderMat,
+    obstacles,
+    socket,
+    hud,
+    sfx,
+    splash,
+    popAt,
+    getMyRaft: () => myRaft,
+    getOtherPlayers: () => otherPlayers,
+    getEnemiesData: () => enemiesData,
+    enemyMeshes,
+    getMyStats: () => myStats,
+    getIsDead: () => isDead,
+    onGrantCoins: (delta) => {
+        myStats.coins = Math.max(0, myStats.coins + delta);
+        hud.setStats(myStats);
+    },
+    onHealPlayer: (amount) => {
+        myHealth = Math.min(myMaxHealth, myHealth + amount);
+        hud.setHealth(myHealth, myMaxHealth);
+    },
+});
+
 /**
  * group (position + yaw, mirrors the physics body) → tilt (visual-only bank/pitch/bob) → multi-log hull, articulated crew, oar/mallet, motor.
  */
 function createRaftMesh(color, upgrades = []) {
-    return createAAARaftAndCrew(
+    const vis = createAAARaftAndCrew(
         color,
         upgrades,
         raftSize,
@@ -404,6 +436,8 @@ function createRaftMesh(color, upgrades = []) {
         motorMaterial,
         propMaterial
     );
+    scene.add(vis.group);
+    return vis;
 }
 
 /** Per-frame visual life of a raft: oar strokes, articulated crew limbs, attack swing, banking, planing pitch, bob, propeller, wake. */
@@ -646,6 +680,7 @@ socket.on('gameWon', () => {
     hud.setStatus('YOU WIN! CO-OP ESCAPE!', 'var(--ok)');
     sfx.kill();
     document.getElementById('win').hidden = false;
+    feverDirector.onGameWon();
 });
 
 // --- Intro Sequence (short 1.2s swoop, immediately skippable on any movement input) ---
@@ -694,6 +729,7 @@ function triggerAttack() {
     inIntroSequence = false;
     isAttacking = true;
     myRaft.vis.anim.swing = SWING_S;
+    feverDirector.onPlayerAttack();
     if (enemiesData) {
         for (const key in enemiesData) {
             if (enemiesData[key].health > 0 && myRaft.vis.group.position.distanceTo(enemyMeshes[key].position) < PLAYER.attackRange) {
@@ -721,14 +757,18 @@ window.addEventListener('keydown', (e) => {
         e.preventDefault();
     }
     if (k === 'f') triggerAttack();
-    if (k === 'shift') isBlocking = true;
+    if (k === 'shift') {
+        if (!isBlocking) feverDirector.onBlockPressed(performance.now());
+        isBlocking = true;
+    }
     if (k === 'e') {
-        if (shopOpen) {
-            document.getElementById('shop').style.display = 'none';
+        if (feverDirector.armoryShop.isOpen()) {
+            feverDirector.armoryShop.close();
             shopOpen = false;
         } else if (myRaft?.craft && isInShopZone(myRaft.craft.position)) {
             hud.setStats(myStats);
-            document.getElementById('shop').style.display = 'block';
+            feverDirector.armoryShop.updatePlayerData({ coins: myStats.coins, upgrades: myStats.upgrades, isDead });
+            feverDirector.armoryShop.open();
             shopOpen = true;
         }
     }
@@ -746,12 +786,13 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; isBlocking = false; });
 
 window.addEventListener('mousedown', (e) => {
-    if (e.target?.closest?.('#shop')) return;
-    if (isDead || shopOpen || !myRaft) return;
+    if (e.target?.closest?.('#shop') || e.target?.closest?.('#armory-overlay') || e.target?.closest?.('#title-menu-root')) return;
+    if (isDead || shopOpen || feverDirector.armoryShop.isOpen() || !myRaft) return;
     if (e.button === 0) {
         triggerAttack();
     } else if (e.button === 2) {
         inIntroSequence = false;
+        feverDirector.onBlockPressed(performance.now());
         isBlocking = true;
     }
 });
@@ -773,7 +814,7 @@ let lastHud = 0;
 let wasAirborne = false;
 
 function fixedStep() {
-    if (!myRaft?.craft) return;
+    if (!myRaft?.craft || feverDirector.isPaused()) return;
     const craft = myRaft.craft;
     if (inIntroSequence) {
         craft.velocity.set(0, 0, 0);
@@ -785,6 +826,10 @@ function fixedStep() {
     const col = resolveWorldBoundsAndObstacles(craft, obstacles);
     onSolid = col.onSolid;
     craft.quaternion.setFromAxisAngle(yAxis, craft.yaw);
+
+    if (live) {
+        feverDirector.fixedStep(FIXED_DT, performance.now());
+    }
 
     if (jumped) { splash(craft.position.x, craft.position.z, 0.8); sfx.splash(0.6); }
     if (impact !== null && wasAirborne && impact > 4) {
@@ -817,16 +862,21 @@ function updateLocalRaft(dt, now) {
         for (const key in enemiesData) {
             const enemy = enemiesData[key];
             if (enemy.health > 0 && vis.group.position.distanceTo(enemyMeshes[key].position) < ENEMY_TYPES[key].hitRadius) {
-                socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking });
+                const parryCheck = feverDirector.resolvePlayerHit(enemy.damage, enemy.type, performance.now());
+                if (!parryCheck.parried) {
+                    socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking });
+                }
                 lastEnemyHit = now;
             }
         }
     }
-    for (const cp of checkpoints) {
+    for (let idx = 0; idx < checkpoints.length; idx++) {
+        const cp = checkpoints[idx];
         if (cp.active && craft.position.z < cp.z) {
             cp.active = false;
             cp.gate?.markCrossed();
             socket.emit('checkpointCrossed', { checkpointZ: cp.z });
+            feverDirector.onCheckpointCrossed(cp.z, idx);
         }
     }
     if (!gameWon && craft.position.z < finishLineZ) {
@@ -968,8 +1018,9 @@ function animate() {
     }
     updateFoam(delta);
     updateRings(delta);
+    feverDirector.update(delta, t, performance.now());
 
-    if (myRaft?.vis) updateCamera(delta);
+    if (myRaft?.vis && !feverDirector.photoAndAwards.isActive()) updateCamera(delta);
     updateHud(now);
     renderer.render(scene, camera);
 }

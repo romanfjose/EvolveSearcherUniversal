@@ -616,7 +616,6 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     paddle.position.copy(paddleHome);
 
     tilt.add(raft, character, paddle);
-    scene.add(group);
 
     return {
         group,

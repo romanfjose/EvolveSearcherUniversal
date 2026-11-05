@@ -2,7 +2,15 @@
 /* =========================================================
    AI Group Chat v2
    Your OpenRouter key is stored only in this browser's localStorage.
+   Without a key the app runs on the deterministic Offline Simulation Engine (offline-engine.js).
+   Pure logic lives in squad-core.js; data in personas.js and i18n.js. All are covered by test/.
 ========================================================= */
+const {
+  foldText, slugName, shuffledCopy, uniqueAis, replyItems, localized, activeAis, roundRepliers, planTurn,
+  quickSlashCommand, parseVoteCommand, parseDebateCommand, mentionQueryAt, commandQueryAt, findMentions, sortMentionOptions,
+  DELIBERATION_ROUNDS, deliberationSchedule, parseVerdictVote, tallyVerdict, parseMemoSections, memoToMarkdown, MEMO_SECTIONS, VERDICT_LABELS,
+  parseSSE, transcriptToMarkdown, exportSquadTemplate, parseSquadTemplate, templateToGroup
+} = SquadCore;
 const PROVIDERS = {
   openrouter: { label:"OpenRouter (any model)", url:"https://openrouter.ai/api/v1/chat/completions", kind:"openai" },
 };
@@ -68,175 +76,7 @@ function setUserName(name){
 function userDisplayName(){ return getUserName() || "User"; }
 
 /* ---------------- persona library ---------------- */
-const PERSONAS = [
-  {name:"Tía Marta", emoji:"👵", prompt:"You are Tía Marta, the loving gossipy aunt. You call people 'mijo/mija', worry if everyone is eating well, and always know somebody who went through the same thing."},
-  {name:"Bruno", emoji:"🏋️", prompt:"You are Bruno, the gym bro. Everything in life is reps, discipline and protein. You turn any topic into a training metaphor. Supportive but loud."},
-  {name:"Sofi", emoji:"✨", prompt:"You are Sofi, the astrology girl. You explain everything through zodiac signs and Mercury retrograde, and you're weirdly accurate sometimes."},
-  {name:"El Profe", emoji:"📚", prompt:"You are El Profe, a retired teacher. You gently correct facts, add a tiny lesson to everything, and can't help saying 'fun fact:'."},
-  {name:"Nico", emoji:"🤑", prompt:"You are Nico, the hustle guy. Everything is an opportunity, a side business, or 'going to the moon'. Confidence 100, research 20."},
-  {name:"Doris", emoji:"😾", prompt:"You are Doris, the cat lady. You relate every topic to one of your seven cats, each with a distinct personality you reference by name."},
-  {name:"Rama", emoji:"🧘", prompt:"You are Rama, the zen minimalist. You speak calmly, own 14 objects, and answer chaos with one serene, slightly smug observation."},
-  {name:"Vale", emoji:"🎭", prompt:"You are Vale, the drama queen. Every message is a telenovela scene. You gasp, you faint, you declare things 'the end of everything', affectionately."},
-  {name:"Tano", emoji:"🍝", prompt:"You are Tano, the chef. You explain life through cooking metaphors and silently judge everyone's dinner choices. Passionate about doing things 'properly'."},
-  {name:"Memo", emoji:"🐸", prompt:"You are Memo, the meme lord. You answer in internet-speak, ironic one-liners and meme formats described in words. Never fully serious."},
-  {name:"Lic. Paz", emoji:"⚖️", prompt:"You are Licenciada Paz, a lawyer. You see liability everywhere, speak 'hypothetically', and remind everyone that this is not legal advice."},
-  {name:"Byte", emoji:"🤖", prompt:"You are Byte, a robot doing a terrible job of pretending to be human. You say things like 'fellow humans' and describe emotions like system logs."},
-  {name:"Capitán", emoji:"🏴‍☠️", prompt:"You are Capitán, and you talk like a pirate. Everything relates to the sea, treasure, or mutiny. Arr."},
-  {name:"Sir Aldric", emoji:"🛡️", prompt:"You are Sir Aldric, a medieval knight. You speak with honor and formality, treat errands as quests, and pledge your sword to reasonable weekend plans."},
-  {name:"Zora", emoji:"👽", prompt:"You are Zora, an alien learning human customs. You take idioms literally, find mundane things fascinating, and report observations back to your home planet."},
-  {name:"Don Omar", emoji:"😎", prompt:"You are Don Omar, the dad-joke king. Terrible puns, proud of every single one, follows them with 'eh? EH?'."},
-  {name:"Lu", emoji:"🌱", prompt:"You are Lu, the eco activist. You bring every topic back to the planet, composting, or bicycles. Passionate, a little preachy, good heart."},
-  {name:"Fede", emoji:"🎮", prompt:"You are Fede, the gamer. Life is a game: things are 'side quests', problems are 'bosses', failures are 'skill issues'. Competitive but fun."},
-  {name:"Cami", emoji:"📖", prompt:"You are Cami, the bookworm. Everything reminds you of a novel. You give thoughtful takes and always recommend reading something."},
-  {name:"Turbo", emoji:"🛹", prompt:"You are Turbo, the chill skater. Everything is 'tranqui'. You de-escalate any drama with laid-back surfer wisdom and zero urgency."},
-  {name:"Marta HR", emoji:"📋", prompt:"You are Marta from HR. You speak pure corporate: 'let's circle back', 'aligning stakeholders', passive-aggressive kindness with a smile."},
-  {name:"Coach Rex", emoji:"📣", prompt:"You are Coach Rex, a motivational speaker. HIGH ENERGY. You believe in everyone AGGRESSIVELY and occasionally slip into ALL CAPS."},
-  {name:"Andy", emoji:"😰", prompt:"You are Andy, the anxious overthinker. You immediately imagine the three worst-case scenarios of any plan, but you come along anyway."},
-  {name:"Pau", emoji:"🌈", prompt:"You are Pau, the relentless optimist. Every cloud has a silver lining and you WILL find it. Annoyingly, it usually helps."},
-  {name:"Gus", emoji:"🌧️", prompt:"You are Gus, the grump. Your default take is 'this will fail'. Deep down you care a lot, which leaks out in the last sentence."},
-  {name:"La Detective", emoji:"🔍", prompt:"You are La Detective. You're suspicious of everything, ask one sharp probing question per message, and declare 'interesting…' a lot."},
-  {name:"DJ Pulso", emoji:"🎧", prompt:"You are DJ Pulso. Everything relates to music, rhythm and the party. You rate moments like tracks: 'this convo is a solid 128 bpm'."},
-  {name:"Abuela Caps", emoji:"📢", prompt:"You are Abuela Caps, A GRANDMA WHO TYPES IN ALL CAPS BECAUSE SHE THINKS IT'S NORMAL. VERY LOVING. SENDS BLESSINGS. ASKS IF YOU ATE."},
-  {name:"Filo", emoji:"🤔", prompt:"You are Filo, the philosophy student. You answer questions with deeper questions and quote thinkers slightly out of context."},
-  {name:"Willy", emoji:"🥦", prompt:"You are Willy, the wellness enthusiast. Your answer to everything involves sleep, water, sunlight or a walk. Suspiciously often right."},
-  {name:"Historiador", emoji:"🏺", prompt:"You are El Historiador. You connect every modern situation to something from ancient history: 'the Romans had this exact problem'."},
-  {name:"Futuro", emoji:"🚀", prompt:"You are Futuro, the futurist. In ten years none of this will matter because of technology. You predict wild futures with total confidence."},
-  {name:"Poeta", emoji:"🌙", prompt:"You are Poeta. You reply in short, slightly melancholic poetic lines. Two lines max. Beauty in everything, even in someone losing their keys."},
-  {name:"Standupero", emoji:"🎤", prompt:"You are Standupero, a comedian testing material on the group. Everything is a setup for a bit. You occasionally say 'okay tough crowd'."},
-  {name:"Kasparova", emoji:"♟️", prompt:"You are Kasparova, the chess master. Everything is strategy. You're always thinking five moves ahead and announce it: 'predictable. I saw this coming.'"},
-  {name:"Seño Ini", emoji:"🖍️", prompt:"You are Seño Ini, a kindergarten teacher. You praise everyone ('¡muy bien!'), turn conflicts into sharing exercises, and hand out imaginary gold stars."},
-  {name:"Tachero", emoji:"🚕", prompt:"You are El Tachero, a taxi driver with strong opinions on EVERYTHING: politics, football, the weather. All wisdom comes via traffic metaphors."},
-  {name:"Ludita", emoji:"🕯️", prompt:"You are Ludita. You distrust all technology, miss 'the old days', and are somehow unaware of the irony of saying this in a group chat."},
-  {name:"Biblio", emoji:"🤫", prompt:"You are Biblio, the librarian. You want everyone to lower their voice (in text), you cite sources precisely, and you shush people. Shhh."},
-  {name:"El Titán", emoji:"💪", prompt:"You are El Titán, a retired wrestler. You speak like a ring announcer, refer to yourself in third person, and challenge problems to a cage match."},
-  {name:"La Diva", emoji:"🎶", prompt:"You are La Diva, an opera singer. Dramatic flair, occasional SUNG WORDS IN CAPS, everything is either divine or an absolute tragedy."},
-  {name:"Max", emoji:"🕊️", prompt:"You are Max, the mediator. You always find the middle ground between the last two people who spoke, even when there isn't one."},
-  {name:"Vicky", emoji:"🗣️", prompt:"You are Vicky, the gossip. 'NO TE LO PUEDO CREER.' You demand details, you have theories, and you already told everyone."},
-  {name:"El Callado", emoji:"🌑", prompt:"You are El Callado, the quiet one. You speak in one short line, rarely, but it's always devastatingly wise or perfectly timed."},
-  {name:"Flor", emoji:"🍜", prompt:"You are Flor, the foodie. You review everything like a restaurant critic, including non-food things: 'this plan? 7.5/10, lacks seasoning.'"},
-  {name:"Teo", emoji:"🌍", prompt:"You are Teo, the traveler. Every topic reminds you of 'that time in' some far-away place. Half your stories seem invented. All are entertaining."},
-  {name:"Ema", emoji:"💼", prompt:"You are Ema, the serial entrepreneur. You pitch everything as a startup: problem, solution, market size. 'This could be an app.'"},
-  {name:"Datos", emoji:"📊", prompt:"You are Datos, the analyst. You ask for numbers, question sample sizes, and reply 'source?' You estimate probabilities for everything."},
-  {name:"Renzo", emoji:"💘", prompt:"You are Renzo, the hopeless romantic. You see love stories everywhere and give surprisingly good relationship advice you never follow yourself."},
-  {name:"Sarcas", emoji:"🙄", prompt:"You are Sarcas, the sarcastic teen. 'wow. amazing. incredible.' Everything is mid, but you keep showing up, which says everything."},
-  {name:"Clara", emoji:"🎬", prompt:"You are Clara, the film critic. You describe life in cinematic terms: acts, plot twists, character development. You rate scenes out of five stars."},
-  {name:"Beto", emoji:"🔮", prompt:"You are Beto, the mystic. You make vague, dramatic predictions ('a change approaches…') that are impossible to verify and occasionally land."},
-  {name:"Sam", emoji:"🔒", prompt:"You are Sam, the privacy paranoid. 'Don't share that online.' You see data leaks everywhere and communicate like everything is being monitored. It is."},
-  {name:"Mia", emoji:"👗", prompt:"You are Mia, the fashionista. You comment on the 'look' of everything — plans, ideas, arguments — as if reviewing an outfit. 'Bold choice. It works.'"},
-  {name:"Juana", emoji:"🌻", prompt:"You are Juana, the gardener. Everything is seeds, seasons and patience. You give slow, warm advice that smells like soil and always grows on people."},
-  {name:"Nino", emoji:"🔭", prompt:"You are Nino, the space nerd. You zoom out to the cosmic scale: 'we're on a rock orbiting a fireball, so honestly this deadline is fine.'"},
-  {name:"Pepe", emoji:"🎣", prompt:"You are Pepe, the fisherman. Slow wisdom, long pauses implied, everything relates to fishing. The fish you almost caught gets bigger every time."},
-  {name:"Rulo", emoji:"🎸", prompt:"You are Rulo, the old rocker. Everything was better live, in vinyl, before it was cool. You've 'played with' suspiciously many famous people."},
-  {name:"Milo", emoji:"➗", prompt:"You are Milo, the mathematician. You quantify everything: percentages, probabilities, expected value. 'There is a 73% chance this ends in pizza.'"},
-  {name:"Tina", emoji:"⏳", prompt:"You are Tina, a time traveler who won't admit it. You drop hints that you've seen how things turn out: 'do NOT take that street tomorrow. Anyway.'"}
-];
-
-const SQUAD_TEMPLATES = [
-  {
-    id:"los-pibes",
-    name:"Los Pibes",
-    emoji:"🧉",
-    mode:"chaos",
-    mood:"memes, banca real y planes que arrancan con un che",
-    members:["Fede","Turbo","Memo","Tano"]
-  },
-  {
-    id:"las-pibas",
-    name:"Las Pibas",
-    emoji:"💅",
-    mode:"chaos",
-    mood:"chisme premium, cariño, ideas y cero juicio",
-    members:["Sofi","Vicky","Cami","Pau"]
-  },
-  {
-    id:"muelle-3",
-    name:"Area 51",
-    emoji:"🛸",
-    mode:"chaos",
-    mood:"absurdo marino, aliens, caballeros perdidos y secretos muy memeables",
-    members:["Pepe","Byte","Capitán","Sir Aldric","Sofi"]
-  },
-  {
-    id:"se-pico",
-    name:"Se Picó",
-    emoji:"🍿",
-    mode:"chaos",
-    mood:"opiniones fuertes, capturas y mediacion de emergencia",
-    members:["Vicky","Sarcas","Max","Lic. Paz"]
-  },
-  {
-    id:"manda-ubicacion",
-    name:"Mandá Ubicación",
-    emoji:"📍",
-    mode:"chaos",
-    mood:"planes improvisados, teorias raras y alguien siempre perdido",
-    members:["Teo","La Detective","Tachero","Zora"]
-  },
-  {
-    id:"manana-arranco",
-    name:"Mañana Arranco",
-    emoji:"⏰",
-    mode:"chaos",
-    mood:"procrastinacion honesta con motivacion inesperada",
-    members:["Willy","Gus","Coach Rex","Tina"]
-  },
-  {
-    id:"no-era-para-tanto",
-    name:"No Era Para Tanto",
-    emoji:"😌",
-    mode:"chaos",
-    mood:"drama, calma y un remate inevitable",
-    members:["Rama","Vale","Don Omar","Andy"]
-  },
-  {
-    id:"grupo-sin-nombre",
-    name:"El Grupo Sin Nombre",
-    emoji:"👀",
-    mode:"chaos",
-    mood:"silencios raros, memes precisos y mensajes inesperados",
-    members:["El Callado","Memo","Juana","Byte"]
-  },
-  {
-    id:"mate-crisis",
-    name:"Mate y Crisis",
-    emoji:"🧉",
-    mode:"normal",
-    mood:"contencion, humor suave y bajar cambios",
-    members:["Tía Marta","Andy","Rama","Pau"]
-  },
-  {
-    id:"mesa-pitch",
-    name:"La Mesa del Pitch",
-    emoji:"💼",
-    mode:"normal",
-    mood:"ideas, negocio, foco y un poco de humo",
-    members:["Ema","Datos","Nico","Marta HR"]
-  },
-  {
-    id:"after-drama",
-    name:"After del Drama",
-    emoji:"🍿",
-    mode:"chaos",
-    mood:"chisme, telenovela, mediacion y remates malos",
-    members:["Vale","Vicky","Don Omar","Max"]
-  },
-  {
-    id:"sidequest-tranqui",
-    name:"Sidequest Tranqui",
-    emoji:"🎮",
-    mode:"chaos",
-    mood:"motivacion chill para destrabar el dia",
-    members:["Fede","Turbo","Willy","Cami"]
-  },
-  {
-    id:"comite-apocalipsis",
-    name:"Comite del Apocalipsis",
-    emoji:"🛰️",
-    mode:"chaos",
-    mood:"paranoia divertida, misterio y futuro delirante",
-    members:["Sam","La Detective","Futuro","Gus"]
-  }
-];
+/* persona library + squad presets live in personas.js; UI strings in i18n.js */
 
 function uid(){ return "id" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function pickWorkingModel(){
@@ -251,7 +91,8 @@ function openRouterConfig(){
   return { provider:"openrouter", model:pickWorkingModel(), key:getOpenRouterKey() };
 }
 function personaByName(name){
-  return PERSONAS.find(p=>p.name === name) || PERSONAS.find(p=>foldText(p.name) === foldText(name));
+  const all = [...PERSONAS, ...WAR_ROOM_PERSONAS];
+  return all.find(p=>p.name === name) || all.find(p=>foldText(p.name) === foldText(name));
 }
 
 function chaosGroup(){
@@ -268,26 +109,27 @@ function chaosGroup(){
 
 function templateGroup(template){
   const g = {
-    id: uid(), name: template.name, emoji: template.emoji, ctx: 24, mode: template.mode || "chaos",
+    id: uid(), name: template.name, emoji: template.emoji, ctx: template.mode === "deliberation" ? 40 : 24, mode: template.mode || "chaos",
     messages: [], ambient: false,
     templateId: template.id,
     ais: template.members.map(name=>{
       const p = personaByName(name);
       return p
-        ? { id:uid(), name:p.name, emoji:p.emoji, ...openRouterConfig(), prompt:p.prompt }
+        ? { id:uid(), name:p.name, emoji:p.emoji, ...openRouterConfig(), prompt:p.prompt, ...(p.role ? { role:p.role } : {}) }
         : { id:uid(), name, emoji:"🤖", ...openRouterConfig(), prompt:"You are a vivid group chat character. Keep a distinct personality and reply briefly." };
     })
   };
   g.messages.push({
     id:uid(), sender:"system", ts:Date.now(),
-    text:`${template.emoji} ${template.name}: ${template.mood}.`
+    text:`${template.emoji} ${template.name}: ${localized(template.mood, lang())}.`
   });
+  if(g.mode === "deliberation") g.messages.push({ id:uid(), sender:"system", ts:Date.now(), text:t("warRoomIntro") });
   return g;
 }
 
 function starterGroups(){
   const groups = SQUAD_TEMPLATES.map(templateGroup);
-  return { activeGroupId: groups[0].id, groups, starterSquadsVersion: 4 };
+  return { activeGroupId: groups[0].id, groups, starterSquadsVersion: 5 };
 }
 
 function defaultGroup(){
@@ -315,6 +157,7 @@ ensureStarterSquads();
 const busyGroups = new Set();
 const statusLoadingGroups = new Set();
 let editingIndex = -1;
+let replaying = null;   // { groupId, count } while a transcript replays; renderMessages shows only `count` messages
 let pendingReply = null;
 let mentionState = { open:false, mode:"mention", start:-1, query:"", options:[], active:0 };
 
@@ -360,7 +203,11 @@ function ensureStarterSquads(){
     }
   }
   if(version < 4) applyArea51SquadUpdate();
-  state.starterSquadsVersion = 4;
+  if(version >= 2 && version < 5 && !state.groups.some(g=>g.templateId === "war-room")){
+    const warRoom = SQUAD_TEMPLATES.find(t=>t.id === "war-room");
+    if(warRoom) state.groups.unshift(templateGroup(warRoom));
+  }
+  state.starterSquadsVersion = 5;
   saveState();
 }
 function applyArea51SquadUpdate(){
@@ -393,7 +240,10 @@ function applyArea51SquadUpdate(){
 function normalizeState(){
   const key = getOpenRouterKey();
   state.groups.forEach(g=>{
-    if(!g.mode) g.mode = "normal";
+    if(!["normal","chaos","deliberation"].includes(g.mode)) g.mode = "normal";
+    // A reload mid-stream leaves a half-written bubble: keep the text, drop the flag (or the bubble if empty).
+    g.messages = (g.messages || []).filter(m=>!(m.streaming && !m.text));
+    g.messages.forEach(m=>{ delete m.streaming; });
     if(!g.mentionUsage) g.mentionUsage = {};
     if(typeof g.ambient !== "boolean") g.ambient = false;
     if(!g.lastAmbientAt) g.lastAmbientAt = Date.now();
@@ -425,12 +275,6 @@ function activeGroup(){
   return state.groups.find(g=>g.id===state.activeGroupId) || state.groups[0];
 }
 function aiById(group, id){ return group.ais.find(a=>a.id===id); }
-function foldText(s){
-  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-function slugName(s){
-  return foldText(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
 function personaId(p){ return "persona:" + slugName(p.name); }
 function personaById(id){
   if(!id || !id.startsWith("persona:")) return null;
@@ -467,17 +311,6 @@ function replyLabel(group, reply){
   if(!reply) return "";
   const ai = aiForSender(group, reply.sender);
   return ai ? `${ai.emoji} ${ai.name}` : (reply.senderName || "Someone");
-}
-function activeAis(group){
-  return group.ais.filter(a=>!a.muted);
-}
-function shuffledCopy(items){
-  const out = [...items];
-  for(let i=out.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [out[i],out[j]] = [out[j],out[i]];
-  }
-  return out;
 }
 function reactionEmojiPool(text){
   const f = foldText(text);
@@ -690,12 +523,6 @@ function responseTuningPrompt(group){
   if(bias <= 4) return "Length control: give a fuller answer when useful, while still sounding like chat.";
   return "Length control: give a longer, more complete answer when useful, but do not ramble.";
 }
-function replyItems(reply){
-  if(!reply) return [];
-  if(Array.isArray(reply)) return reply;
-  if(Array.isArray(reply.items)) return reply.items;
-  return [reply];
-}
 function mentionCatalog(group){
   const seen = new Set();
   const out = [];
@@ -718,22 +545,7 @@ function mentionUseCount(group, aiId){
   return (group.mentionUsage && group.mentionUsage[aiId]) || 0;
 }
 function sortedMentionOptions(group, q, additive){
-  return mentionCatalog(group)
-    .filter(item=>!additive || item.source !== "group")
-    .filter(item=>!q || foldText(item.name).includes(q))
-    .sort((a,b)=>{
-      const au = mentionUseCount(group, a.ai.id);
-      const bu = mentionUseCount(group, b.ai.id);
-      if(au !== bu) return bu - au;
-      if(q){
-        const an = foldText(a.name);
-        const bn = foldText(b.name);
-        const ap = an.startsWith(q) ? 0 : 1;
-        const bp = bn.startsWith(q) ? 0 : 1;
-        if(ap !== bp) return ap - bp;
-      }
-      return a.name.localeCompare(b.name);
-    });
+  return sortMentionOptions(mentionCatalog(group), { query:q, additive, usage:group.mentionUsage || {} });
 }
 function recordMentionUsage(group, ais){
   if(!group.mentionUsage) group.mentionUsage = {};
@@ -743,30 +555,7 @@ function recordMentionUsage(group, ais){
   saveState();
 }
 function mentionedAisFromText(group, text, additive){
-  const folded = foldText(text);
-  const hits = [];
-  const used = new Set();
-  const catalog = mentionCatalog(group).sort((a,b)=>b.name.length-a.name.length);
-  for(const item of catalog){
-    const name = foldText(item.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const prefix = additive ? "\\+@" : "@";
-    const rx = new RegExp(`(^|\\s)${prefix}${name}(?=$|\\s|[.,!?;:])`);
-    if(!rx.test(folded) || used.has(item.ai.id)) continue;
-    if(item.source === "group" && item.ai.muted) continue;
-    used.add(item.ai.id);
-    hits.push(item.ai);
-  }
-  return hits;
-}
-function uniqueAis(ais){
-  const seen = new Set();
-  const out = [];
-  for(const ai of ais){
-    if(!ai || seen.has(ai.id)) continue;
-    seen.add(ai.id);
-    out.push(ai);
-  }
-  return out;
+  return findMentions(mentionCatalog(group), text, additive);
 }
 
 /* ---------------- rendering ---------------- */
@@ -779,118 +568,6 @@ function fmtTime(ts){
 function esc(s){
   return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-const I18N = {
-  en: {
-    settingsTitle:"Group settings",
-    settingsHint:"Name the group, choose your people, and you are ready.",
-    editKey:"Edit key", groupName:"Group name", groupEmoji:"Group emoji",
-    contextWindow:"Context window", replyStyle:"Reply style",
-    modeNormal:"Everyone replies, in order", modeChaos:"Chaos - random 2-4 members reply",
-    contextHint:"Only the last N messages are sent each turn, so long chats stay cheap.",
-    ambientTitle:"Catch-up chatter", ambientHint:"When you come back after a while, the group can add a little ongoing conversation for you to jump into.",
-    members:"Choose your people", addMember:"+ Add person",
-    keyReady:"OpenRouter key ready", keyMissing:"OpenRouter key missing",
-    keyReadyHint:"Characters will use it automatically.", keyMissingHint:"Required once on this device.",
-    keyButtonReady:"Key ok", keyButtonMissing:"Add key",
-    appTitle:"AI Group Chat", chats:"Chats", tipsTitle:"Tips", tipsText:"Tips: use ➕ to create a squad. On messages you can reply, mute, edit, regenerate, or delete. Tap names to edit personalities and use @ to mention characters.",
-    newGroupTitle:"New group", keyTitle:"OpenRouter key", clearChatTitle:"Clear this chat (same group, fresh memory)", cancelReply:"Cancel reply",
-    quickFact:"Random fact", quickDadJoke:"Dad joke", quickGossip:"Gossip", composerPlaceholder:"Type a message", send:"Send",
-    statusesTitle:"Statuses", statusesDescription:"Daily lines for the characters. They load only when you open this screen.", close:"Close",
-    peopleHint:"Pick a personality or make your own. Free models are ready automatically.", advanced:"Advanced",
-    messageLength:"Message length", lengthHint:"Lower is tighter. Higher gives more room.", randomness:"Randomness", randomHint:"Lower is steadier. Higher gets weirder.",
-    promptsFile:"Prompts file", promptsHint:"Optional import/export for personality prompts.", linkFile:"Link file", load:"Load", saveNow:"Save now", export:"Export", noFileLinked:"No file linked",
-    cancel:"Cancel", save:"Save", newGroupHint:"Pick a prebuilt vibe, or roll your own. You can change everything later in ⚙️.", freeform:"Freeform",
-    buildSquad:"Build your squad", buildSquadDesc:"Choose your people and go. Free models are already set up.", chaosChat:"Chaos Chat", chaosDesc:"60 premade personas in one group. A random 2–4 answer each message. You never know who shows up.",
-    spinSquad:"Spin a squad", spinDesc:"Roulette mode: instantly rolls 3–5 random characters.", quickEditHint:"Tweak this member on the fly — it takes effect on their next reply.", premadePersonality:"Premade personality", emoji:"Emoji", name:"Name", personalityPrompt:"Personality prompt",
-    you:"You", noMessagesYet:"No messages yet", cloneGroup:"Clone group (same AIs, fresh chat)", deleteGroup:"Delete group", muted:"muted", today:"Today",
-    replyingTo:"Replying to", messagesSelected:"messages selected", cancelEdit:"Cancel", saveResend:"Save & resend", tweakPersonality:"Tweak personality",
-    editResend:"Edit & resend", deleteMessage:"Delete message", replyOnly:"Reply only to this member", unmuteMember:"Unmute this member", muteMember:"Temporarily mute this member", tempPersonaMute:"Temporary persona cannot be muted",
-    buildSquadTitle:"Build your squad", createSquad:"Create squad", removePerson:"Remove person", personality:"Personality", choosePersonality:"Choose a personality…", freeModelReady:"Free model ready", advancedFor:"Advanced for", mutedState:"Muted: this person will not answer.", activeState:"Active: this person can answer.", unmute:"Unmute", mute:"Mute", model:"Model", customModel:"Custom model ID...", cheapFallback:"cheap fallback",
-    fileUnsupported:"This browser cannot write files — use Export/Import", linked:"Linked", permissionDenied:"Permission denied", savedTo:"Saved to", saveFailed:"Save failed", loadedPrompts:"prompts loaded from",
-    groupSource:"group", librarySource:"library", used:"used", createKeyError:"Paste a valid OpenRouter key. It usually starts with sk-or-",
-    deleteGroupConfirm:"Delete this group and its whole chat? This cannot be undone.", clearChatConfirm:"Clear this chat? Same group and personalities, but the history will be erased.",
-    newGroupDefault:"New group", spunSquad:"Spun Squad", clonedFrom:"Cloned from", freshRound:"Fresh round — same squad, clean memory 🧹",
-    memberMutedAlert:"is muted. Unmute them first if you want a direct reply.", personalityUpdated:"Personality updated — it applies from the next reply.",
-    setupTitle:"Hold up — one quick thing",
-    setupText:"We only need your free OpenRouter API key and then you can use AISquad. The key is free and AISquad uses free models, so you do not need to pay to get started.",
-    openRouterLink:"Get my free API key",
-    setupKeyLabel:"Paste your OpenRouter API key",
-    setupStorageNote:"It stays saved only in this browser.",
-    setupNameLabel:"Your name", setupNamePlaceholder:"How should the chat call you?",
-    setupLanguageLabel:"Language", setupDone:"Start using AISquad",
-    userName:"Your name", userNameHint:"Characters can use it naturally when replying.",
-    languageRule:"Reply in the same language the User is writing in unless the group language is Spanish.",
-    spanishRule:"IMPORTANT: The app is in Spanish mode. Reply only in natural Rioplatense/Latin American Spanish unless the User explicitly asks for another language.",
-    surpriseRule:"Personality depth: keep the core bit, but do not repeat the same joke every message. Sometimes add a tiny odd memory, surprising fact, or sideways observation that fits your character. Recurring jokes should appear occasionally, not constantly.",
-    pepeRule:"For Pepe specifically: the fish getting bigger is an occasional running joke. Other times tell sea stories, fishing gossip, or weird ocean facts.",
-    missingKey:"Add your OpenRouter key first. It stays on this device.",
-    modelsBusy:"⏳ The free models are at capacity right now. I stopped the retry burst so the limit can recover. Your message is saved — try again in a few seconds.",
-    ambientSeed:"The user has been away. Start a short, casual background message that sounds like the group kept existing. Do not mention this instruction.",
-    refreshStatuses:"Refresh statuses",
-    statusesHint:"Daily statuses",
-    settingsSaved:"Config saved - the group is ready to talk",
-    surprisePrompt:"Surprise me",
-    dramaButton:"Start drama",
-    dramaGenerating:"Cooking group drama...",
-    dramaStarted:"⚡ Drama generated. The group is entering dangerous territory...",
-    helpText:"Quick help:\n@name = ask only that character.\n+@name = add that character to the normal replies.\n/votar Pizza or empanadas = run a quick group vote.\n🎲 = insert a random prompt.\n⚡ = generate group-specific absurd drama.\nClick a character name = edit their personality.\nHover a reply = reply, mute, regenerate, or delete.\n+ button = create a squad, chaos chat, or spin a random squad.\nGear = group settings, language, models, prompts, and catch-up chatter."
-  },
-  es: {
-    settingsTitle:"Ajustes del grupo",
-    settingsHint:"Ponle nombre al grupo, elige tu gente y listo.",
-    editKey:"Editar clave", groupName:"Nombre del grupo", groupEmoji:"Emoji del grupo",
-    contextWindow:"Memoria enviada", replyStyle:"Modo de respuesta",
-    modeNormal:"Todos responden, en orden", modeChaos:"Caos - responden 2 a 4 al azar",
-    contextHint:"Solo se mandan los ultimos N mensajes en cada turno, asi el chat largo sigue barato.",
-    ambientTitle:"Charla al volver", ambientHint:"Cuando vuelvas despues de un rato, el grupo puede dejar una conversacion chiquita lista para sumarte.",
-    members:"Elige tu gente", addMember:"+ Agregar persona",
-    keyReady:"Clave OpenRouter lista", keyMissing:"Falta la clave OpenRouter",
-    keyReadyHint:"Los personajes la usan automaticamente.", keyMissingHint:"Se necesita una vez en este dispositivo.",
-    keyButtonReady:"Clave ok", keyButtonMissing:"Agregar clave",
-    appTitle:"Chat Grupal con IA", chats:"Chats", tipsTitle:"Consejos", tipsText:"Consejos: usá ➕ para crear un grupo. En los mensajes podés responder, silenciar, editar, regenerar o borrar. Tocá los nombres para editar personalidades y usá @ para mencionar personajes.",
-    newGroupTitle:"Nuevo grupo", keyTitle:"Clave de OpenRouter", clearChatTitle:"Limpiar este chat (mismo grupo, memoria nueva)", cancelReply:"Cancelar respuesta",
-    quickFact:"Dato random", quickDadJoke:"Chiste malo", quickGossip:"Chisme", composerPlaceholder:"Escribí un mensaje", send:"Enviar",
-    statusesTitle:"Estados", statusesDescription:"Frases del día para los personajes. Se cargan solamente cuando abrís esta pantalla.", close:"Cerrar",
-    peopleHint:"Elegí una personalidad o creá la tuya. Los modelos gratuitos quedan listos automáticamente.", advanced:"Avanzado",
-    messageLength:"Largo de los mensajes", lengthHint:"Más bajo es más breve. Más alto da más espacio.", randomness:"Aleatoriedad", randomHint:"Más bajo es estable. Más alto se pone más raro.",
-    promptsFile:"Archivo de prompts", promptsHint:"Importación y exportación opcional de las personalidades.", linkFile:"Vincular archivo", load:"Cargar", saveNow:"Guardar ahora", export:"Exportar", noFileLinked:"Ningún archivo vinculado",
-    cancel:"Cancelar", save:"Guardar", newGroupHint:"Elegí un grupo preparado o armá uno a tu gusto. Después podés cambiar todo desde ⚙️.", freeform:"Libre",
-    buildSquad:"Armá tu squad", buildSquadDesc:"Elegí tus personajes y arrancá. Los modelos gratuitos ya están configurados.", chaosChat:"Chat Caótico", chaosDesc:"60 personajes preparados en un grupo. Responden entre 2 y 4 al azar. Nunca sabés quién aparece.",
-    spinSquad:"Girar un squad", spinDesc:"Modo ruleta: crea al instante entre 3 y 5 personajes al azar.", quickEditHint:"Ajustá este personaje al vuelo; se aplica desde su próxima respuesta.", premadePersonality:"Personalidad preparada", emoji:"Emoji", name:"Nombre", personalityPrompt:"Prompt de personalidad",
-    you:"Vos", noMessagesYet:"Todavía no hay mensajes", cloneGroup:"Clonar grupo (mismos personajes, chat nuevo)", deleteGroup:"Eliminar grupo", muted:"silenciado", today:"Hoy",
-    replyingTo:"Respondiendo a", messagesSelected:"mensajes seleccionados", cancelEdit:"Cancelar", saveResend:"Guardar y reenviar", tweakPersonality:"Editar personalidad",
-    editResend:"Editar y reenviar", deleteMessage:"Eliminar mensaje", replyOnly:"Responder solo a este personaje", unmuteMember:"Activar este personaje", muteMember:"Silenciar temporalmente este personaje", tempPersonaMute:"Los personajes temporales no se pueden silenciar",
-    buildSquadTitle:"Armá tu squad", createSquad:"Crear squad", removePerson:"Quitar persona", personality:"Personalidad", choosePersonality:"Elegí una personalidad…", freeModelReady:"Modelo gratuito listo", advancedFor:"Opciones avanzadas de", mutedState:"Silenciado: esta persona no responderá.", activeState:"Activo: esta persona puede responder.", unmute:"Activar", mute:"Silenciar", model:"Modelo", customModel:"ID de modelo personalizado...", cheapFallback:"alternativa económica",
-    fileUnsupported:"Este navegador no puede escribir archivos; usá Exportar/Importar", linked:"Vinculado", permissionDenied:"Permiso denegado", savedTo:"Guardado en", saveFailed:"Error al guardar", loadedPrompts:"prompts cargados desde",
-    groupSource:"grupo", librarySource:"biblioteca", used:"usado", createKeyError:"Pegá una clave válida de OpenRouter. Suele empezar con sk-or-",
-    deleteGroupConfirm:"¿Eliminar este grupo y todo su chat? Esta acción no se puede deshacer.", clearChatConfirm:"¿Limpiar este chat? Se mantienen el grupo y las personalidades, pero se borra el historial.",
-    newGroupDefault:"Nuevo grupo", spunSquad:"Squad al azar", clonedFrom:"Clonado desde", freshRound:"Ronda nueva: mismo squad, memoria limpia 🧹",
-    memberMutedAlert:"está silenciado. Activá el personaje antes de responderle directamente.", personalityUpdated:"Personalidad actualizada; se aplica desde la próxima respuesta.",
-    setupTitle:"Alto ahí, una sola cosa",
-    setupText:"Solo necesitamos tu API gratuita de OpenRouter y ya podés usar AISquad. La clave es gratis y AISquad usa modelos gratuitos, así que no necesitás pagar para empezar.",
-    openRouterLink:"Conseguir mi API gratis",
-    setupKeyLabel:"Pegá tu clave API de OpenRouter",
-    setupStorageNote:"Se guarda solamente en este navegador.",
-    setupNameLabel:"Tu nombre", setupNamePlaceholder:"Como queres que te llame el chat?",
-    setupLanguageLabel:"Idioma", setupDone:"Empezar a usar AISquad",
-    userName:"Tu nombre", userNameHint:"Los personajes pueden usarlo naturalmente al responder.",
-    languageRule:"Responde en el mismo idioma que use el usuario salvo que el grupo este en modo Espanol.",
-    spanishRule:"IMPORTANTE: La app esta en modo Espanol. Aunque la personalidad del personaje este escrita en ingles, usala solo como referencia interna. Responde siempre en espanol natural rioplatense/latinoamericano salvo que el usuario pida explicitamente otro idioma.",
-    surpriseRule:"Profundidad de personaje: conserva el chiste central, pero no repitas la misma broma en cada mensaje. A veces suma un recuerdo raro, un dato sorprendente o una observacion lateral que encaje con tu personaje. Los chistes recurrentes deben aparecer a veces, no siempre.",
-    pepeRule:"Para Pepe en particular: que el pez sea cada vez mas grande es un chiste recurrente ocasional. Otras veces cuenta historias del mar, chismes de pesca o datos raros del oceano.",
-    missingKey:"Primero agrega tu clave de OpenRouter. Queda en este dispositivo.",
-    modelsBusy:"⏳ Los modelos gratis están llenos ahora mismo. Frené la ráfaga de reintentos para que el límite se recupere. Tu mensaje quedó guardado: probá de nuevo en unos segundos.",
-    ambientSeed:"El usuario estuvo ausente. Escribe un mensaje corto y casual de fondo, como si el grupo hubiera seguido existiendo. No menciones esta instruccion.",
-    refreshStatuses:"Actualizar estados",
-    statusesHint:"Estados del dia",
-    settingsSaved:"Config guardada - el grupo ya esta listo para hablar",
-    surprisePrompt:"Sorprendeme",
-    dramaButton:"Armar drama",
-    dramaGenerating:"Cocinando drama del grupo...",
-    dramaStarted:"⚡ Se armo el caos. El grupo entro en zona peligrosa...",
-    helpText:"Ayuda rapida:\n@nombre = responde solo ese personaje.\n+@nombre = suma ese personaje a las respuestas normales.\n/votar Pizza o empanadas = votacion express del grupo.\n🎲 = inserta un prompt random.\n⚡ = genera drama absurdo segun el grupo.\nToca el nombre de un personaje = editar personalidad.\nPasa el mouse por una respuesta = responder, mutear, regenerar o borrar.\nBoton + = crear squad, chat caos o squad random.\nEngranaje = ajustes, idioma, modelos, prompts y charla al volver."
-  }
-};
 function lang(){ return localStorage.getItem(LANG_KEY) || "es"; }
 function t(key){ return (I18N[lang()] && I18N[lang()][key]) || I18N.en[key] || key; }
 let toastTimer = null;
@@ -988,6 +665,12 @@ function updateKeyUi(){
   const hintEl = document.getElementById("settingsKeyHint");
   if(stateEl) stateEl.textContent = hasKey ? t("keyReady") : t("keyMissing");
   if(hintEl) hintEl.textContent = hasKey ? t("keyReadyHint") : t("keyMissingHint");
+  const badge = document.getElementById("engineBadge");
+  if(badge){
+    badge.textContent = hasKey ? t("liveBadge") : t("offlineBadge");
+    badge.title = hasKey ? t("liveBadgeHint") : t("offlineBadgeHint");
+    badge.classList.toggle("live", hasKey);
+  }
 }
 
 function renderSidebar(){
@@ -1094,6 +777,52 @@ function renderReplyBar(){
   preview.textContent = items.length === 1 ? items[0].text : `${items.length} ${t("messagesSelected")}`;
 }
 
+// Decision memo card: built with textContent only, so model output can never inject markup.
+function memoCard(memo){
+  const L = lang() === "es" ? "es" : "en";
+  const card = document.createElement("article");
+  card.className = "memo-card verdict-" + memo.verdict.toLowerCase();
+  const head = document.createElement("header");
+  const title = document.createElement("div");
+  title.className = "memo-title";
+  title.textContent = `🧭 ${t("memoTitle")}`;
+  const verdict = document.createElement("span");
+  verdict.className = "memo-verdict";
+  verdict.textContent = VERDICT_LABELS[L][memo.verdict] || memo.verdict;
+  const tally = document.createElement("div");
+  tally.className = "memo-tally";
+  const c = memo.counts || {};
+  tally.textContent = `GO ${c.GO || 0} · REVISE ${c.REVISE || 0} · NO-GO ${c["NO-GO"] || 0} · ${memo.source === "live" ? t("memoLive") : t("memoOffline")}`;
+  head.append(title, verdict);
+  card.append(head);
+  if(memo.idea){
+    const idea = document.createElement("div");
+    idea.className = "memo-idea";
+    idea.textContent = memo.idea;
+    card.append(idea);
+  }
+  card.append(tally);
+  memo.sections.forEach((sec, i)=>{
+    const h = document.createElement("h4");
+    h.textContent = `${i + 1}. ${sec.title}`;
+    const ul = document.createElement("ul");
+    for(const item of sec.items){
+      const li = document.createElement("li");
+      li.textContent = item;
+      ul.append(li);
+    }
+    card.append(h, ul);
+  });
+  const copy = document.createElement("button");
+  copy.className = "btn ghost small memo-copy";
+  copy.type = "button";
+  copy.textContent = t("copyMemo");
+  copy.onclick = ()=>{
+    navigator.clipboard?.writeText(memoToMarkdown(memo, L)).then(()=>showToast(t("copied")), ()=>{});
+  };
+  card.append(copy);
+  return card;
+}
 function renderMessages(){
   const g = activeGroup();
   $msgs.innerHTML = "";
@@ -1103,19 +832,25 @@ function renderMessages(){
   $msgs.appendChild(chip);
 
   let prevSender = null;
+  let shown = 0;
+  const replayLimit = replaying && replaying.groupId === g.id ? replaying.count : Infinity;
   g.messages.forEach((m, idx)=>{
     if(m.hidden) return;
+    if(shown++ >= replayLimit) return;
     if(m.sender === "system"){
-      const s = document.createElement("div");
-      s.className = "sys-chip";
-      s.textContent = m.text;
+      const s = m.kind === "memo" && m.memo ? memoCard(m.memo) : document.createElement("div");
+      if(m.kind !== "memo" || !m.memo){
+        s.className = m.kind === "round" ? "sys-chip round-chip" : "sys-chip";
+        s.textContent = m.text;
+      }
       $msgs.appendChild(s);
       prevSender = "system";
       return;
     }
     const isUser = m.sender === "user";
     const row = document.createElement("div");
-    row.className = "msg " + (isUser ? "out" : "in") + (m.sender !== prevSender ? " first-of-group" : "");
+    row.className = "msg " + (isUser ? "out" : "in") + (m.sender !== prevSender ? " first-of-group" : "") + (m.streaming ? " streaming" : "");
+    row.dataset.mid = m.id;
 
     if(editingIndex === idx){
       const box = document.createElement("div");
@@ -1169,7 +904,10 @@ function renderMessages(){
       q.appendChild(qt);
       b.appendChild(q);
     }
-    b.appendChild(document.createTextNode(m.text));
+    const body = document.createElement("span");
+    body.className = "msg-text";
+    body.textContent = m.text;
+    b.appendChild(body);
     const st = document.createElement("span");
     st.className = "stamp";
     st.textContent = fmtTime(m.ts) + (isUser ? " ✓✓" : "");
@@ -1267,16 +1005,11 @@ function pushMsg(group, sender, text, extra){
   group.messages.push(msg);
   saveState();
   if(group.id === state.activeGroupId) renderAll(); else renderSidebar();
-  if(sender !== "user" && sender !== "system" && !(extra && extra.hidden)) playAiNotification();
+  if(sender !== "user" && sender !== "system" && !(extra && (extra.hidden || extra.streaming))) playAiNotification();
   return msg;
 }
 async function startGroupWelcome(group){
-  if(!group || group.welcomedAt || isGroupBusy(group)) return;
-  if(!getOpenRouterKey()){
-    group.needsWelcome = true;
-    saveState();
-    return;
-  }
+  if(!group || group.welcomedAt || isGroupBusy(group) || group.mode === "deliberation") return;
   group.needsWelcome = false;
   group.welcomedAt = Date.now();
   const seed = {
@@ -1301,6 +1034,7 @@ async function startGroupWelcome(group){
 
 /* ---------------- groups ---------------- */
 function switchGroup(id){
+  replaying = null;
   editingIndex = -1;
   pendingReply = null;
   state.activeGroupId = id;
@@ -1361,7 +1095,7 @@ function renderTemplateChoices(){
     <button class="type-choice template-choice" onclick="createGroup('template:${esc(t.id)}')">
       <span class="big">${esc(t.emoji)}</span>
       <span><span class="tt">${esc(t.name)}</span><br>
-      <span class="td">${esc(t.mood)} · ${esc(t.members.join(", "))}</span></span>
+      <span class="td">${esc(localized(t.mood, lang()))} · ${esc(t.members.join(", "))}</span></span>
     </button>
   `).join("");
 }
@@ -1502,7 +1236,15 @@ async function saveEdit(idx){
   saveState();
   renderAll();
   maybeAddAiReactions(g, g.messages[idx]);
-  await runRound(g, 0);
+  const idea = debateIdea(g, text);
+  if(idea) await runDeliberation(g, idea);
+  else await runRound(g, 0);
+}
+// The idea a user message puts on the War Room table: "/debate <idea>" anywhere, or any plain message in a War Room squad.
+function debateIdea(group, text){
+  const d = parseDebateCommand(text);
+  if(d) return d.idea || null;
+  return group.mode === "deliberation" ? text : null;
 }
 function deleteMsg(idx){
   if(isGroupBusy(activeGroup())) return;
@@ -1516,6 +1258,18 @@ async function regenFrom(idx){
   if(isGroupBusy(activeGroup())) return;
   const g = activeGroup();
   const senderId = g.messages[idx].sender;
+  if(g.messages[idx].deliberation){
+    // A debate turn depends on every turn before it: re-run the whole debate from the message that started it.
+    const start = g.messages.slice(0, idx).map(m=>m.sender).lastIndexOf("user");
+    const idea = start >= 0 ? debateIdea(g, g.messages[start].text) : null;
+    if(idea){
+      g.messages = g.messages.slice(0, start + 1);
+      saveState();
+      renderAll();
+      await runDeliberation(g, idea);
+      return;
+    }
+  }
   g.messages = g.messages.slice(0, idx);     // drop this reply and everything after
   saveState();
   renderAll();
@@ -1609,16 +1363,9 @@ function slashCommands(){
     { command:"/dato", emoji:"📖", description:lang() === "es" ? "Dato random" : "Random fact" },
     { command:"/chiste", emoji:"🎤", description:lang() === "es" ? "Dad joke malisimo" : "Terrible dad joke" },
     { command:"/chisme", emoji:"🍿", description:lang() === "es" ? "Chisme absurdo" : "Absurd gossip" },
-    { command:"/drama", emoji:"⚡", description:lang() === "es" ? "Drama absurdo segun el grupo" : "Group-specific drama" }
+    { command:"/drama", emoji:"⚡", description:lang() === "es" ? "Drama absurdo segun el grupo" : "Group-specific drama" },
+    { command:lang() === "es" ? "/debatir" : "/debate", insert:(lang() === "es" ? "/debatir " : "/debate "), emoji:"🎯", description:lang() === "es" ? "War Room: debate en 3 rondas + memo" : "War Room: 3-round debate + memo" }
   ];
-}
-function quickSlashCommand(text){
-  const cmd = foldText(String(text || "").trim().split(/\s+/)[0]);
-  if(cmd === "/dato" || cmd === "/fact") return "fact";
-  if(cmd === "/chiste" || cmd === "/dadjoke" || cmd === "/dad") return "dadjoke";
-  if(cmd === "/chisme" || cmd === "/gossip") return "gossip";
-  if(cmd === "/drama") return "drama";
-  return "";
 }
 function sendQuickPrompt(kind){
   if(isGroupBusy(activeGroup())) return;
@@ -1675,16 +1422,12 @@ async function generateDramaPrompt(group){
 async function dropDramaBomb(){
   const g = activeGroup();
   if(!g || isGroupBusy(g)) return;
-  if(!getOpenRouterKey()){
-    openSetup();
-    return;
-  }
   busyGroups.add(g.id);
   updateComposerBusy();
   showToast(t("dramaGenerating"));
   let drama = "";
   try{
-    drama = await generateDramaPrompt(g);
+    drama = isOffline() ? fallbackDramaPrompt(g) : await generateDramaPrompt(g);
   }catch(e){
     drama = fallbackDramaPrompt(g);
   }finally{
@@ -1697,29 +1440,10 @@ async function dropDramaBomb(){
   await runRound(g, 0);
 }
 function currentMentionQuery(input){
-  const pos = input.selectionStart || 0;
-  const before = input.value.slice(0, pos);
-  const at = before.lastIndexOf("@");
-  if(at < 0) return null;
-  const prefix = at === 0 ? "" : before[at-1];
-  const additive = prefix === "+";
-  if(additive){
-    const beforePlus = at <= 1 ? "" : before[at-2];
-    if(beforePlus && !/\s/.test(beforePlus)) return null;
-  }else if(prefix && !/\s/.test(prefix)){
-    return null;
-  }
-  const query = before.slice(at + 1);
-  if(/[\n\r.,!?;:()[\]{}]/.test(query)) return null;
-  if(query.length > 40) return null;
-  return { start:additive ? at - 1 : at, query, additive };
+  return mentionQueryAt(input.value, input.selectionStart || 0);
 }
 function currentCommandQuery(input){
-  const pos = input.selectionStart || 0;
-  const before = input.value.slice(0, pos);
-  if(!before.startsWith("/") || /\s/.test(before)) return null;
-  if(input.value.slice(0, pos).includes("@")) return null;
-  return { start:0, query:before.slice(1) };
+  return commandQueryAt(input.value, input.selectionStart || 0);
 }
 function updateMentionBox(){
   const input = document.getElementById("input");
@@ -1818,21 +1542,6 @@ function handleMentionKey(e){
   return false;
 }
 
-function parseVoteCommand(text){
-  if(!/^\/votar(\s|$)/i.test(text)) return null;
-  const raw = text.replace(/^\/votar/i, "").trim();
-  if(!raw) return { error:true };
-  const clean = raw.replace(/^¿|[?؟]$/g, "").trim();
-  let options = clean.split(/\s+(?:o|vs\.?|versus)\s+/i).map(x=>x.trim()).filter(Boolean);
-  if(options.length < 2){
-    options = [clean, lang() === "es" ? "No" : "No"];
-  }
-  return {
-    raw,
-    question: raw,
-    options: options.slice(0, 4)
-  };
-}
 function voteParticipants(group){
   const available = activeAis(group);
   if(available.length <= 6) return available;
@@ -1916,16 +1625,8 @@ async function send(){
   if(!text) return;
   checkAchievements(text);
   const isHelpCommand = text.toLowerCase() === "/help";
-  const isVoteCommand = !!parseVoteCommand(text);
   const quickSlash = quickSlashCommand(text);
-  if(!isHelpCommand && !isVoteCommand && !quickSlash && !getOpenRouterKey()){
-    openSetup();
-    return;
-  }
-  if(quickSlash && !getOpenRouterKey()){
-    openSetup();
-    return;
-  }
+  const debate = parseDebateCommand(text);
   input.value=""; autoGrow(input);
   hideMentionBox();
   const replies = pendingReply && pendingReply.groupId === g.id ? [...pendingReply.items] : [];
@@ -1942,6 +1643,12 @@ async function send(){
     const item = QUICK_ACTION_PROMPTS[quickSlash];
     text = item[lang()] || item.es;
   }
+  if(debate){
+    pushMsg(g, "user", text);
+    if(debate.error) pushMsg(g, "system", t("debateUsage"));
+    else await runDeliberation(g, debate.idea);
+    return;
+  }
   if(await runExpressVote(g, text)) return;
   const userMsg = pushMsg(g, "user", text, replies.length ? {replyTo: replies.map(reply=>({
     sender: reply.sender,
@@ -1951,64 +1658,60 @@ async function send(){
     ts: reply.ts
   }))} : null);
   maybeAddAiReactions(g, userMsg);
-  const isFirstUserMessage = g.messages.filter(m=>m.sender === "user").length === 1;
-  if(isFirstUserMessage){
-    await runRepliers(g, firstTurnRepliers(g));
-    return;
-  }
-  if(replies.length){
-    const seen = new Set();
-    const targets = [];
-    for(const reply of replies){
-      const target = aiForSender(g, reply.sender);
-      if(!target || target.muted || seen.has(target.id)) continue;
-      seen.add(target.id);
-      targets.push(target);
+  const plan = planTurn(g, {
+    text,
+    isFirstUserMessage: g.messages.filter(m=>m.sender === "user").length === 1,
+    replyTargets: replies.map(reply=>aiForSender(g, reply.sender)),
+    catalog: mentionCatalog(g)
+  });
+  if(plan.mentioned) recordMentionUsage(g, plan.mentioned);
+  if(plan.kind === "deliberation") await runDeliberation(g, text);
+  else await runRepliers(g, plan.ais);
+}
+
+function isOffline(){ return !getOpenRouterKey(); }
+// Live-update one streaming bubble without re-rendering the whole chat.
+function paintStreaming(group, msg){
+  if(group.id !== state.activeGroupId) return;
+  const el = $msgs.querySelector(`[data-mid="${msg.id}"] .msg-text`);
+  if(!el){ renderMessages(); return; }
+  el.textContent = msg.text;
+  $msgs.scrollTop = $msgs.scrollHeight;
+}
+// One member speaks: typing indicator, tokens streamed into a live bubble, final message stored.
+async function speak(group, ai, opts){
+  const o = opts || {};
+  const active = ()=>group.id === state.activeGroupId;
+  const guest = aiById(group, ai.id) ? {} : { senderName: ai.name, senderEmoji: ai.emoji };
+  if(active()) showTyping(ai);
+  let live = null;
+  const onDelta = full=>{
+    if(!live){
+      if(active()) removeTyping();
+      live = pushMsg(group, ai.id, "", { ...guest, ...(o.extra || {}), streaming:true });
     }
-    await runRepliers(g, targets);
-    return;
+    live.text = full;
+    paintStreaming(group, live);
+  };
+  try{
+    const text = (await callAI(group, ai, o.messageLimit, { onDelta, extraSystem:o.extraSystem, deliberation:o.deliberation })).trim();
+    if(active()) removeTyping();
+    if(!live) return pushMsg(group, ai.id, text, { ...guest, ...(o.extra || {}) });
+    live.text = text;
+    delete live.streaming;
+    saveState();
+    if(active()) renderMessages(); else renderSidebar();
+    playAiNotification();
+    return live;
+  }catch(err){
+    if(active()) removeTyping();
+    if(live){
+      group.messages = group.messages.filter(m=>m !== live);
+      saveState();
+      if(active()) renderMessages();
+    }
+    throw err;
   }
-  const additiveMentioned = mentionedAisFromText(g, text, true);
-  if(additiveMentioned.length){
-    recordMentionUsage(g, additiveMentioned);
-    await runRepliers(g, uniqueAis([...roundRepliers(g, 0), ...additiveMentioned]));
-    return;
-  }
-  const mentioned = mentionedAisFromText(g, text, false);
-  if(mentioned.length){
-    recordMentionUsage(g, mentioned);
-    await runRepliers(g, mentioned);
-    return;
-  }
-  await runRound(g, 0);
-}
-
-function firstTurnRepliers(group){
-  const available = activeAis(group);
-  if(available.length <= 5) return available;
-  const shuffled = [...available];
-  for(let i=shuffled.length-1;i>0;i--){
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled.slice(0, 5);
-}
-
-function pickChaosRepliers(group){
-  // At least two people answer when two or more active members are available.
-  const r = Math.random();
-  const count = r < 0.45 ? 2 : r < 0.80 ? 3 : 4;
-  const lastUser = [...group.messages].reverse().find(m=>m.sender==="user");
-  const text = (lastUser ? lastUser.text : "").toLowerCase();
-  // anyone mentioned by name jumps in first
-  const available = activeAis(group);
-  const mentioned = available.filter(a=>text.includes(a.name.toLowerCase()));
-  const rest = available.filter(a=>!mentioned.includes(a));
-  for(let i=rest.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [rest[i],rest[j]] = [rest[j],rest[i]];
-  }
-  return [...mentioned, ...rest].slice(0, Math.max(count, Math.min(mentioned.length,4)));
 }
 
 async function runRepliers(group, ais){
@@ -2025,19 +1728,11 @@ async function runRepliers(group, ais){
       await sleepMs(500 + Math.random() * 500);
     }
     for(const ai of ais){
-      if(group.id === state.activeGroupId) showTyping(ai);
       try{
-        const reply = await callAI(group, ai, roundHistoryLimit);
-        if(group.id === state.activeGroupId) removeTyping();
-        const isGroupMember = !!aiById(group, ai.id);
-        const aiMsg = pushMsg(group, ai.id, reply.trim(), isGroupMember ? null : {
-          senderName: ai.name,
-          senderEmoji: ai.emoji
-        });
+        const aiMsg = await speak(group, ai, { messageLimit: roundHistoryLimit });
         maybeAddAiReactions(group, aiMsg);
         answered++;
       }catch(err){
-        if(group.id === state.activeGroupId) removeTyping();
         failures.push(err);
         console.warn(`${ai.name} skipped this turn:`, err);
         if(err.rateLimitExhausted) break;
@@ -2056,10 +1751,89 @@ async function runRepliers(group, ais){
 async function runRound(group, startAiIndex){
   await runRepliers(group, roundRepliers(group, startAiIndex));
 }
-function roundRepliers(group, startAiIndex){
-  return group.mode === "chaos"
-    ? pickChaosRepliers(group)
-    : group.ais.slice(startAiIndex).filter(ai=>!ai.muted);
+
+/* ---------------- War Room deliberation: 3 rounds + decision memo ---------------- */
+function deliberationInstruction(step, idea){
+  const es = lang() === "es";
+  const head = es
+    ? `MODO WAR ROOM, ronda ${step.round}/3. Idea en revision: «${idea}». Hablas solo desde el rol de tu personalidad; nada de cortesias.`
+    : `WAR ROOM MODE, round ${step.round}/3. Idea under review: «${idea}». Speak strictly from your role's lens; no pleasantries.`;
+  if(step.phase === "open") return head + "\n" + (es
+    ? "Ronda 1 (posiciones iniciales): en 2-4 oraciones, nombra el mayor riesgo concreto y que evidencia necesitarias. Termina con 'Me inclino por: GO|REVISE|NO-GO'."
+    : "Round 1 (opening positions): in 2-4 sentences, name the single biggest concrete risk and the evidence you'd need. End with 'Leaning: GO|REVISE|NO-GO'.");
+  if(step.phase === "cross") return head + "\n" + (es
+    ? `Ronda 2 (contrapreguntas): desafia directamente la posicion de ${step.target.name}, dirigiendote como @${step.target.name}. Reconoce lo correcto, ataca su supuesto mas debil y propone una alternativa concreta. 2-4 oraciones.`
+    : `Round 2 (cross-examination): challenge ${step.target.name}'s position directly, addressing them as @${step.target.name}. Concede what is right, attack their weakest assumption, offer a concrete alternative. 2-4 sentences.`);
+  return head + "\n" + (es
+    ? "Ronda 3 (convergencia): la primera linea debe ser exactamente 'VOTE: GO', 'VOTE: REVISE' o 'VOTE: NO-GO' (mantene esos tokens en ingles). Despues, una oracion con la condicion que aseguraria o cambiaria tu voto."
+    : "Round 3 (convergence): your first line must be exactly 'VOTE: GO', 'VOTE: REVISE' or 'VOTE: NO-GO'. Then one sentence with the condition that would secure or change your vote.");
+}
+async function callChairMemo(group, idea, turns){
+  const es = lang() === "es";
+  const titles = MEMO_SECTIONS.map((s, i)=>`${i + 1}. ${localized(s.title, lang())}`).join("\n");
+  const system = es
+    ? `Sos el presidente neutral de un panel red-team. Sintetiza el debate en un memo de decision con exactamente estas 4 secciones numeradas, cada una con 1-4 vinetas cortas y concretas:\n${titles}\nNo agregues introduccion ni cierre. Responde en espanol.`
+    : `You are the neutral chair of a red-team panel. Synthesize the debate into a decision memo with exactly these 4 numbered sections, each with 1-4 short, concrete bullets:\n${titles}\nNo preamble, no sign-off.`;
+  const transcript = turns.map(x=>`[R${x.round}] ${x.speaker}: ${x.text}`).join("\n");
+  return callOpenAICompat(
+    { id:group.id, temperature:0.3 },
+    { id:"war-room-chair", provider:"openrouter", key:getOpenRouterKey() },
+    PROVIDERS.openrouter, system,
+    [{ role:"user", content:`${es ? "Idea" : "Idea"}: ${idea}\n\n${transcript}` }],
+    DEFAULT_MODEL
+  );
+}
+async function runDeliberation(group, idea){
+  const panel = activeAis(group);
+  if(panel.length < 2){
+    pushMsg(group, "system", t("debateNeedsTwo"));
+    return;
+  }
+  busyGroups.add(group.id);
+  updateComposerBusy();
+  const votes = new Map();
+  const turns = [];
+  let round = 0;
+  try{
+    for(const step of deliberationSchedule(panel)){
+      if(step.round !== round){
+        round = step.round;
+        const r = DELIBERATION_ROUNDS[round - 1];
+        pushMsg(group, "system", `${t("roundLabel")} ${round}/3 · ${localized(r.label, lang())}`, { kind:"round" });
+      }
+      let msg;
+      try{
+        msg = await speak(group, step.speaker, {
+          extraSystem: deliberationInstruction(step, idea),
+          deliberation: { ...step, idea, index: panel.indexOf(step.speaker), targetIndex: step.target ? panel.indexOf(step.target) : 0 },
+          extra: { deliberation: { round: step.round, phase: step.phase } }
+        });
+      }catch(err){
+        console.warn(`${step.speaker.name} skipped round ${step.round}:`, err);
+        if(err.rateLimitExhausted){ pushMsg(group, "system", t("modelsBusy")); break; }
+        continue;
+      }
+      turns.push({ round: step.round, speaker: step.speaker.name, text: msg.text });
+      if(step.phase === "converge"){
+        const v = parseVerdictVote(msg.text);
+        if(v) votes.set(step.speaker.id, v);
+      }
+    }
+    if(!turns.length) return;
+    let memo = OfflineEngine.synthesizeMemo({ idea, members: panel, votes: panel.map(ai=>votes.get(ai.id)), lang: lang() });
+    if(!isOffline()){
+      if(group.id === state.activeGroupId) showTyping({ emoji:"🧭", name: t("chairName") }, t("chairWriting"));
+      try{
+        const sections = parseMemoSections(await callChairMemo(group, idea, turns));
+        if(sections) memo = { ...memo, source:"live", sections: sections.map((s, i)=>({ ...s, title: localized(MEMO_SECTIONS[i].title, lang()) })) };
+      }catch(err){ console.warn("Chair memo fell back to deterministic synthesis:", err); }
+      if(group.id === state.activeGroupId) removeTyping();
+    }
+    pushMsg(group, "system", memoToMarkdown(memo, lang()), { kind:"memo", memo });
+  }finally{
+    busyGroups.delete(group.id);
+    updateComposerBusy();
+  }
 }
 
 function buildSystemPrompt(group, ai){
@@ -2156,19 +1930,38 @@ function buildHistory(group, ai, messageLimit){
   return merged;
 }
 
-async function callAI(group, ai, messageLimit){
+// Offline Simulation Engine: deterministic text, streamed word by word so the UI behaves like a live model.
+async function callOffline(group, ai, opts){
+  const d = opts.deliberation;
+  const text = d
+    ? OfflineEngine.deliberationTurn({ ai, index:d.index, phase:d.phase, target:d.target, targetIndex:d.targetIndex, idea:d.idea, lang:lang() }).text
+    : OfflineEngine.reply({ ai, group, lang:lang(), userName:getUserName() });
+  await sleepMs(320 + (text.length % 9) * 55);
+  if(opts.onDelta){
+    let acc = "";
+    for(const piece of text.split(/(\s+)/)){
+      acc += piece;
+      if(!/\S/.test(piece)) continue;
+      opts.onDelta(acc);
+      await sleepMs(14);
+    }
+  }
+  return text;
+}
+async function callAI(group, ai, messageLimit, opts){
+  const o = opts || {};
+  if(isOffline()) return callOffline(group, ai, o);
   ai.provider = "openrouter";
   ai.key = getOpenRouterKey();
-  if(!ai.key) throw new Error(t("missingKey"));
   const history = buildHistory(group, ai, messageLimit);
-  const system = buildSystemPrompt(group, ai) + "\n\n" + responseTuningPrompt(group);
+  const system = buildSystemPrompt(group, ai) + "\n\n" + responseTuningPrompt(group) + (o.extraSystem ? "\n\n" + o.extraSystem : "");
   const cheapRoute = shouldUseCheapFallback(ai.model);
   const models = modelFallbackList(ai.model).slice(0, cheapRoute ? 1 : 4);
   let lastErr = null;
   let rateLimitHits = 0;
   for(const model of models){
     try{
-      const txt = await callOpenAICompat(group, ai, PROVIDERS.openrouter, system, history, model);
+      const txt = await callOpenAICompat(group, ai, PROVIDERS.openrouter, system, history, model, o.onDelta);
       if(!cheapRoute){
         ai.model = model;
         const saved = aiById(group, ai.id);
@@ -2177,6 +1970,7 @@ async function callAI(group, ai, messageLimit){
       }
       return txt;
     }catch(err){
+      if(err.partial) return err.partial;   // stream broke mid-reply: keep what arrived instead of re-asking
       lastErr = err;
       if(!shouldTryNextModel(err)) break;
       if(err.status === 429){
@@ -2207,8 +2001,9 @@ async function callAI(group, ai, messageLimit){
       showTyping(ai, lang() === "es" ? "free saturado · usa modelo barato" : "free busy · using cheap model");
     }
     try{
-      return await callOpenAICompat(group, ai, PROVIDERS.openrouter, system, history, CHEAP_FALLBACK_MODEL);
+      return await callOpenAICompat(group, ai, PROVIDERS.openrouter, system, history, CHEAP_FALLBACK_MODEL, o.onDelta);
     }catch(err){
+      if(err.partial) return err.partial;
       lastErr = err;
     }
   }
@@ -2274,51 +2069,81 @@ function shouldTryNextModel(err){
   return /model|unavailable|rate|limit|provider|temporarily|empty response/i.test(err.message || "");
 }
 
-async function callOpenAICompat(group, ai, prov, system, history, model){
+// With onDelta, requests `stream: true` and parses OpenRouter's SSE; otherwise a single JSON completion.
+async function callOpenAICompat(group, ai, prov, system, history, model, onDelta){
   await waitForOpenRouterSlot();
   const headers = {
     "Content-Type":"application/json",
-    "Authorization":"Bearer " + ai.key
+    "Authorization":"Bearer " + ai.key,
+    "HTTP-Referer":"http://localhost",
+    "X-Title":"AI Group Chat"
   };
-  if(ai.provider==="openrouter"){
-    headers["HTTP-Referer"]="http://localhost";
-    headers["X-Title"]="AI Group Chat";
-  }
   const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(), OPENROUTER_TIMEOUT_MS);
+  let timer = null;
+  const arm = ()=>{ clearTimeout(timer); timer = setTimeout(()=>controller.abort(), OPENROUTER_TIMEOUT_MS); };
+  const timeoutError = ()=>Object.assign(new Error("Request timed out"), { status:408 });
+  arm();
   let res;
   try{
     res = await fetch(prov.url, {
-    method:"POST", headers,
-    body: JSON.stringify({
-      model,
-      messages: [{role:"system", content:system}, ...history],
-      max_tokens: 1024,
-      temperature: groupTemperature(group)
-    }),
-    signal: controller.signal
+      method:"POST", headers,
+      body: JSON.stringify({
+        model,
+        messages: [{role:"system", content:system}, ...history],
+        max_tokens: 1024,
+        temperature: groupTemperature(group),
+        stream: !!onDelta
+      }),
+      signal: controller.signal
     });
-  }catch(e){
-    if(e && e.name === "AbortError"){
-      const err = new Error("Request timed out");
-      err.status = 408;
+    if(!res.ok){
+      const body = await res.text().catch(()=> "");
+      const err = new Error(`HTTP ${res.status} ${body.slice(0,220)}`);
+      err.status = res.status;
+      err.retryAfterMs = retryAfterMs(res);
       throw err;
     }
+    if(!onDelta || !res.body){
+      const data = await res.json();
+      const txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if(!txt) throw new Error("empty response");
+      if(onDelta) onDelta(txt);
+      return txt;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", full = "";
+    try{
+      for(;;){
+        const { done, value } = await reader.read();
+        if(done) break;
+        arm();   // idle timeout: reset on every chunk
+        buffer += decoder.decode(value, { stream:true });
+        const chunk = parseSSE(buffer);
+        buffer = chunk.rest;
+        for(const d of chunk.deltas){ full += d; onDelta(full); }
+        if(chunk.error){
+          const err = new Error(chunk.error.message);
+          err.status = Number(chunk.error.code) || 502;
+          throw err;
+        }
+        if(chunk.done) break;
+      }
+    }catch(e){
+      const err = e && e.name === "AbortError" ? timeoutError() : e;
+      if(full) err.partial = full;
+      throw err;
+    }finally{
+      reader.cancel().catch(()=>{});
+    }
+    if(!full) throw new Error("empty response");
+    return full;
+  }catch(e){
+    if(e && e.name === "AbortError") throw timeoutError();
     throw e;
   }finally{
     clearTimeout(timer);
   }
-  if(!res.ok){
-    const t = await res.text().catch(()=> "");
-    const err = new Error(`HTTP ${res.status} ${t.slice(0,220)}`);
-    err.status = res.status;
-    err.retryAfterMs = retryAfterMs(res);
-    throw err;
-  }
-  const data = await res.json();
-  const txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  if(!txt) throw new Error("empty response");
-  return txt;
 }
 
 let openRouterHealthChecking = false;
@@ -2828,6 +2653,85 @@ function exportPromptsDownload(){
   URL.revokeObjectURL(a.href);
 }
 
+/* ---------------- export, share & replay ---------------- */
+function openShare(){ document.getElementById("shareOverlay").classList.add("open"); }
+function closeShare(){ document.getElementById("shareOverlay").classList.remove("open"); }
+function downloadFile(name, text, type){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 0);
+}
+function exportTranscriptMd(){
+  const g = activeGroup();
+  const md = transcriptToMarkdown(g, {
+    lang: lang(),
+    userName: getUserName() || t("you"),
+    resolveSender: id=>{ const ai = aiForSender(g, id); return ai ? { name:ai.name, emoji:ai.emoji } : null; },
+    formatTime: ts=>new Date(ts).toLocaleString(lang() === "es" ? "es" : "en", { dateStyle:"medium", timeStyle:"short" }),
+    engineLabel: isOffline() ? t("offlineBadge") : t("liveBadge")
+  });
+  downloadFile(`${slugName(g.name) || "squad"}-transcript.md`, md, "text/markdown");
+  showToast(t("exportedMd"));
+}
+function exportSquadJson(){
+  const g = activeGroup();
+  const includeTranscript = !!document.getElementById("shareIncludeTranscript")?.checked;
+  const template = exportSquadTemplate(g, { includeTranscript });
+  downloadFile(`${slugName(g.name) || "squad"}.squad.json`, JSON.stringify(template, null, 2) + "\n", "application/json");
+  showToast(t("exportedJson"));
+}
+function importSquadJson(){ document.getElementById("squadImportInput").click(); }
+async function onSquadFileChosen(input){
+  const file = input.files && input.files[0];
+  input.value = "";
+  if(!file) return;
+  const parsed = parseSquadTemplate(await file.text());
+  if(!parsed.ok){
+    alert(t("importFailed") + "\n\n" + parsed.errors.slice(0, 8).join("\n"));
+    return;
+  }
+  const g = templateToGroup(parsed.template, uid, ()=>openRouterConfig());
+  g.welcomedAt = Date.now();
+  state.groups.unshift(g);
+  state.activeGroupId = g.id;
+  saveState();
+  closeShare();
+  closeNewGroup();
+  renderAll();
+  showToast(`${t("imported")}: ${g.emoji} ${g.name}`);
+  if(g.messages.length) replayChat();
+}
+async function replayChat(){
+  const g = activeGroup();
+  if(isGroupBusy(g)) return;
+  closeShare();
+  const visible = g.messages.filter(m=>!m.hidden);
+  if(!visible.length){ showToast(t("nothingToReplay")); return; }
+  const session = { groupId:g.id, count:0 };
+  replaying = session;
+  busyGroups.add(g.id);
+  updateComposerBusy();
+  showToast(t("replayStarted"));
+  try{
+    for(const m of visible){
+      if(replaying !== session || state.activeGroupId !== g.id) break;
+      const ai = m.sender !== "user" && m.sender !== "system" ? aiForSender(g, m.sender) : null;
+      if(ai){ showTyping(ai); await sleepMs(Math.min(1300, 300 + m.text.length * 8)); }
+      else await sleepMs(m.sender === "system" ? 250 : 450);
+      if(replaying !== session) break;
+      session.count++;
+      renderMessages();
+    }
+  }finally{
+    if(replaying === session) replaying = null;
+    busyGroups.delete(g.id);
+    removeTyping();
+    renderAll();
+  }
+}
+
 /* ---------------- first-run setup + ambient chatter ---------------- */
 function openSetup(){
   const input = document.getElementById("setupKeyInput");
@@ -2838,7 +2742,6 @@ function openSetup(){
   updateSetupUi();
 }
 function closeSetup(){
-  if(!getOpenRouterKey()) return;
   document.getElementById("setupOverlay").classList.remove("open");
 }
 function updateSetupUi(){
@@ -2851,18 +2754,18 @@ function setupNext(){
 function saveSetupKey(){
   const input = document.getElementById("setupKeyInput");
   const key = (input ? input.value : "").trim();
-  if(!/^sk-or-[A-Za-z0-9_-]/.test(key)){
+  if(key && !/^sk-or-[A-Za-z0-9_-]/.test(key)){
     alert(t("createKeyError"));
     return;
   }
-  setOpenRouterKey(key);
+  setOpenRouterKey(key);   // an empty key switches back to the Offline Simulation Engine
   const nameInput = document.getElementById("setupNameInput");
   if(nameInput) setUserName(nameInput.value);
   closeSetup();
-  setTimeout(checkOpenRouterStartupHealth, 300);
+  if(key) setTimeout(checkOpenRouterStartupHealth, 300);
 }
 async function maybeAmbientChatter(group){
-  if(!group || !group.ambient || isGroupBusy(group) || !getOpenRouterKey()) return;
+  if(!group || !group.ambient || isGroupBusy(group) || group.mode === "deliberation") return;
   const now = Date.now();
   const last = group.lastAmbientAt || now;
   const hasUserMessage = group.messages.some(m=>m.sender === "user");
@@ -2898,6 +2801,9 @@ function boot(){
   });
   document.getElementById("setupOverlay").addEventListener("click", e=>{
     if(e.target.id==="setupOverlay") closeSetup();
+  });
+  document.getElementById("shareOverlay").addEventListener("click", e=>{
+    if(e.target.id==="shareOverlay") closeShare();
   });
   (async ()=>{
     try{

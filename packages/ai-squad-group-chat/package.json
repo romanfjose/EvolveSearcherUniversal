@@ -1,0 +1,15 @@
+{
+  "name": "ai-squad-group-chat",
+  "version": "2.0.0",
+  "description": "Multi-persona AI group chat and War Room deliberation studio: @mentions, reply threads, 3-round red-team debates with decision memos, deterministic offline engine, OpenRouter streaming, ES/EN.",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "docs": "node scripts/sync-docs.mjs",
+    "serve": "python3 -m http.server 8137"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

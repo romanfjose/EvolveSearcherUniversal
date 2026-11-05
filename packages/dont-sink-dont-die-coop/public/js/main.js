@@ -7,6 +7,18 @@ import {
 } from '../../shared/game-core.js';
 import { createNetSocket } from './net.js';
 import { createHud, createSfx } from './hud.js';
+import {
+    upgradeRendererAndAtmosphere,
+    createAAARiverMesh,
+    createAAACanyonAndCity,
+    createAAAObstacleMesh,
+    createAAACheckpointGate,
+    createAAAFinishArch,
+    createAAARaftAndCrew,
+    createAAAEnemyMeshes,
+    animateAAAEnemies,
+    createAAANpcMesh,
+} from './aaa-visuals.js';
 
 // Real Socket.io server when reachable, otherwise the in-browser loopback with AI bots.
 const socket = createNetSocket();
@@ -25,23 +37,31 @@ let shopOpen = false;
 
 // Setup Three.js Scene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB); 
-scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1400);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
+upgradeRendererAndAtmosphere(renderer, scene);
+
 // Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.55);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(10, 20, 10);
+const directionalLight = new THREE.DirectionalLight(0xffe4b5, 1.45);
+directionalLight.position.set(35, 65, -45);
 directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.set(2048, 2048);
+directionalLight.shadow.camera.near = 1;
+directionalLight.shadow.camera.far = 260;
+directionalLight.shadow.camera.left = -45;
+directionalLight.shadow.camera.right = 55;
+directionalLight.shadow.camera.top = 60;
+directionalLight.shadow.camera.bottom = -60;
 scene.add(directionalLight);
+scene.add(directionalLight.target);
 
 // --- Procedural Textures ---
 function createWoodTexture() {
@@ -83,56 +103,35 @@ const woodTex = createWoodTexture();
 const waterTex = createWaterTexture();
 
 // Materials
-const riverMaterial = new THREE.MeshStandardMaterial({ color: 0x1ca3ec, map: waterTex, flatShading: true });
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22, flatShading: true }); 
-const vegetationMaterial = new THREE.MeshStandardMaterial({ color: 0x2e8b57, flatShading: true }); // SeaGreen
-const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, map: woodTex, flatShading: true });
-const checkpointMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.5 });
-const whiteGuyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
-const wizardHatMaterial = new THREE.MeshStandardMaterial({ color: 0x3333aa, flatShading: true });
-const mudAlienMaterial = new THREE.MeshStandardMaterial({ color: 0x654321, flatShading: true });
-const longWormMaterial = new THREE.MeshStandardMaterial({ color: 0x8b008b, flatShading: true }); // Dark magenta
-const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, map: woodTex });
-const hammerMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const pedMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
-const policeMaterial = new THREE.MeshStandardMaterial({ color: 0x0000aa });
+const vegetationMaterial = new THREE.MeshStandardMaterial({ color: 0x2a6f47, roughness: 0.78, flatShading: true });
+const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, map: woodTex, roughness: 0.72 });
+const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x9b5a28, map: woodTex, roughness: 0.65 });
+const hammerMaterial = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.35, metalness: 0.25 });
 
 // --- Environment ---
 const riverWidth = RIVER.width;
 const riverLength = RIVER.length;
 
-const riverGeo = new THREE.PlaneGeometry(riverWidth, riverLength, 10, 100);
-const riverMesh = new THREE.Mesh(riverGeo, riverMaterial);
-riverMesh.rotation.x = -Math.PI / 2;
-riverMesh.position.z = -riverLength / 2 + 50; 
-riverMesh.receiveShadow = true;
+const { mesh: riverMesh, mat: riverShaderMat } = createAAARiverMesh(riverWidth, riverLength, waterTex);
 scene.add(riverMesh);
 
-const cityGeo = new THREE.PlaneGeometry(40, 100);
-const cityMesh = new THREE.Mesh(cityGeo, groundMaterial);
-cityMesh.rotation.x = -Math.PI / 2;
-cityMesh.position.set(25, 0.5, -200);
-cityMesh.receiveShadow = true;
-scene.add(cityMesh);
+createAAACanyonAndCity(scene, riverWidth, riverLength);
 
 // --- Checkpoints ---
 const checkpoints = [];
-for (const cpZ of CHECKPOINTS) {
-    const cpMesh = new THREE.Mesh(new THREE.BoxGeometry(riverWidth, 10, 2), checkpointMaterial);
-    cpMesh.position.set(0, 5, cpZ);
-    scene.add(cpMesh);
-    checkpoints.push({ z: cpZ, active: true });
-}
+CHECKPOINTS.forEach((cpZ, idx) => {
+    const gate = createAAACheckpointGate(riverWidth, cpZ, idx);
+    scene.add(gate.group);
+    checkpoints.push({ z: cpZ, active: true, gate });
+});
 
 // --- Finish Line ---
 const finishLineZ = FINISH_Z;
-const finishMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.8 });
-const finishMesh = new THREE.Mesh(new THREE.BoxGeometry(riverWidth, 20, 2), finishMaterial);
-finishMesh.position.set(0, 10, finishLineZ);
+const finishMesh = createAAAFinishArch(riverWidth, finishLineZ);
 scene.add(finishMesh);
 let gameWon = false;
 
-// --- Obstacles (Vegetation & Planks) ---
+// --- Obstacles (Sculpted Pontoons & Multi-Tier Pine Trees) ---
 const obstacles = [];
 for (let i = 0; i < 300; i++) {
     const isLeft = Math.random() > 0.5;
@@ -145,7 +144,7 @@ for (let i = 0; i < 300; i++) {
         const depth = 2 + Math.random() * 2;
         const height = 0.5;
         const yPos = 0.9 + Math.random() * 0.6;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), woodMaterial);
+        const mesh = createAAAObstacleMesh(true, width, height, depth, 0, woodMaterial, vegetationMaterial);
         mesh.position.set(xPos, yPos, zPos);
         scene.add(mesh);
         obstacles.push({
@@ -159,17 +158,7 @@ for (let i = 0; i < 300; i++) {
         });
     } else {
         const size = 2 + Math.random() * 3;
-        const mesh = new THREE.Group();
-        const trunkMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, size, 8), woodMaterial);
-        trunkMesh.position.y = size / 2;
-        mesh.add(trunkMesh);
-
-        const leavesRadius = size;
-        const leavesMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(leavesRadius), vegetationMaterial);
-        leavesMesh.position.y = size + leavesRadius / 2;
-        leavesMesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-        mesh.add(leavesMesh);
-
+        const mesh = createAAAObstacleMesh(false, 0, 0, 0, size, woodMaterial, vegetationMaterial);
         mesh.position.set(xPos, 0, zPos);
         scene.add(mesh);
         obstacles.push({
@@ -182,24 +171,8 @@ for (let i = 0; i < 300; i++) {
     }
 }
 
-// --- Enemies ---
-// Build Wizard (replaces White Guy)
-const wizardGroup = new THREE.Group();
-const wizardRaft = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 3), woodMaterial); // Wizard raft
-const wizardBody = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1, 2), whiteGuyMaterial);
-wizardBody.position.y = 1.25;
-const wizardHat = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.5, 8), wizardHatMaterial);
-wizardHat.position.y = 2.5;
-wizardGroup.add(wizardRaft);
-wizardGroup.add(wizardBody);
-wizardGroup.add(wizardHat);
-
-const enemyMeshes = {
-    whiteGuy: wizardGroup,
-    mudAlien: new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), mudAlienMaterial),
-    longWorm: new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 8), longWormMaterial) // Long boi
-};
-enemyMeshes.longWorm.rotation.x = Math.PI / 2; // Lie flat
+// --- Enemies (AAA Boss Meshes) ---
+const enemyMeshes = createAAAEnemyMeshes(woodMaterial);
 
 for (let key in enemyMeshes) scene.add(enemyMeshes[key]);
 let enemiesData = null;
@@ -226,7 +199,7 @@ socket.on('enemiesUpdate', (data) => {
             enemyMeshes[key].position.set(e.position.x, e.position.y, e.position.z);
             
             // Align worm to movement
-            if (key === 'longWorm' && e.state === 'charging') {
+            if (key === 'longWorm' && e.state === 'charging' && e.targetPos) {
                  enemyMeshes[key].lookAt(e.targetPos.x, e.position.y, e.targetPos.z);
             }
         } else {
@@ -271,8 +244,7 @@ let npcMeshes = {};
 socket.on('npcsUpdate', (data) => {
     data.forEach(npc => {
         if (!npcMeshes[npc.id]) {
-            const mat = npc.type === 'police' ? policeMaterial : pedMaterial;
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), mat);
+            const mesh = createAAANpcMesh(npc.type);
             scene.add(mesh);
             npcMeshes[npc.id] = mesh;
         }
@@ -419,59 +391,22 @@ const motorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2f36, metalnes
 const propMaterial = new THREE.MeshStandardMaterial({ color: 0xc9d2dc, metalness: 0.7, roughness: 0.3 });
 
 /**
- * group (position + yaw, mirrors the physics body) → tilt (visual-only bank/pitch/bob) → hull, rider, oar, motor.
- * Pitch and roll never touch the CANNON.Body.
+ * group (position + yaw, mirrors the physics body) → tilt (visual-only bank/pitch/bob) → multi-log hull, articulated crew, oar/mallet, motor.
  */
 function createRaftMesh(color, upgrades = []) {
-    const group = new THREE.Group();
-    const tilt = new THREE.Group();
-    group.add(tilt);
-
-    const raft = new THREE.Mesh(new THREE.BoxGeometry(raftSize.w, raftSize.h, raftSize.d), woodMaterial);
-    raft.castShadow = true;
-    const dude = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 0.5), new THREE.MeshStandardMaterial({ color }));
-    dude.position.y = 0.6 + raftSize.h / 2;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), skinMaterial);
-    head.position.y = 1.2 + raftSize.h / 2 + 0.3;
-    tilt.add(raft, dude, head);
-
-    const hammer = upgrades.includes('weapon');
-    const paddle = hammer
-        ? new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 2), hammerMaterial)
-        : new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 3), paddleMaterial);
-    const paddleHome = new THREE.Vector3(1.2, dude.position.y, 0);
-    paddle.position.copy(paddleHome);
-    tilt.add(paddle);
-
-    let prop = null;
-    if (upgrades.includes('motor')) {
-        const motor = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 0.7), motorMaterial);
-        motor.position.set(0, raftSize.h / 2 + 0.2, raftSize.d / 2 + 0.2);
-        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.9), motorMaterial);
-        shaft.position.set(0, -0.6, 0.15);
-        prop = new THREE.Group();
-        prop.position.set(0, -1.0, 0.35);
-        for (let b = 0; b < 3; b++) {
-            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.04), propMaterial);
-            blade.position.y = 0.22;
-            const arm = new THREE.Group();
-            arm.rotation.z = (b * 2 * Math.PI) / 3;
-            blade.rotation.y = 0.5;
-            arm.add(blade);
-            prop.add(arm);
-        }
-        motor.add(shaft, prop);
-        raft.add(motor); // stowed with the raft mid-jump
-    }
-
-    scene.add(group);
-    return {
-        group, tilt, raft, paddle, paddleHome, prop, hammer,
-        anim: { yaw: 0, speed: 0, turn: 0, thrust: 0, airborne: false, rowPhase: 0, bank: 0, pitch: 0, swing: 0, block: false, wakeAcc: 0, propAngle: 0 },
-    };
+    return createAAARaftAndCrew(
+        color,
+        upgrades,
+        raftSize,
+        woodMaterial,
+        paddleMaterial,
+        hammerMaterial,
+        motorMaterial,
+        propMaterial
+    );
 }
 
-/** Per-frame visual life of a raft: oar strokes, attack swing, banking, planing pitch, bob, propeller, wake. */
+/** Per-frame visual life of a raft: oar strokes, articulated crew limbs, attack swing, banking, planing pitch, bob, propeller, wake. */
 function animateRaft(vis, dt, t) {
     const a = vis.anim;
     const ease = (rate) => 1 - Math.exp(-rate * dt);
@@ -489,19 +424,44 @@ function animateRaft(vis, dt, t) {
     const p = vis.paddle;
     p.position.copy(vis.paddleHome);
     if (a.block) {
-        p.position.set(0, vis.paddleHome.y - 0.35, -1.5);
-        p.rotation.set(0, 0, Math.PI / 2);
+        p.position.set(0, vis.paddleHome.y - 0.25, -1.35);
+        p.rotation.set(0, Math.PI / 2, 0);
     } else if (a.swing > 0) {
         a.swing = Math.max(0, a.swing - dt);
-        p.rotation.set(-Math.PI / 4 * Math.sin((a.swing / SWING_S) * Math.PI), 0, 0);
+        const swingArc = Math.sin((a.swing / SWING_S) * Math.PI);
+        p.rotation.set(-Math.PI * 0.42 * swingArc, -0.35 * swingArc, 0);
+        p.position.z = vis.paddleHome.z - 0.45 * swingArc;
     } else if (rowing && !vis.hammer) {
         // stroke: blade dips (roll), sweeps aft (pitch), lifts out on the recovery
         p.rotation.set(Math.sin(a.rowPhase) * 0.65, 0, 0.35 + Math.cos(a.rowPhase) * 0.3);
         p.position.y = vis.paddleHome.y - 0.25 + Math.cos(a.rowPhase) * 0.2;
     } else {
         p.rotation.x *= 1 - ease(10);
-        p.rotation.y = 0;
+        p.rotation.y *= 1 - ease(10);
         p.rotation.z *= 1 - ease(10);
+    }
+
+    // Articulated crew limb animation
+    if (vis.rig) {
+        const { headGroup, leftArm, rightArm, leftLeg, rightLeg } = vis.rig;
+        headGroup.rotation.y = THREE.MathUtils.clamp(-a.turn * 0.22, -0.45, 0.45);
+        if (a.block) {
+            leftArm.rotation.set(-1.1, 0.3, 0.4);
+            rightArm.rotation.set(-1.1, -0.3, -0.4);
+        } else if (a.swing > 0) {
+            const s = Math.sin((a.swing / SWING_S) * Math.PI);
+            rightArm.rotation.set(-1.4 * s + 0.4, 0, -0.35);
+            leftArm.rotation.set(-0.6 * s + 0.3, 0, 0.25);
+        } else if (rowing) {
+            rightArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.55;
+            leftArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.35;
+        } else {
+            rightArm.rotation.x = 0.45 + Math.sin(t * 2.2) * 0.06;
+            leftArm.rotation.x = 0.35 + Math.cos(t * 2.2) * 0.06;
+        }
+        const legTuck = a.airborne ? 0.55 : 0;
+        leftLeg.rotation.x = legTuck;
+        rightLeg.rotation.x = -legTuck * 0.6;
     }
 
     if (vis.prop) {
@@ -865,6 +825,7 @@ function updateLocalRaft(dt, now) {
     for (const cp of checkpoints) {
         if (cp.active && craft.position.z < cp.z) {
             cp.active = false;
+            cp.gate?.markCrossed();
             socket.emit('checkpointCrossed', { checkpointZ: cp.z });
         }
     }
@@ -987,8 +948,11 @@ function animate() {
     }
 
     waterTex.offset.y -= delta * 0.5;
+    riverShaderMat.uniforms.uTime.value = t;
     if (myRaft?.craft) {
-        riverMaterial.color.lerpColors(muddyColor, clearColor, waterClarity(myRaft.craft.position.z));
+        riverShaderMat.uniforms.uClarity.value = waterClarity(myRaft.craft.position.z);
+        directionalLight.position.set(myRaft.craft.position.x + 35, 65, myRaft.craft.position.z + 25);
+        directionalLight.target.position.copy(myRaft.craft.position);
         updateLocalRaft(delta, now);
         animateRaft(myRaft.vis, delta, t);
     }
@@ -997,6 +961,7 @@ function animate() {
         animateRaft(vis, delta, t);
     }
 
+    animateAAAEnemies(enemyMeshes, enemiesData, t);
     for (const key in hitPulse) {
         hitPulse[key] = Math.max(0, hitPulse[key] - delta * 5);
         enemyMeshes[key].scale.setScalar(1 + 0.35 * hitPulse[key]);

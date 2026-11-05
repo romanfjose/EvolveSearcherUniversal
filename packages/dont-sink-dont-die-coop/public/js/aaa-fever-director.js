@@ -122,17 +122,17 @@ export function createAAAFeverDirector({
     // 3. Seeded 3D River Hazards (Rapids, Whirlpools, Launch Ramps, Coin Rings, Naval Mines)
     const hazardsLayout = generateRiverHazardsLayout(seed, -1500, 30);
     const hazardsHandle = buildRiverHazardsGroup(THREE, hazardsLayout);
-    scene.add(hazardsHandle.group);
+    scene.add(hazardsHandle.rootGroup || hazardsHandle.group);
 
     // 4. Destructible Wooden Barricades, Suspension Bridges & Cliff Rockslides
     const destructiblesState = generateDestructiblesLayout(seed + 7, -1500, 30);
     const destructiblesHandle = buildDestructiblesGroup(THREE, destructiblesState);
-    scene.add(destructiblesHandle.group);
+    scene.add(destructiblesHandle.rootGroup || destructiblesHandle.group);
 
     // 5. Bizarre Fever-Dream Mid-River Encounters (Capybara Hot-Tub Barge, Tax Swan, Rubber Ducky Stampede, Ghost Cart, Crab Rave)
     const dreamEncounters = generateDreamEncounters(seed + 13, -1500, 30);
     const dreamEventsHandle = buildDreamEventsGroup(THREE, dreamEncounters);
-    scene.add(dreamEventsHandle.group);
+    scene.add(dreamEventsHandle.root || dreamEventsHandle.rootGroup || dreamEventsHandle.group);
 
     // 6. Floating River Loot Pickups (Magnet, Giant Mallet, Triple Oar, Gold Chests, Repair Kits)
     const lootPickups = generateRiverLoot({ seed: seed + 29, obstacles, riverLength: 1500 });
@@ -424,7 +424,7 @@ export function createAAAFeverDirector({
             }
 
             // Check Dread Kraken boss damage if active
-            if (krakenState.phase !== 'dormant' && krakenState.phase !== 'defeated') {
+            if (krakenState.isSpawned && !krakenState.isDefeated) {
                 const dist = Math.hypot(pos.x - krakenState.position.x, pos.z - krakenState.position.z);
                 if (dist < 18) {
                     const dmg = hasWeapon ? 65 : 30;
@@ -432,7 +432,7 @@ export function createAAAFeverDirector({
                     if (res.damageDealt > 0) {
                         popAt(krakenState.position, `KRAKEN -${res.damageDealt}`, '#f43f5e', 5.5);
                         sfx.hit(hasWeapon, 1.0);
-                        if (krakenState.phase === 'defeated') {
+                        if (krakenState.isDefeated) {
                             hud.toast('🐙 DREAD KRAKEN VANQUISHED! +250 COINS!', 4000);
                             onGrantCoins(250);
                             sfx.kill();
@@ -596,14 +596,14 @@ export function createAAAFeverDirector({
             });
 
             // 8. Dread Kraken Final Boss at z = -1420
-            if (krakenState.phase === 'dormant' && shouldKrakenSpawn(craft.position.z)) {
+            if (!krakenState.isSpawned && shouldKrakenSpawn(craft.position.z)) {
                 spawnKraken(krakenState);
                 krakenMesh.visible = true;
                 hud.toast('🐙 WARNING: THE DREAD KRAKEN AWAKENS AT THE HARBOR GATES!', 4000);
                 screenFX.triggerLeviathanRoar();
                 sfx.wave();
             }
-            if (krakenState.phase !== 'dormant' && krakenState.phase !== 'defeated') {
+            if (krakenState.isSpawned && !krakenState.isDefeated) {
                 tickKraken(krakenState, fixedDt, [{ id: 'local', position: craft.position }]);
             }
 
@@ -669,8 +669,8 @@ export function createAAAFeverDirector({
             }
 
             // 4. Kickflip Visual Roll + Combat & Trick VFX + Screen Speedlines
-            if (raft?.vis) {
-                trickVFX.applyKickflipRotation(raft.vis.tilt, trickState);
+            if (raft?.vis && trickState.kickflipRotation) {
+                trickVFX.applyKickflipRotation(raft.vis.tilt, trickState.kickflipRotation);
             }
             trickVFX.update(dt);
             combatVFX.update(dt);
@@ -692,7 +692,7 @@ export function createAAAFeverDirector({
             musicEngine.update(dt, {
                 speed,
                 nearestEnemyDistance: nearestEnemyDist,
-                inBossArena: krakenState.phase !== 'dormant' && krakenState.phase !== 'defeated',
+                inBossArena: krakenState.isSpawned && !krakenState.isDefeated,
                 isDead: getIsDead(),
             });
 
@@ -707,7 +707,7 @@ export function createAAAFeverDirector({
                     {
                         players: otherList,
                         enemies,
-                        boss: krakenState.phase !== 'dormant' && krakenState.phase !== 'defeated'
+                        boss: krakenState.isSpawned && !krakenState.isDefeated
                             ? { name: 'THE DREAD KRAKEN', health: krakenState.health, maxHealth: krakenState.maxHealth }
                             : null,
                     },

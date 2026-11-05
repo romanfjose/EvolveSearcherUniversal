@@ -1032,4 +1032,18 @@ window.addEventListener('resize', () => {
     foamMaterial.uniforms.scale.value = window.innerHeight / 2;
 });
 
+if (typeof window !== 'undefined') {
+    window.__GAME_QA__ = {
+        THREE,
+        scene,
+        camera,
+        renderer,
+        getMyRaft: () => myRaft,
+        getOtherPlayers: () => otherPlayers,
+        getEnemiesData: () => enemiesData,
+        getMyStats: () => myStats,
+        feverDirector,
+    };
+}
+
 animate();

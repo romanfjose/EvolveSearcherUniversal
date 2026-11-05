@@ -135,9 +135,9 @@ export function createWhirlpoolMesh(THREE, whirlpoolConfig) {
         const vz = pos.getZ(i);
 
         const r = Math.hypot(vx, vz);
-        const normR = r / radius;
+        const normR = Math.min(1.0, Math.max(0.0, r / radius));
         // Parabolic dip: deepest at core, flat at outer rim
-        const funnelY = -depth * Math.pow(1.0 - normR, 2.2);
+        const funnelY = -depth * Math.pow(Math.max(0.0, 1.0 - normR), 2.2);
         pos.setY(i, funnelY);
     }
     vortexGeo.computeVertexNormals();

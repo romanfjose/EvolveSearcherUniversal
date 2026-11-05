@@ -307,7 +307,11 @@ export function createTrickVFXSystem(THREE, scene, options = {}) {
      */
     function applyKickflipRotation(raftGroup, rotationDegrees = 0) {
         if (!raftGroup || !raftGroup.rotation) return;
-        const rad = (rotationDegrees * Math.PI) / 180;
+        const deg = typeof rotationDegrees === 'number'
+            ? rotationDegrees
+            : (Number(rotationDegrees?.kickflipRotation) || 0);
+        if (!Number.isFinite(deg)) return;
+        const rad = (deg * Math.PI) / 180;
         raftGroup.rotation.z = rad;
     }
 

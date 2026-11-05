@@ -38,8 +38,8 @@ export function createMinimapRadar(container = document.body, options = {}) {
     root.id = 'tactical-minimap-root';
     root.style.cssText = `
         position: absolute;
-        bottom: 24px;
-        right: 24px;
+        bottom: 54px;
+        right: 16px;
         display: flex;
         align-items: flex-end;
         gap: 14px;
@@ -110,12 +110,12 @@ export function createMinimapRadar(container = document.body, options = {}) {
     `;
     radarPanel.appendChild(compassOverlay);
 
-    // 3. Top-Center Boss Health Bar
+    // 3. Top-Center Boss Health Bar (positioned cleanly below #wave-panel)
     const bossBarRoot = document.createElement('div');
     bossBarRoot.id = 'boss-health-bar-overlay';
     bossBarRoot.style.cssText = `
         position: fixed;
-        top: 20px;
+        top: 146px;
         left: 50%;
         transform: translateX(-50%);
         width: min(640px, 90vw);
@@ -453,21 +453,12 @@ export function createMinimapRadar(container = document.body, options = {}) {
     function updateBossBar(state, myPlayer) {
         if (!opts.showBossBar) return;
 
-        // Check if there is an active major enemy (Kraken, Worm, Mud Alien, Wizard)
+        // Check if there is an active major boss (Dread Kraken encounter)
         let activeBoss = null;
-        if (state.boss) {
+        if (state.boss && state.boss.health > 0) {
             activeBoss = state.boss;
-        } else if (state.enemies) {
-            // Find major enemy close to player or active
-            const worm = state.enemies.longWorm;
-            const kraken = state.enemies.kraken;
-            const alien = state.enemies.mudAlien;
-            const wizard = state.enemies.whiteGuy;
-
-            if (kraken && kraken.health > 0) activeBoss = kraken;
-            else if (worm && worm.health > 0) activeBoss = worm;
-            else if (alien && alien.health > 0) activeBoss = alien;
-            else if (wizard && wizard.health > 0) activeBoss = wizard;
+        } else if (state.enemies?.kraken && state.enemies.kraken.health > 0) {
+            activeBoss = state.enemies.kraken;
         }
 
         if (!activeBoss || activeBoss.health <= 0) {

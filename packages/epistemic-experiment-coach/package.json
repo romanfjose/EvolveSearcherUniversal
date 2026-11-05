@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c yellow,cyan \"node --watch server.mjs\" \"vite\"",
-    "build": "vite build",
+    "build": "vite build && node scripts/build-standalone.mjs",
+    "build:standalone": "node scripts/build-standalone.mjs",
     "start": "node server.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
     "capture:cooking-flow": "node docs/cooking-flow/capture-flow.mjs"
   },
   "dependencies": {
@@ -21,5 +23,8 @@
     "concurrently": "^9.1.2",
     "playwright-core": "^1.61.1",
     "vite": "^6.3.5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

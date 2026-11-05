@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import {
-    RIVER, CHECKPOINTS, FINISH_Z, PHYSICS, PLAYER, ENEMY_TYPES,
-    WATER_SURFACE_Y, stepWatercraftKinematics, resolveWorldBoundsAndObstacles,
-    watercraftThrust, headingOf, yawOfQuaternion, throwVelocity,
-    waterClarity, isInShopZone,
+    RIVER, CHECKPOINTS, FINISH_Z, PHYSICS, PLAYER, ENEMY_TYPES, BOT, SHOP_ZONE, RIVER_LAYOUT_SEED,
+    WATER_SURFACE_Y, stepWatercraftKinematics, resolveWorldBoundsAndObstacles, generateRiverObstacles,
+    watercraftThrust, headingOf, yawOfQuaternion, throwVelocity, wrapAngle,
+    waterClarity, isInShopZone, autopilotInput, canPurchase,
 } from '../../shared/game-core.js';
 import { createNetSocket } from './net.js';
 import { createHud, createSfx } from './hud.js';
@@ -96,6 +96,8 @@ const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, map: wo
 const hammerMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 const pedMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
 const policeMaterial = new THREE.MeshStandardMaterial({ color: 0x0000aa });
+const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffccaa });
+const motorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2f36, metalness: 0.4, roughness: 0.5 });
 
 // --- Environment ---
 const riverWidth = RIVER.width;
@@ -108,10 +110,10 @@ riverMesh.position.z = -riverLength / 2 + 50;
 riverMesh.receiveShadow = true;
 scene.add(riverMesh);
 
-const cityGeo = new THREE.PlaneGeometry(40, 100);
+const cityGeo = new THREE.PlaneGeometry(30, SHOP_ZONE.maxZ - SHOP_ZONE.minZ);
 const cityMesh = new THREE.Mesh(cityGeo, groundMaterial);
 cityMesh.rotation.x = -Math.PI / 2;
-cityMesh.position.set(25, 0.5, -200);
+cityMesh.position.set(31, 0.5, (SHOP_ZONE.minZ + SHOP_ZONE.maxZ) / 2);
 cityMesh.receiveShadow = true;
 scene.add(cityMesh);
 
@@ -132,76 +134,410 @@ finishMesh.position.set(0, 10, finishLineZ);
 scene.add(finishMesh);
 let gameWon = false;
 
-// --- Obstacles (Vegetation & Planks) ---
-const obstacles = [];
-for (let i = 0; i < 300; i++) {
-    const isLeft = Math.random() > 0.5;
-    const xPos = isLeft ? -riverWidth / 2 - Math.random() * 2 + Math.random() * 3.5 : riverWidth / 2 + Math.random() * 2 - Math.random() * 3.5;
-    const zPos = -Math.random() * (riverLength - 100) - 20;
-    const isPlank = Math.random() > 0.7;
+// --- River layout: seeded in shared/game-core.js, so this client, the server and the bots share it exactly ---
+const obstacles = generateRiverObstacles(RIVER_LAYOUT_SEED);
+const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7280, flatShading: true, roughness: 0.95 });
+const buoyMaterial = new THREE.MeshStandardMaterial({ color: 0xff5a1f, emissive: 0x3a0e00, flatShading: true });
+const lanternMaterial = new THREE.MeshStandardMaterial({ color: 0xffd36b, emissive: 0xffb02e, emissiveIntensity: 1.6 });
 
-    if (isPlank) {
-        const width = 4 + Math.random() * 3;
-        const depth = 2 + Math.random() * 2;
-        const height = 0.5;
-        const yPos = 0.9 + Math.random() * 0.6;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), woodMaterial);
-        mesh.position.set(xPos, yPos, zPos);
-        scene.add(mesh);
-        obstacles.push({
-            type: 'plank',
-            mesh,
-            x: xPos,
-            z: zPos,
-            halfW: width / 2,
-            halfD: depth / 2,
-            topY: yPos + height / 2 + PLAYER.restY,
-        });
-    } else {
-        const size = 2 + Math.random() * 3;
-        const mesh = new THREE.Group();
-        const trunkMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, size, 8), woodMaterial);
-        trunkMesh.position.y = size / 2;
-        mesh.add(trunkMesh);
+/** One InstancedMesh per part: `place(o, pos, euler, scale)` fills the transform for each item. */
+function instanced(geo, mat, list, place) {
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3(), eul = new THREE.Euler();
+    list.forEach((o, i) => {
+        pos.set(0, 0, 0); eul.set(0, 0, 0); scl.set(1, 1, 1);
+        place(o, pos, eul, scl);
+        mesh.setMatrixAt(i, m.compose(pos, q.setFromEuler(eul), scl));
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    return mesh;
+}
+const ofType = (t) => obstacles.filter((o) => o.type === t);
+const planks = ofType('plank');
+const corners = (o) => [-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: o.x + sx * (o.halfW - 0.3), z: o.z + sz * (o.halfD - 0.3), top: o.y - o.height / 2 })));
 
-        const leavesRadius = size;
-        const leavesMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(leavesRadius), vegetationMaterial);
-        leavesMesh.position.y = size + leavesRadius / 2;
-        leavesMesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-        mesh.add(leavesMesh);
+instanced(new THREE.CylinderGeometry(0.5, 0.8, 1, 8).translate(0, 0.5, 0), woodMaterial, ofType('tree'), (o, p, e, s) => { p.set(o.x, 0, o.z); s.set(1, o.height, 1); });
+instanced(new THREE.DodecahedronGeometry(1), vegetationMaterial, ofType('tree'), (o, p, e, s) => { p.set(o.x, o.height * 1.5, o.z); s.setScalar(o.height); e.set(o.spin, o.spin * 0.7, o.spin * 1.3); });
+instanced(new THREE.DodecahedronGeometry(1), rockMaterial, ofType('rock'), (o, p, e, s) => { p.set(o.x, 0.15, o.z); s.set(o.radius, o.radius * 0.75, o.radius); e.set(0, o.x * 7, 0); });
+instanced(new THREE.CylinderGeometry(1, 1, 1.3, 12).translate(0, 0.35, 0), buoyMaterial, ofType('buoy'), (o, p, e, s) => { p.set(o.x, 0, o.z); s.set(o.radius, 1, o.radius); });
+instanced(new THREE.ConeGeometry(0.3, 0.6, 8), whiteGuyMaterial, ofType('buoy'), (o, p) => p.set(o.x, 1.3, o.z));
+instanced(new THREE.BoxGeometry(1, 1, 1), woodMaterial, planks, (o, p, e, s) => { p.set(o.x, o.y, o.z); s.set(o.halfW * 2, o.height, o.halfD * 2); });
+instanced(new THREE.CylinderGeometry(0.12, 0.12, 1).translate(0, -0.5, 0), woodMaterial, planks.flatMap(corners), (c, p, e, s) => { p.set(c.x, c.top, c.z); s.set(1, c.top + 0.6, 1); });
+// a lantern marks every refuge plank: a deck above PLAYER.safeHeight the wizard cannot reach
+instanced(new THREE.SphereGeometry(0.22, 10, 8), lanternMaterial, planks, (o, p) => p.set(o.x + o.halfW - 0.35, o.topY + 0.25, o.z));
 
-        mesh.position.set(xPos, 0, zPos);
-        scene.add(mesh);
-        obstacles.push({
-            type: 'tree',
-            mesh,
-            x: xPos,
-            z: zPos,
-            radius: 0.85,
-        });
+// --- City Shop: dock pier and a neon sign readable from far upriver (no fog) ---
+function neonSignTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 320;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(11, 14, 19, 0.88)';
+    ctx.beginPath(); ctx.roundRect(16, 16, 992, 288, 36); ctx.fill();
+    ctx.lineWidth = 10; ctx.strokeStyle = '#5eead4'; ctx.shadowColor = '#5eead4'; ctx.shadowBlur = 30;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.font = '800 150px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillStyle = '#ffd6f6'; ctx.shadowColor = '#ff4fd8'; ctx.shadowBlur = 48;
+    for (let i = 0; i < 3; i++) ctx.fillText('CITY SHOP', 512, 180);
+    ctx.font = '700 46px ui-monospace, monospace';
+    ctx.fillStyle = '#5eead4'; ctx.shadowColor = '#5eead4'; ctx.shadowBlur = 18;
+    ctx.fillText('UPGRADES  ·  DOCK  ▶', 512, 262);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+const shop = (() => {
+    const group = new THREE.Group();
+    const deckTop = 0.56;
+    const quayLen = SHOP_ZONE.maxZ - SHOP_ZONE.minZ;
+    const midZ = (SHOP_ZONE.minZ + SHOP_ZONE.maxZ) / 2;
+    const quay = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.4, quayLen), woodMaterial);
+    quay.position.set(14.75, deckTop - 0.2, midZ);
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(15, 0.4, 10), woodMaterial);
+    pier.position.set(22.5, deckTop - 0.2 + 0.01, -200);
+    group.add(quay, pier);
+    const piling = new THREE.CylinderGeometry(0.18, 0.2, 2.2, 8);
+    for (let z = SHOP_ZONE.maxZ - 2; z > SHOP_ZONE.minZ; z -= 6) {
+        const pole = new THREE.Mesh(piling, woodMaterial);
+        pole.position.set(13.6, -0.3, z);
+        group.add(pole);
+    }
+    for (let x = 15; x <= 30; x += 3) for (const z of [-195.2, -204.8]) {
+        const pole = new THREE.Mesh(piling, woodMaterial);
+        pole.position.set(x, -0.3, z);
+        group.add(pole);
+    }
+    const lampMat = new THREE.MeshStandardMaterial({ color: 0xbffcf2, emissive: 0x5eead4, emissiveIntensity: 2 });
+    for (const z of [-170, -185, -215, -230]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3), motorMaterial);
+        post.position.set(14.2, deckTop + 1.5, z);
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), lampMat);
+        lamp.position.set(14.2, deckTop + 3.1, z);
+        group.add(post, lamp);
+    }
+
+    const signMat = new THREE.MeshBasicMaterial({ map: neonSignTexture(), transparent: true, fog: false, toneMapped: false });
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.4), signMat);
+    sign.position.set(22.5, 10, -196);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(14.4, 4.8, 0.3), new THREE.MeshStandardMaterial({ color: 0x161c26, metalness: 0.6, roughness: 0.4 }));
+    back.position.set(22.5, 10, -196.25);
+    group.add(sign, back);
+    for (const x of [17, 28]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 8), motorMaterial);
+        post.position.set(x, deckTop + 4, -196.3);
+        group.add(post);
+    }
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.22, fog: false, depthWrite: false, blending: THREE.AdditiveBlending });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.4, 60, 16, 1, true), beamMat);
+    beam.position.set(22.5, 42, -198);
+    const glow = new THREE.PointLight(0xff4fd8, 4, 40);
+    glow.position.set(22.5, 9, -192);
+    group.add(beam, glow);
+    scene.add(group);
+    return { signMat, beamMat, glow };
+})();
+
+function animateShop(t) {
+    const flicker = Math.sin(t * 37) > 0.97 ? 0.45 : 1; // the odd neon stutter
+    shop.signMat.color.setScalar((0.88 + 0.12 * Math.sin(t * 3)) * flicker);
+    shop.beamMat.opacity = 0.16 + 0.08 * Math.sin(t * 1.7);
+    shop.glow.intensity = 3 + Math.sin(t * 3) * flicker;
+}
+
+// --- Enemies: articulated procedural rigs. root = authoritative position, body = facing. ---
+const glowMat = (color, emissiveIntensity = 1.5) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity, flatShading: true });
+const flatRing = (inner, outer, mat, thetaStart, thetaLength) => new THREE.Mesh(new THREE.RingGeometry(inner, outer, 64, 1, thetaStart, thetaLength).rotateX(-Math.PI / 2), mat);
+const ringMat = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+const WATER_FX_Y = RIVER.waterLevel + 0.06;
+
+/** River Wizard: robed caster on a raft; staff with a glowing orb; a rune ring on the water telegraphs his reach. */
+function createWizardRig() {
+    const root = new THREE.Group();
+    const body = new THREE.Group();
+    root.add(body);
+    const robeMat = new THREE.MeshStandardMaterial({ color: 0x2b2f8f, flatShading: true });
+    const raft = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 3.2), woodMaterial);
+    const robe = new THREE.Mesh(new THREE.ConeGeometry(0.85, 2.1, 10), robeMat);
+    robe.position.y = 1.3;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), skinMaterial);
+    head.position.y = 2.55;
+    const beard = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1, 8), whiteGuyMaterial);
+    beard.rotation.x = Math.PI;
+    beard.position.set(0, 2.05, -0.3);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.08, 16), wizardHatMaterial);
+    brim.position.y = 2.85;
+    const hat = new THREE.Group();
+    hat.position.y = 2.88;
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.6, 10), wizardHatMaterial);
+    cone.position.y = 0.8;
+    hat.add(cone);
+    const arm = new THREE.Group(); // shoulder pivot
+    arm.position.set(0.75, 2.0, -0.1);
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.2, 0.7), robeMat);
+    sleeve.position.set(0.05, -0.3, 0);
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 3.2), paddleMaterial);
+    staff.position.set(0.2, 0.2, 0);
+    const orbMat = glowMat(0x66d9ff, 1.5);
+    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), orbMat);
+    orb.position.set(0.2, 1.95, 0);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), new THREE.MeshBasicMaterial({ color: 0x66d9ff, transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending }));
+    orb.add(halo);
+    const light = new THREE.PointLight(0x66d9ff, 1.5, 14);
+    orb.add(light);
+    arm.add(sleeve, staff, orb);
+    body.add(raft, robe, head, beard, brim, hat, arm);
+
+    const telegraphMat = ringMat(0x66d9ff, 0.3);
+    const reach = ENEMY_TYPES.whiteGuy.hitRadius;
+    const telegraph = new THREE.Group();
+    telegraph.position.y = WATER_FX_Y - 0.5; // root sits at the server's y = 0.5
+    telegraph.add(flatRing(reach - 0.25, reach, telegraphMat));
+    const runes = new THREE.Group();
+    for (let i = 0; i < 6; i++) runes.add(flatRing(reach - 0.8, reach - 0.5, telegraphMat, (i * Math.PI) / 3, Math.PI / 5));
+    telegraph.add(runes);
+    root.add(telegraph);
+    return { root, body, arm, hat, orb, orbMat, light, telegraphMat, runes, cast: 0 };
+}
+
+/** Swamp Behemoth: a bog mound on six jointed limbs inside a pulsing toxic pool of radius aoeRadius. */
+function createMudRig() {
+    const root = new THREE.Group();
+    const body = new THREE.Group();
+    root.add(body);
+    const blob = new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10), mudAlienMaterial);
+    blob.scale.set(1.25, 0.85, 1.25);
+    blob.position.y = 0.6;
+    const toxic = glowMat(0x9cff3a, 1.2);
+    for (let i = 0; i < 9; i++) {
+        const a = i * 2.4;
+        const wart = new THREE.Mesh(new THREE.SphereGeometry(0.18 + (i % 3) * 0.06, 8, 6), toxic);
+        wart.position.set(Math.cos(a) * 1.4, 0.9 + (i % 3) * 0.35, Math.sin(a) * 1.4);
+        body.add(wart);
+    }
+    const eyeMat = glowMat(0xffe14a, 2);
+    for (const x of [-0.55, 0, 0.55]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(x ? 0.2 : 0.26, 10, 8), eyeMat);
+        eye.position.set(x, 1.35 - Math.abs(x) * 0.3, -1.6);
+        body.add(eye);
+    }
+    body.add(blob);
+    const limbs = [];
+    for (let i = 0; i < 6; i++) {
+        const base = new THREE.Group();
+        base.rotation.y = (i / 6) * Math.PI * 2 + 0.3;
+        const hip = new THREE.Group();
+        hip.position.set(1.7, 0.5, 0);
+        hip.rotation.z = -1.0;
+        base.add(hip);
+        const joints = [];
+        let parent = hip;
+        for (let j = 0; j < 3; j++) {
+            const joint = new THREE.Group();
+            const len = 1.1 - j * 0.15;
+            const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.3 - j * 0.08, 0.36 - j * 0.08, len, 7).translate(0, len / 2, 0), mudAlienMaterial);
+            joint.add(seg);
+            parent.add(joint);
+            joints.push(joint);
+            const next = new THREE.Group();
+            next.position.y = len;
+            joint.add(next);
+            parent = next;
+        }
+        body.add(base);
+        limbs.push({ hip, joints, phase: i * 1.1 });
+    }
+    const R = ENEMY_TYPES.mudAlien.aoeRadius;
+    const aoe = new THREE.Group(); // scene-level: the danger zone must not scale with hit pulses
+    const poolMat = ringMat(0x7cff2a, 0.18);
+    const rimMat = ringMat(0xb6ff5a, 0.7);
+    const waveMat = ringMat(0xb6ff5a, 0.5);
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(R, 48).rotateX(-Math.PI / 2), poolMat);
+    const wave = flatRing(0.85, 1, waveMat);
+    aoe.add(pool, flatRing(R - 0.25, R, rimMat), wave);
+    scene.add(aoe);
+    return { root, body, limbs, aoe, poolMat, rimMat, wave, waveMat, slam: 0, nextSplash: 0 };
+}
+
+/** Abyssal Leviathan: a jawed head and an undulating chain of segments; coils to telegraph, foams on the charge. */
+const WORM_SEGMENTS = 18;
+function createWormRig() {
+    const root = new THREE.Group();
+    const body = new THREE.Group();
+    root.add(body);
+    const hide = longWormMaterial;
+    const belly = new THREE.MeshStandardMaterial({ color: 0xc04ac0, flatShading: true });
+    const spikeMat = new THREE.MeshStandardMaterial({ color: 0x2a0030, flatShading: true });
+    const head = new THREE.Group();
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 10), hide);
+    skull.scale.set(1, 0.85, 1.3);
+    const jawGeo = new THREE.ConeGeometry(0.9, 1.9, 8).rotateX(-Math.PI / 2).translate(0, 0, -0.95);
+    const upperJaw = new THREE.Mesh(jawGeo, hide);
+    upperJaw.position.set(0, 0.15, -0.9);
+    const lowerJawPivot = new THREE.Group();
+    lowerJawPivot.position.set(0, -0.2, -0.9);
+    const lowerJaw = new THREE.Mesh(jawGeo, belly);
+    lowerJaw.scale.set(0.85, 0.6, 0.9);
+    lowerJawPivot.add(lowerJaw);
+    const eyeMat = glowMat(0xff2a2a, 2.5);
+    for (const x of [-0.6, 0.6]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), eyeMat);
+        eye.position.set(x, 0.55, -0.9);
+        head.add(eye);
+    }
+    head.add(skull, upperJaw, lowerJawPivot);
+    body.add(head);
+    const segGeo = new THREE.SphereGeometry(1, 12, 9);
+    const spikeGeo = new THREE.ConeGeometry(0.3, 0.9, 6).translate(0, 1.1, 0);
+    const segments = [];
+    for (let i = 1; i < WORM_SEGMENTS; i++) {
+        const seg = new THREE.Mesh(segGeo, i % 2 ? hide : belly);
+        seg.scale.setScalar(1.15 * (1 - (i / WORM_SEGMENTS) * 0.65));
+        if (i % 2) seg.add(new THREE.Mesh(spikeGeo, spikeMat));
+        seg.castShadow = true;
+        body.add(seg);
+        segments.push(seg);
+    }
+    return { root, body, head, lowerJawPivot, segments, coil: 0, phase: 0, yaw: 0, foamAcc: 0, ringAt: 0 };
+}
+
+const wizardRig = createWizardRig();
+const mudRig = createMudRig();
+const wormRig = createWormRig();
+const enemyRigs = { whiteGuy: wizardRig, mudAlien: mudRig, longWorm: wormRig };
+const enemyMeshes = { whiteGuy: wizardRig.root, mudAlien: mudRig.root, longWorm: wormRig.root };
+const enemyGoal = {}; // last authoritative position per enemy, eased toward each frame
+for (const key in enemyMeshes) {
+    enemyMeshes[key].visible = false;
+    scene.add(enemyMeshes[key]);
+}
+
+/** XZ distance from an enemy to the nearest visible raft (the local one included). */
+function nearestRaftDistance(pos) {
+    let best = Infinity;
+    const rafts = Object.values(otherPlayers).map((v) => v.group);
+    if (myRaft?.vis && !isDead) rafts.push(myRaft.vis.group);
+    for (const g of rafts) if (g.visible) best = Math.min(best, Math.hypot(g.position.x - pos.x, g.position.z - pos.z));
+    return best;
+}
+
+/** Turn a rig's body toward the way it is moving (or toward `face` when given). */
+function faceRig(rig, from, face, dt, rate = 6) {
+    const dx = face.x - from.x;
+    const dz = face.z - from.z;
+    if (Math.hypot(dx, dz) < 1e-3) return;
+    rig.body.rotation.y += wrapAngle(Math.atan2(-dx, -dz) - rig.body.rotation.y) * (1 - Math.exp(-rate * dt));
+}
+
+function animateWizard(e, dt, t) {
+    const r = wizardRig;
+    const d = nearestRaftDistance(r.root.position);
+    const casting = e.state === 'adjacent' || (e.state === 'chasing' && d < 8);
+    r.cast += ((casting ? 1 : 0) - r.cast) * (1 - Math.exp(-6 * dt));
+    const c = r.cast;
+    r.arm.rotation.set(-(0.15 + 1.9 * c) + Math.sin(t * 14) * 0.12 * c, 0, -0.15 + Math.sin(t * 1.6) * 0.06 + Math.sin(t * 9) * 0.25 * c);
+    r.body.position.y = Math.sin(t * 2) * 0.05;
+    r.hat.rotation.x = Math.sin(t * 1.3) * 0.08 - 0.12 * c;
+    r.orb.scale.setScalar(1 + (0.12 + 0.3 * c) * Math.sin(t * (4 + 12 * c)));
+    r.orbMat.emissiveIntensity = 1.2 + 3 * c;
+    r.light.intensity = 1.5 + 5 * c;
+    const waiting = e.state === 'waiting';
+    r.telegraphMat.color.setHex(waiting ? 0x8899aa : c > 0.5 ? 0xd46bff : 0x66d9ff);
+    r.telegraphMat.opacity = (waiting ? 0.12 : 0.2 + 0.6 * c) + 0.08 * Math.sin(t * 3);
+    r.runes.rotation.y += dt * (0.6 + 5 * c);
+    r.runes.scale.setScalar(1 - 0.1 * c * (0.5 + 0.5 * Math.sin(t * 10)));
+}
+
+function animateMud(e, dt, t) {
+    const r = mudRig;
+    const d = nearestRaftDistance(r.root.position);
+    const attacking = e.state === 'chasing' && d < ENEMY_TYPES.mudAlien.hitRadius + 3;
+    r.slam = attacking ? r.slam + dt * 2.2 : r.slam * Math.exp(-4 * dt);
+    const lift = attacking ? Math.sin(r.slam * Math.PI * 2) : 0; // raise → smash
+    for (const limb of r.limbs) {
+        limb.hip.rotation.z = -1.0 - 0.5 * lift + Math.sin(t * 1.4 + limb.phase) * 0.12;
+        limb.joints.forEach((j, k) => { j.rotation.z = Math.sin(t * 2.2 + limb.phase + k * 0.8) * 0.35 + lift * 0.4; });
+    }
+    if (attacking && lift < -0.95 && t > r.nextSplash) {
+        splash(r.root.position.x, r.root.position.z, 0.9);
+        r.nextSplash = t + 0.3;
+    }
+    r.body.position.y = Math.sin(t * 1.8) * 0.12 - 0.3;
+    r.body.scale.set(1 + 0.04 * Math.sin(t * 3.6), 1 - 0.04 * Math.sin(t * 3.6), 1 + 0.04 * Math.sin(t * 3.6));
+    r.aoe.visible = r.root.visible;
+    r.aoe.position.set(r.root.position.x, WATER_FX_Y, r.root.position.z);
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    r.poolMat.opacity = 0.12 + 0.14 * pulse;
+    r.rimMat.opacity = 0.45 + 0.4 * pulse;
+    const u = (t * 0.8) % 1; // a ring of spores rolling out to the edge of the danger zone
+    r.wave.scale.setScalar(u * ENEMY_TYPES.mudAlien.aoeRadius);
+    r.waveMat.opacity = 0.6 * (1 - u);
+}
+
+function animateWorm(e, dt, t) {
+    const r = wormRig;
+    const coiling = e.state === 'coiling';
+    const charging = e.state === 'charging';
+    r.coil += ((coiling ? 1 : 0) - r.coil) * (1 - Math.exp(-(coiling ? 7 : 4) * dt));
+    r.phase += dt * (charging ? 13 : coiling ? 1 : 2.6);
+    const amp = charging ? 0.75 : 0.45;
+    const c = r.coil;
+    r.head.position.y = 0.2 + 2.3 * c + (charging ? Math.sin(r.phase) * 0.35 : 0);
+    r.head.rotation.x = 0.35 * c + (coiling ? Math.sin(t * 40) * 0.04 : 0);
+    r.lowerJawPivot.rotation.x = charging ? 0.55 + 0.15 * Math.sin(t * 10) : 0.15 + 0.75 * c;
+    r.segments.forEach((seg, k) => {
+        const i = k + 1;
+        const fade = Math.min(1, i / 3);
+        const tx = amp * Math.sin(r.phase - i * 0.55) * fade;
+        const ty = charging ? 0.3 + 0.55 * Math.sin(r.phase * 0.5 - i * 0.5) : -0.1 + 0.15 * Math.sin(r.phase * 0.5 - i * 0.6);
+        const tz = i * 1.15;
+        const ang = i * 0.62 + t * 0.6;
+        const rad = 1.4 + i * 0.13;
+        seg.position.set(
+            tx + (Math.cos(ang) * rad - tx) * c,
+            ty + (0.1 + i * 0.09 - ty) * c,
+            tz + (Math.sin(ang) * rad + 1.2 - tz) * c,
+        );
+    });
+    if (charging && r.root.visible) {
+        const f = headingOf(r.body.rotation.y);
+        const { x, z } = r.root.position;
+        r.foamAcc += dt * 260;
+        for (; r.foamAcc >= 1; r.foamAcc -= 1) {
+            const back = Math.random() * 10;
+            const side = Math.random() < 0.5 ? -1 : 1;
+            const spread = 4 + Math.random() * 5;
+            emitFoam(x - f.x * back + -f.z * side * 1.2, FOAM_Y + 0.1, z - f.z * back + f.x * side * 1.2,
+                -f.z * side * spread, 1 + Math.random() * 4, f.x * side * spread, 1.6 + Math.random(), 0.45 + Math.random() * 0.25);
+        }
+        if (t > r.ringAt) { splash(x, z, 1.1); r.ringAt = t + 0.15; }
     }
 }
 
-// --- Enemies ---
-// Build Wizard (replaces White Guy)
-const wizardGroup = new THREE.Group();
-const wizardRaft = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 3), woodMaterial); // Wizard raft
-const wizardBody = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1, 2), whiteGuyMaterial);
-wizardBody.position.y = 1.25;
-const wizardHat = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.5, 8), wizardHatMaterial);
-wizardHat.position.y = 2.5;
-wizardGroup.add(wizardRaft);
-wizardGroup.add(wizardBody);
-wizardGroup.add(wizardHat);
+const animateEnemy = { whiteGuy: animateWizard, mudAlien: animateMud, longWorm: animateWorm };
 
-const enemyMeshes = {
-    whiteGuy: wizardGroup,
-    mudAlien: new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), mudAlienMaterial),
-    longWorm: new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 8), longWormMaterial) // Long boi
-};
-enemyMeshes.longWorm.rotation.x = Math.PI / 2; // Lie flat
+function updateEnemies(dt, t) {
+    if (!enemiesData) return;
+    const k = 1 - Math.exp(-15 * dt);
+    for (const key in enemyMeshes) {
+        const e = enemiesData[key];
+        const rig = enemyRigs[key];
+        const root = enemyMeshes[key];
+        if (!e || e.health <= 0) { root.visible = false; if (key === 'mudAlien') rig.aoe.visible = false; continue; }
+        const goal = enemyGoal[key];
+        const from = { x: root.position.x, z: root.position.z };
+        if (!root.visible || !goal) root.position.set(e.position.x, e.position.y, e.position.z);
+        else root.position.lerp(goal, k);
+        root.visible = true;
+        const face = key === 'longWorm' && e.targetPos && (e.state === 'coiling' || e.state === 'charging') ? e.targetPos
+            : { x: root.position.x + (root.position.x - from.x) * 50, z: root.position.z + (root.position.z - from.z) * 50 };
+        faceRig(rig, root.position, face, dt, key === 'longWorm' ? 10 : 6);
+        animateEnemy[key](e, dt, t);
+    }
+}
 
-for (let key in enemyMeshes) scene.add(enemyMeshes[key]);
 let enemiesData = null;
 const hitPulse = { whiteGuy: 0, mudAlien: 0, longWorm: 0 };
 let cameraShake = 0;
@@ -219,22 +555,15 @@ function popAt(pos, text, color, lift) {
 
 socket.on('enemiesUpdate', (data) => {
     enemiesData = data;
-    for(const key in data) {
-        const e = data[key];
-        if (e.health > 0) {
-            enemyMeshes[key].visible = true;
-            enemyMeshes[key].position.set(e.position.x, e.position.y, e.position.z);
-            
-            // Align worm to movement
-            if (key === 'longWorm' && e.state === 'charging') {
-                 enemyMeshes[key].lookAt(e.targetPos.x, e.position.y, e.targetPos.z);
-            }
-        } else {
-            enemyMeshes[key].visible = false;
-        }
-    }
+    for (const key in data) if (enemyMeshes[key]) (enemyGoal[key] ??= new THREE.Vector3()).set(data[key].position.x, data[key].position.y, data[key].position.z);
 });
-socket.on('enemyRespawn', (e) => { if(enemyMeshes[e.id]) enemyMeshes[e.id].visible = true; });
+socket.on('enemyRespawn', (e) => {
+    const root = enemyMeshes[e.id];
+    if (!root) return;
+    root.visible = false; // the next frame snaps it to the new spawn instead of gliding there
+    if (enemiesData) enemiesData[e.id] = e;
+    (enemyGoal[e.id] ??= new THREE.Vector3()).set(e.position.x, e.position.y, e.position.z);
+});
 
 socket.on('enemyHit', (d) => {
     const mesh = enemyMeshes[d.id];
@@ -287,7 +616,7 @@ socket.on('npcsUpdate', (data) => {
 
 // --- Watercraft FX: V-shaped foam wake, splash droplets and splash rings (visual only) ---
 const FOAM_Y = RIVER.waterLevel + 0.03;
-const FOAM_MAX = 2000;
+const FOAM_MAX = 4000;
 const foam = {
     pos: new Float32Array(FOAM_MAX * 3), vel: new Float32Array(FOAM_MAX * 3),
     alpha: new Float32Array(FOAM_MAX), size: new Float32Array(FOAM_MAX),
@@ -414,8 +743,6 @@ let myHealth = 100;
 const raftSize = { w: 2, h: 0.5, d: 3 };
 const SWING_S = 0.2;
 const yAxis = new THREE.Vector3(0, 1, 0);
-const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffccaa });
-const motorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2f36, metalness: 0.4, roughness: 0.5 });
 const propMaterial = new THREE.MeshStandardMaterial({ color: 0xc9d2dc, metalness: 0.7, roughness: 0.3 });
 
 /**
@@ -700,13 +1027,44 @@ const keys = { w: false, a: false, s: false, d: false, space: false };
 let isAttacking = false;
 let isBlocking = false;
 
+// --- Auto-Pilot: the shared bot brain (autopilotInput) drives the raft through the same kinematics ---
+const autopilotBtn = document.getElementById('autopilot');
+const shopPrompt = document.getElementById('shop-prompt');
+let autopilot = false;
+let drive = keys; // the input actually applied last step (keys or the autopilot's)
+let nextAutoSwing = 0;
+let nextAutoBuy = 0;
+const wantsShop = () => BOT.shopPriority.some((t) => canPurchase(myStats, t).ok);
+
+function setAutopilot(on) {
+    autopilot = on;
+    autopilotBtn.classList.toggle('on', on);
+    autopilotBtn.setAttribute('aria-pressed', String(on));
+    autopilotBtn.querySelector('span').textContent = on ? 'ON' : 'OFF';
+    if (on) inIntroSequence = false;
+    hud.toast(on ? 'AUTO-PILOT ENGAGED' : 'MANUAL CONTROL', 900);
+}
+autopilotBtn.addEventListener('click', () => setAutopilot(!autopilot));
+
+function updateAutopilot(now) {
+    if (!autopilot || isDead || !myRaft?.craft) return;
+    if (drive.attack && now >= nextAutoSwing) {
+        triggerAttack();
+        nextAutoSwing = now + BOT.attackCooldownMs;
+    }
+    if (isInShopZone(myRaft.craft.position) && now >= nextAutoBuy) {
+        const pick = BOT.shopPriority.find((t) => canPurchase(myStats, t).ok);
+        if (pick) socket.emit('buyUpgrade', pick);
+        nextAutoBuy = now + 500;
+    }
+}
+
 // Spring-damped chase camera: trails the raft's heading; mouse drag / arrow keys orbit, then eases back behind.
 const CAM = { pitch: 0.3, minPitch: -0.15, maxPitch: 1.2, distance: 11, stiffness: 9, follow: 3.5, recenterDelayMs: 1200, recenter: 2.5 };
 const cam = {
     yaw: 0, orbit: 0, pitch: CAM.pitch, lastInput: -Infinity, live: false,
     vel: new THREE.Vector3(), look: new THREE.Vector3(), fov: camera.fov,
 };
-const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -747,6 +1105,8 @@ function triggerAttack() {
 window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'm') hud.toast(sfx.toggle() ? 'SOUND OFF' : 'SOUND ON', 800);
+    if (k === 'p' && !e.repeat) setAutopilot(!autopilot);
+    else if (autopilot && /^(w|a|s|d|arrow(up|down|left|right))$/.test(k)) setAutopilot(false); // any helm input takes back control
     if (k === 'arrowup') keys.w = true;
     if (k === 'arrowdown') keys.s = true;
     if (k === 'arrowleft') keys.a = true;
@@ -786,7 +1146,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; isBlocking = false; });
 
 window.addEventListener('mousedown', (e) => {
-    if (e.target?.closest?.('#shop')) return;
+    if (e.target?.closest?.('#shop, #autopilot')) return;
     if (isDead || shopOpen || !myRaft) return;
     if (e.button === 0) {
         triggerAttack();
@@ -820,7 +1180,10 @@ function fixedStep() {
         craft.angularVelocity.y = 0;
     }
     const live = !isDead && !inIntroSequence;
-    const input = live ? { ...keys, upgrades: myStats.upgrades, attacking: isAttacking, onSolid } : { onSolid };
+    drive = live && autopilot
+        ? autopilotInput(craft, { enemies: enemiesData ?? {}, obstacles, onSolid, wantsShop: wantsShop() })
+        : keys;
+    const input = live ? { ...drive, upgrades: myStats.upgrades, attacking: isAttacking, onSolid } : { onSolid };
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
     const col = resolveWorldBoundsAndObstacles(craft, obstacles);
     onSolid = col.onSolid;
@@ -846,7 +1209,7 @@ function updateLocalRaft(dt, now) {
         yaw,
         speed: craft.velocity.x * f.x + craft.velocity.z * f.z,
         turn: craft.angularVelocity.y,
-        thrust: isDead ? 0 : Math.sign(watercraftThrust(keys, myStats.upgrades, isAttacking)),
+        thrust: isDead ? 0 : Math.sign(watercraftThrust(drive, myStats.upgrades, isAttacking)),
         airborne: wasAirborne,
         block: isBlocking,
     });
@@ -959,6 +1322,7 @@ function updateHud(now) {
     if (!myRaft?.craft || now - lastHud < 100) return;
     lastHud = now;
     const { velocity: v, position: p, yaw } = myRaft.craft;
+    shopPrompt.hidden = !(isInShopZone(p) && !shopOpen && !isDead);
     hud.setTelemetry({
         speed: Math.hypot(v.x, v.z),
         heading: (((-yaw * 180) / Math.PI) % 360 + 360) % 360,
@@ -997,6 +1361,9 @@ function animate() {
         animateRaft(vis, delta, t);
     }
 
+    updateAutopilot(now);
+    updateEnemies(delta, t);
+    animateShop(t);
     for (const key in hitPulse) {
         hitPulse[key] = Math.max(0, hitPulse[key] - delta * 5);
         enemyMeshes[key].scale.setScalar(1 + 0.35 * hitPulse[key]);

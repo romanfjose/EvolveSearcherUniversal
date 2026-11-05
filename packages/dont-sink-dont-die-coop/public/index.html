@@ -77,6 +77,15 @@
         .shop-btn:hover { filter: brightness(1.1); }
         .shop-btn:disabled { background: var(--line-2); color: var(--faint); cursor: default; }
 
+        .ap-btn { pointer-events: auto; display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px; appearance: none; cursor: pointer; background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 9px; font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+        .ap-btn span { color: var(--faint); }
+        .ap-btn:hover { border-color: var(--accent); }
+        .ap-btn.on { border-color: var(--accent); background: rgba(94, 234, 212, .12); box-shadow: 0 0 0 3px rgba(94, 234, 212, .12); }
+        .ap-btn.on span { color: var(--accent); }
+        #shop-prompt { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); padding: 9px 16px; background: var(--panel); border: 1px solid #ff4fd8; border-radius: 999px; font: 700 13px/1 var(--mono); letter-spacing: .08em; color: #ffd6f6; box-shadow: 0 0 18px rgba(255, 79, 216, .45); pointer-events: none; animation: beckon 1.2s ease-in-out infinite alternate; }
+        #shop-prompt[hidden] { display: none; }
+        @keyframes beckon { to { box-shadow: 0 0 30px rgba(255, 79, 216, .8); } }
+
         #toast { position: absolute; top: 28%; width: 100%; text-align: center; font: 800 30px/1 var(--mono); letter-spacing: .18em; text-shadow: 0 3px 12px rgba(0, 0, 0, .8); pointer-events: none; opacity: 0; transition: opacity .3s; }
         #toast.show { opacity: 1; }
         #damage-flash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(248, 113, 113, .75); opacity: 0; }
@@ -105,6 +114,7 @@
             <div class="kpi"><b id="kpi-threats">0</b><span class="label">Threats</span></div>
         </div>
         <div id="my-upgrades"></div>
+        <button id="autopilot" class="ap-btn" type="button" aria-pressed="false"><b><kbd>P</kbd>Auto-Pilot</b><span>OFF</span></button>
     </div>
 
     <div id="wave-panel" class="panel">
@@ -130,6 +140,7 @@
         <div class="shop-item"><b>Raft Armor <span class="cost">20c</span></b><small>+50 max hull</small><button class="shop-btn" data-upgrade="armor">Buy</button></div>
     </div>
 
+    <div id="shop-prompt" hidden>[Press <kbd>E</kbd> — Open City Shop]</div>
     <div id="toast"></div>
     <div id="damage-flash"></div>
     <div id="fx"></div>
@@ -137,7 +148,7 @@
 
     <div id="instructions">
         <span><kbd>W</kbd><kbd>S</kbd>paddle</span><span><kbd>A</kbd><kbd>D</kbd>steer</span><span><kbd>Space</kbd>jump</span>
-        <span><kbd>LMB</kbd>attack</span><span><kbd>RMB</kbd>block</span><span><kbd>Mouse</kbd>orbit</span><span><kbd>E</kbd>shop</span><span><kbd>M</kbd>mute</span>
+        <span><kbd>LMB</kbd>attack</span><span><kbd>RMB</kbd>block</span><span><kbd>Mouse</kbd>orbit</span><span><kbd>E</kbd>shop</span><span><kbd>P</kbd>auto-pilot</span><span><kbd>M</kbd>mute</span>
     </div>
 
     <script type="importmap">

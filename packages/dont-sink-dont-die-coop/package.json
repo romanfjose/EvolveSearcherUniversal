@@ -1,7 +1,7 @@
 {
   "name": "dont-sink-dont-die-coop",
   "version": "1.1.0",
-  "description": "3D Three.js + Cannon co-op raft survival with a Socket.io server and a zero-server offline AI-bot mode.",
+  "description": "3D Three.js co-op raft survival on deterministic kinematics with a Socket.io server and a zero-server offline AI-bot mode.",
   "license": "MIT",
   "type": "module",
   "scripts": {

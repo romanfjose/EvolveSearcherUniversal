@@ -61,7 +61,7 @@ export const UPGRADES = {
 export const ENEMY_TYPES = {
     whiteGuy: { baseHealth: 50, speed: 15, damage: 15, respawnDelay: 10000, hitRadius: 3, reward: 10, spawnOffset: 15, unlockZ: -100, homeX: 0 },
     mudAlien: { baseHealth: 150, speed: 10, damage: 30, respawnDelay: 20000, hitRadius: 3, reward: 20, spawnOffset: -50, unlockZ: -150, homeX: 15, chaseMin: 3, chaseMax: 100, aoeRadius: 5, aoeDamage: 1 },
-    longWorm: { baseHealth: 200, speed: 40, damage: 40, respawnDelay: 30000, hitRadius: 5, reward: 30, spawnOffset: -60, unlockZ: -300, homeX: -10, aggroRange: 200, strikeStop: 2, cooldownMs: 2000 },
+    longWorm: { baseHealth: 200, speed: 40, damage: 40, respawnDelay: 30000, hitRadius: 5, reward: 30, spawnOffset: -60, unlockZ: -300, homeX: -10, aggroRange: 200, strikeStop: 2, cooldownMs: 2000, windupMs: 600 },
 };
 
 export const WAVE_SCALING = { health: 0.25, damage: 0.1, reward: 2, perExtraPlayerHealth: 0.2 };
@@ -80,6 +80,27 @@ export const BOT = {
     xLimit: 13,
     throwDamping: 0.85,
     shopPriority: ['weapon', 'armor', 'motor'],
+    avoidLookahead: 12, // m of path scanned for trunks, rocks and buoys
+    avoidMargin: 0.5, // m of daylight kept beyond contact distance
+    refugeRange: 10, // a wizard this close sends the crew up onto a plank
+    plankSeekRange: 12,
+    airSubsteps: 4, // ballistic substeps per tick so a falling raft cannot tunnel through a plank deck
+};
+
+/** Hands-free driving for the local raft (HUD [P] Auto-Pilot). */
+export const AUTOPILOT = { lookahead: 25, shopLaneX: 12, steerDeadband: 0.08, yawDamping: 0.25, throttleCone: 1.0, brakeDist: 6, brakeSpeed: 6 };
+
+export const RAFT_CLEARANCE = 1.05; // raft half-width added to round obstacle radii on contact
+
+/**
+ * Seeded river layout. Bank trees and refuge planks hug the channel edges, a slalom of rocks and buoys
+ * alternates sides mid-channel. Plank decks (topY) sit above PLAYER.safeHeight: the wizard cannot reach them.
+ */
+export const RIVER_LAYOUT_SEED = 0x5eed;
+export const OBSTACLES = {
+    trees: 300, treeRadius: 0.85, treeZ: [-20, -1920], bankX: [12.5, 17], treeHeight: [2, 5],
+    slalomStartZ: -60, slalomSpacing: 45, slalomJitterZ: 6, slalomX: [3, 8], rockRadius: [1, 1.6], buoyRadius: 0.5,
+    planks: 70, plankZ: [-40, -1490], plankX: [5, 10], plankHalfW: [2, 3.5], plankHalfD: [1, 2], plankThickness: 0.5, plankCenterY: [0.9, 1.5], plankGap: 1.5, plankTries: 20,
 };
 
 // ---------- deterministic randomness ----------
@@ -95,7 +116,91 @@ export function createRng(seed = 1) {
     };
 }
 
-// ---------- raft physics math (used by the Cannon client and the kinematic bots) ----------
+export const ROUND_OBSTACLES = new Set(['tree', 'rock', 'buoy']);
+
+export function generateRiverObstacles(seed = RIVER_LAYOUT_SEED) {
+    const rng = createRng(seed);
+    const O = OBSTACLES;
+    const span = ([a, b]) => a + rng() * (b - a);
+    const shopBand = (z) => z > SHOP_ZONE.minZ - 5 && z < SHOP_ZONE.maxZ + 5;
+    const out = [];
+
+    for (let i = 0; i < O.trees; i++) {
+        const z = span(O.treeZ);
+        let side = rng() < 0.5 ? -1 : 1;
+        if (side > 0 && shopBand(z)) side = -1; // keep the City Shop dock approach clear
+        out.push({ type: 'tree', x: side * span(O.bankX), z, radius: O.treeRadius, height: span(O.treeHeight), spin: rng() * Math.PI * 2 });
+    }
+
+    for (let i = 0, z0 = O.slalomStartZ; z0 > FINISH_Z + 20; i++, z0 -= O.slalomSpacing) {
+        const side = i % 2 ? 1 : -1;
+        const buoy = i % 3 === 2;
+        out.push({ type: buoy ? 'buoy' : 'rock', x: side * span(O.slalomX), z: z0 + (rng() * 2 - 1) * O.slalomJitterZ, radius: buoy ? O.buoyRadius : span(O.rockRadius) });
+    }
+
+    const clearOf = (pl) => out.every((o) => (o.type === 'plank'
+        ? Math.abs(o.z - pl.z) > o.halfD + pl.halfD + O.plankGap || Math.abs(o.x - pl.x) > o.halfW + pl.halfW + O.plankGap
+        : Math.abs(o.x - pl.x) > pl.halfW + o.radius + RAFT_CLEARANCE || Math.abs(o.z - pl.z) > pl.halfD + o.radius + RAFT_CLEARANCE));
+    for (let i = 0; i < O.planks; i++) {
+        for (let t = 0; t < O.plankTries; t++) {
+            const centerY = span(O.plankCenterY);
+            const pl = {
+                type: 'plank', x: (rng() < 0.5 ? -1 : 1) * span(O.plankX), z: span(O.plankZ),
+                halfW: span(O.plankHalfW), halfD: span(O.plankHalfD), y: centerY, height: O.plankThickness,
+                topY: centerY + O.plankThickness / 2 + PLAYER.restY,
+            };
+            if (clearOf(pl)) { out.push(pl); break; }
+        }
+    }
+    return out;
+}
+
+/** Nearest plank (by XZ distance to its centre) within range, or null. */
+export function nearestRefugePlank(pos, obstacles = [], range = BOT.plankSeekRange) {
+    let best = null;
+    let bestD = range;
+    for (const o of obstacles) {
+        if (o.type !== 'plank') continue;
+        const d = distXZ(pos, o);
+        if (d <= bestD) { best = o; bestD = d; }
+    }
+    return best;
+}
+
+export const overPlank = (pos, plank) => Math.abs(pos.x - plank.x) <= plank.halfW && Math.abs(pos.z - plank.z) <= plank.halfD;
+
+/**
+ * Local obstacle avoidance: scans the straight path pos → target (up to `lookahead`) for the first round
+ * obstacle the raft would touch and returns a waypoint beside it (opposite its lateral side, flipped if that
+ * leaves the bot lane). Returns `target` itself when the path is clear.
+ */
+export function steerAroundObstacles(pos, target, obstacles = [], lookahead = BOT.avoidLookahead) {
+    const dx = target.x - pos.x;
+    const dz = target.z - pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1e-6) return target;
+    const fx = dx / d, fz = dz / d;
+    const nx = -fz, nz = fx; // left normal
+    const reach = Math.min(lookahead, d);
+    let hit = null;
+    for (const o of obstacles) {
+        if (!ROUND_OBSTACLES.has(o.type)) continue;
+        const ox = o.x - pos.x, oz = o.z - pos.z;
+        const clear = o.radius + RAFT_CLEARANCE + BOT.avoidMargin;
+        const t = ox * fx + oz * fz;
+        if (t <= 0 || t > reach + o.radius) continue;
+        const l = ox * nx + oz * nz;
+        if (Math.abs(l) >= clear) continue;
+        if (!hit || t < hit.t) hit = { o, t, l, clear };
+    }
+    if (!hit) return target;
+    const { o, l, clear } = hit;
+    let side = Math.abs(l) > 1e-3 ? -Math.sign(l) : (nx * -pos.x >= 0 ? 1 : -1);
+    if (Math.abs(o.x + nx * side * clear) > BOT.xLimit) side = -side;
+    return { x: o.x + nx * side * clear, z: o.z + nz * side * clear };
+}
+
+// ---------- raft physics math (shared by the kinematic client raft and the bots) ----------
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -128,15 +233,17 @@ export function watercraftThrust(keys, upgrades = [], isAttacking = false) {
 export const headingOf = (yaw) => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) });
 export const yawOfQuaternion = (q) => 2 * Math.atan2(q.y, q.w);
 
+export const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
 /** Exact solution of dv/dt = −rate·(v − target) over dt: frame-rate independent. */
 const relax = (v, target, rate, dt) => target + (v - target) * Math.exp(-rate * dt);
 
 /**
- * Velocity-level arcade watercraft controller, shared by the cannon-es client and the tests.
- * craft = { position, velocity, angularVelocity, yaw } (cannon Vec3s or plain {x,y,z});
+ * Velocity-level arcade watercraft controller, shared by the client raft, Auto-Pilot and the tests.
+ * craft = { position, velocity, angularVelocity, yaw } (THREE.Vector3s or plain {x,y,z});
  * input = { w, a, s, d, space, upgrades, attacking, onSolid }.
- * Sets velocity and angularVelocity.y only; integration belongs to the caller (world.step or
- * stepWatercraftKinematics). Horizontal velocity is split along the heading (light drag) and across it
+ * Sets velocity and angularVelocity.y only; integration belongs to the caller
+ * (stepWatercraftKinematics). Horizontal velocity is split along the heading (light drag) and across it
  * (keel grip, PHYSICS.keelGrip × stronger), so the raft carves where it points instead of skating.
  */
 export function driveWatercraft(craft, input, dt) {
@@ -200,7 +307,7 @@ export function stepWatercraftKinematics(craft, input, dt) {
 
 /**
  * Pure kinematic world collision resolver (replaces cannon-es rigid bodies):
- * - Smoothly slides off tree trunks in 2D without spinning or flipping the raft.
+ * - Smoothly slides off tree trunks, rocks and buoys in 2D without spinning or flipping the raft.
  * - Supports landing on elevated planks (above PLAYER.safeHeight) and the City Shop dock.
  * - Clamps lateral x to the river channel (widened along the City Shop dock band).
  */
@@ -219,10 +326,10 @@ export function resolveWorldBoundsAndObstacles(craft, obstacles = []) {
                     onSolid = true;
                 }
             }
-        } else if (obs.type === 'tree') {
+        } else if (ROUND_OBSTACLES.has(obs.type)) {
             const dx = p.x - obs.x;
             const dz = p.z - obs.z;
-            const minDist = (obs.radius || 0.9) + 1.05;
+            const minDist = (obs.radius || 0.9) + RAFT_CLEARANCE;
             const distSq = dx * dx + dz * dz;
             if (distSq < minDist * minDist && distSq > 1e-8) {
                 const dist = Math.sqrt(distSq);
@@ -289,7 +396,7 @@ export function canPurchase(player, type) {
     return { ok: true, reason: null };
 }
 
-/** Launch velocity for a wizard throw (the same for the cannon client and the kinematic bots). */
+/** Launch velocity for a wizard throw (the same for the client raft and the kinematic bots). */
 export function throwVelocity(force) {
     const k = PHYSICS.throwVelocityPerForce;
     return { x: force.x * k, y: force.y * k, z: force.z * k };
@@ -376,7 +483,10 @@ export function stepMudAlien(e, target, dt) {
     return 'chasing';
 }
 
-/** Long worm: idle → lock a vector on the rear raft → charge in a straight line → cooldown → idle. */
+/**
+ * Long worm: idle → lock a vector on the rear raft and coil (windupMs telegraph) → charge in a straight
+ * line → cooldown → idle.
+ */
 export function stepLongWorm(e, target, dt, now) {
     e.position.y = 0.5;
     const T = ENEMY_TYPES.longWorm;
@@ -384,10 +494,15 @@ export function stepLongWorm(e, target, dt, now) {
         if (now >= e.cooldownUntil) e.state = 'idle';
         return e.state;
     }
+    if (e.state === 'coiling') {
+        if (now >= e.chargeAt) e.state = 'charging';
+        return e.state;
+    }
     if (Math.abs(target.position.z - e.position.z) >= T.aggroRange) return e.state;
     if (e.state === 'idle') {
         e.targetPos = { x: target.position.x, z: target.position.z };
-        e.state = 'charging';
+        e.state = 'coiling';
+        e.chargeAt = now + T.windupMs;
     } else if (e.state === 'charging') {
         if (!moveToward(e.position, e.targetPos, e.speed * dt, T.strikeStop)) {
             e.state = 'cooldown';
@@ -410,11 +525,11 @@ function makeEnemy(type) {
         speed: T.speed, damage: T.damage, respawnDelay: T.respawnDelay,
         hasSpawned: false, respawnAt: null,
     };
-    if (type === 'longWorm') Object.assign(e, { state: 'idle', targetPos: null, cooldownUntil: 0 });
+    if (type === 'longWorm') Object.assign(e, { state: 'idle', targetPos: null, cooldownUntil: 0, chargeAt: 0 });
     return e;
 }
 
-export function createGameState({ seed = 1, rng = createRng(seed) } = {}) {
+export function createGameState({ seed = 1, rng = createRng(seed), obstacles = generateRiverObstacles(RIVER_LAYOUT_SEED) } = {}) {
     const npcs = [];
     for (let i = 0; i < 5; i++) {
         npcs.push({ id: `pedestrian_${i}`, type: 'pedestrian', position: { x: 20 + rng() * 10, y: 5, z: -190 - rng() * 20 }, health: 20, isDead: false });
@@ -424,6 +539,7 @@ export function createGameState({ seed = 1, rng = createRng(seed) } = {}) {
     }
     return {
         rng, now: 0, tickCount: 0,
+        obstacles,
         players: {},
         enemies: Object.fromEntries(Object.keys(ENEMY_TYPES).map((t) => [t, makeEnemy(t)])),
         npcs,
@@ -490,7 +606,7 @@ export function spawnEnemy(state, type, z) {
     e.position.z = z;
     e.hasSpawned = true;
     e.respawnAt = null;
-    if (type === 'longWorm') Object.assign(e, { state: 'idle', targetPos: null, cooldownUntil: 0 });
+    if (type === 'longWorm') Object.assign(e, { state: 'idle', targetPos: null, cooldownUntil: 0, chargeAt: 0 });
     return [ev('enemyRespawn', e)];
 }
 
@@ -626,12 +742,19 @@ export function botDecide(state, bot) {
     if (state.gameWon) return { mode: 'hold', target: bot.position };
     const leader = leadPlayer(alivePlayers(state).filter((p) => !p.isBot));
     const worm = state.enemies.longWorm;
-    const wormCharging = worm.health > 0 && worm.state === 'charging' && worm.targetPos;
+    const wormCharging = worm.health > 0 && (worm.state === 'charging' || worm.state === 'coiling') && worm.targetPos;
     if (wormCharging && distXZ(bot.position, worm.targetPos) < BOT.evadeRadius) {
         // sidestep the strike vector toward the roomier bank, then punish during cooldown
         const side = bot.position.x >= worm.targetPos.x ? 1 : -1;
         const dir = Math.abs(worm.targetPos.x + side * BOT.evadeRadius) > BOT.xLimit ? -side : side;
         return { mode: 'evade', target: { x: worm.targetPos.x + dir * BOT.evadeRadius, z: bot.position.z } };
+    }
+    const wizard = state.enemies.whiteGuy;
+    if (wizard.health > 0 && distXZ(bot.position, wizard.position) < BOT.refugeRange
+        && (!leader || distXZ(bot.position, leader.position) < BOT.leashRange)) {
+        // Don't Sink: climb above the wizard's reach and bonk him from the plank
+        const plank = nearestRefugePlank(bot.position, state.obstacles);
+        if (plank) return { mode: 'refuge', target: { x: plank.x, z: plank.z }, plank, enemyId: wizard.id };
     }
     let best = null;
     for (const e of Object.values(state.enemies)) {
@@ -659,17 +782,31 @@ export function stepBot(state, bot, dt) {
     if (decision.mode === 'dead') return events;
     const pos = bot.position;
     const before = { x: pos.x, z: pos.z };
+    const obstacles = state.obstacles ?? [];
 
     if (decision.mode !== 'hold') {
-        moveToward(pos, decision.target, botMaxSpeed(bot.upgrades) * dt, decision.mode === 'engage' ? BOT.engageStop : 0);
+        const goal = decision.mode === 'refuge' ? decision.target : steerAroundObstacles(pos, decision.target, obstacles);
+        const stop = decision.mode === 'engage' && goal === decision.target ? BOT.engageStop : 0;
+        moveToward(pos, goal, botMaxSpeed(bot.upgrades) * dt, stop);
     }
-    // ballistic recovery after being thrown
     const v = bot.velocity;
+    const afloat = pos.y <= WATER_SURFACE_Y + PHYSICS.surfaceSnap && v.y <= 0;
+    if (decision.mode === 'refuge' && afloat && overPlank(pos, decision.plank)) v.y = PHYSICS.jumpVelocity;
+    // ballistic flight (jump or wizard throw), substepped against plank decks
     if (v.x || v.y || v.z || pos.y > WATER_SURFACE_Y) {
-        pos.x += v.x * dt; pos.z += v.z * dt; pos.y += v.y * dt;
-        v.y -= PHYSICS.gravity * dt;
-        v.x *= BOT.throwDamping; v.z *= BOT.throwDamping;
-        if (settleOnWater(bot) !== null) bot.velocity = { x: 0, y: 0, z: 0 };
+        const h = dt / BOT.airSubsteps;
+        const damp = BOT.throwDamping ** (1 / BOT.airSubsteps);
+        for (let i = 0; i < BOT.airSubsteps; i++) {
+            pos.x += v.x * h; pos.z += v.z * h; pos.y += v.y * h;
+            v.y -= PHYSICS.gravity * h;
+            v.x *= damp; v.z *= damp;
+            if (resolveWorldBoundsAndObstacles(bot, obstacles).onSolid || settleOnWater(bot) !== null) {
+                bot.velocity = { x: 0, y: 0, z: 0 };
+                break;
+            }
+        }
+    } else {
+        resolveWorldBoundsAndObstacles(bot, obstacles);
     }
     pos.x = clamp(pos.x, -BOT.xLimit, BOT.xLimit);
     bot.bestZ = Math.min(bot.bestZ, pos.z);
@@ -678,7 +815,7 @@ export function stepBot(state, bot, dt) {
     const dz = pos.z - before.z;
     if (Math.hypot(dx, dz) > 1e-3) bot.quaternion = yawQuaternion(dx, dz);
 
-    if (decision.mode === 'engage' && state.now >= bot.nextAttackAt) {
+    if ((decision.mode === 'engage' || decision.mode === 'refuge') && state.now >= bot.nextAttackAt) {
         const e = state.enemies[decision.enemyId];
         if (dist3(pos, e.position) < PLAYER.attackRange) {
             bot.nextAttackAt = state.now + BOT.attackCooldownMs;
@@ -711,6 +848,53 @@ function botContacts(state) {
         }
     }
     return events;
+}
+
+/**
+ * Auto-Pilot for the local raft: the bot brain expressed as keys for stepWatercraftKinematics.
+ * world = { enemies, obstacles, onSolid, wantsShop }. Returns { w, a, s, d, space, attack, mode, target }.
+ */
+export function autopilotInput(craft, { enemies = {}, obstacles = [], onSolid = false, wantsShop = false } = {}) {
+    const p = craft.position;
+    const afloat = p.y <= WATER_SURFACE_Y + PHYSICS.surfaceSnap && craft.velocity.y <= 0;
+    const alive = (e) => e && e.health > 0;
+    const keys = { w: false, a: false, s: false, d: false, space: false, attack: false };
+    for (const e of Object.values(enemies)) if (alive(e) && dist3(p, e.position) < PLAYER.attackRange) keys.attack = true;
+
+    let mode = 'cruise';
+    let target = null;
+    let plank = null;
+    const worm = enemies.longWorm;
+    const wiz = enemies.whiteGuy;
+    if (alive(worm) && (worm.state === 'charging' || worm.state === 'coiling') && worm.targetPos && distXZ(p, worm.targetPos) < BOT.evadeRadius) {
+        const side = p.x >= worm.targetPos.x ? 1 : -1;
+        const dir = Math.abs(worm.targetPos.x + side * BOT.evadeRadius) > BOT.xLimit ? -side : side;
+        mode = 'evade';
+        target = { x: worm.targetPos.x + dir * BOT.evadeRadius, z: p.z - BOT.evadeRadius };
+    } else if (alive(wiz) && distXZ(p, wiz.position) < BOT.refugeRange && (plank = nearestRefugePlank(p, obstacles))) {
+        mode = 'refuge';
+        target = { x: plank.x, z: plank.z };
+    } else {
+        const inShopRun = wantsShop && p.z < SHOP_ZONE.maxZ + 60 && p.z > SHOP_ZONE.minZ + 10;
+        target = steerAroundObstacles(p, { x: inShopRun ? AUTOPILOT.shopLaneX : 0, z: p.z - AUTOPILOT.lookahead }, obstacles, AUTOPILOT.lookahead);
+    }
+
+    if (mode === 'refuge' && (onSolid || overPlank(p, plank))) {
+        keys.space = afloat && !onSolid;
+        return { ...keys, mode, target };
+    }
+    const dx = target.x - p.x;
+    const dz = target.z - p.z;
+    const err = wrapAngle(Math.atan2(-dx, -dz) - craft.yaw);
+    const cmd = err - AUTOPILOT.yawDamping * craft.angularVelocity.y;
+    keys.a = cmd > AUTOPILOT.steerDeadband;
+    keys.d = cmd < -AUTOPILOT.steerDeadband;
+    const f = headingOf(craft.yaw);
+    const fwdSpeed = craft.velocity.x * f.x + craft.velocity.z * f.z;
+    const braking = mode === 'refuge' && Math.hypot(dx, dz) < AUTOPILOT.brakeDist && fwdSpeed > AUTOPILOT.brakeSpeed;
+    keys.s = braking;
+    keys.w = !braking && Math.abs(err) < AUTOPILOT.throttleCone;
+    return { ...keys, mode, target };
 }
 
 // ---------- the authoritative tick ----------
@@ -783,8 +967,8 @@ export function tick(state, dtMs = TICK_MS) {
     const { whiteGuy, mudAlien, longWorm } = state.enemies;
     if (alive.length > 0) {
         const target = rearPlayer(alive);
-        if (whiteGuy.health > 0) stepWhiteGuy(whiteGuy, target, dt);
-        if (mudAlien.health > 0) stepMudAlien(mudAlien, target, dt);
+        if (whiteGuy.health > 0) whiteGuy.state = stepWhiteGuy(whiteGuy, target, dt);
+        if (mudAlien.health > 0) mudAlien.state = stepMudAlien(mudAlien, target, dt);
         if (longWorm.health > 0) stepLongWorm(longWorm, target, dt, state.now);
     }
 

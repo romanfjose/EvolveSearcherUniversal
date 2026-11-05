@@ -5,84 +5,139 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dream River Racing Survival</title>
     <style>
-        :root { --panel: rgba(8, 20, 32, 0.72); --ink: #f4f8fb; --muted: #9fb4c4; --ok: #5fd38d; --warn: #ffcf4a; --bad: #ff5a5a; }
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: system-ui, sans-serif; color: var(--ink); }
-        .panel { position: absolute; background: var(--panel); border-radius: 8px; padding: 10px 12px; pointer-events: none; backdrop-filter: blur(3px); }
-        .bar { height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; }
-        .bar > i { display: block; height: 100%; width: 100%; background: var(--ok); transition: width 0.15s; }
-        #ui { top: 10px; left: 10px; min-width: 190px; }
-        #ui h2 { margin: 0 0 6px; font-size: 16px; }
-        #mode { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-        #health { font-size: 14px; margin-bottom: 4px; }
-        #coins, #my-upgrades { font-size: 13px; color: var(--muted); margin-top: 6px; }
-        #wave-panel { top: 10px; left: 50%; transform: translateX(-50%); width: 280px; text-align: center; }
-        #wave-label { font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
-        #wave-pips { display: flex; gap: 3px; margin-bottom: 6px; }
-        #wave-pips span { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.15); }
+        :root {
+            --bg: #0b0e13; --panel: rgba(17, 22, 30, 0.86); --panel-2: #161c26; --line: #232b38; --line-2: #2f3a4b;
+            --ink: #e6ebf2; --muted: #8d99ab; --faint: #5f6b7d; --accent: #5eead4; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+            --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+            --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            color-scheme: dark;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; overflow: hidden; background: var(--bg); font: 13px/1.4 var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased; }
+        .panel { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; pointer-events: none; backdrop-filter: blur(8px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+        .eyebrow { font: 600 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+        .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(94, 234, 212, .15); }
+        .label { font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+        .faint { color: var(--faint); }
+        .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+        .bar > i { display: block; height: 100%; width: 100%; background: var(--ok); transition: width .15s, background .3s; }
+
+        #ui { top: 12px; left: 12px; width: 236px; }
+        #mode { font: 11px/1.3 var(--mono); color: var(--muted); margin: 8px 0 10px; }
+        #status { font: 700 12px/1.2 var(--mono); letter-spacing: .06em; margin-bottom: 8px; }
+        .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 10px; }
+        .kpi { background: var(--panel-2); padding: 8px 10px; }
+        .kpi b { display: block; font: 600 19px/1.1 var(--mono); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+        .kpi b small { font-size: 10.5px; color: var(--muted); font-weight: 500; margin-left: 3px; letter-spacing: 0; }
+        .kpi b.air { color: var(--warn); }
+        .hull { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+        #health { font: 600 13px/1 var(--mono); font-variant-numeric: tabular-nums; }
+        #my-upgrades { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; font-size: 11px; }
+        .chip { font: 600 10px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(94, 234, 212, .35); background: rgba(94, 234, 212, .08); padding: 4px 6px; border-radius: 5px; }
+
+        #wave-panel { top: 12px; left: 50%; transform: translateX(-50%); width: min(400px, calc(100vw - 520px)); min-width: 280px; }
+        .wave-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+        #wave-label { font: 700 13px/1 var(--mono); letter-spacing: .12em; }
+        #distance { font: 600 13px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+        #wave-pips { display: flex; gap: 3px; margin-bottom: 10px; }
+        #wave-pips span { flex: 1; height: 4px; border-radius: 2px; background: var(--line-2); }
         #wave-pips span.on { background: var(--warn); }
-        #distance { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-        #enemy-bars div { display: grid; grid-template-columns: 70px 1fr; gap: 6px; align-items: center; font-size: 11px; margin-top: 3px; text-align: left; }
+        #river-track { position: relative; height: 14px; border-radius: 4px; margin: 4px 0 4px; background: linear-gradient(90deg, #3a2f26, #12395a 60%, #0f5e9c); border: 1px solid var(--line-2); }
+        #river-track > * { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+        #river-track .cp { width: 1px; height: 100%; background: rgba(251, 191, 36, .7); transform: translate(0, -50%); }
+        #river-track .shop-band { height: 100%; transform: translate(0, -50%); background: repeating-linear-gradient(135deg, rgba(74, 222, 128, .35) 0 3px, transparent 3px 6px); border-left: 1px solid var(--ok); border-right: 1px solid var(--ok); }
+        #river-track .finish { left: 100%; width: 4px; height: 20px; background: repeating-linear-gradient(0deg, #fff 0 3px, #111 3px 6px); border-radius: 1px; }
+        #river-track .crew { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); border: 1px solid var(--bg); }
+        #me-marker { width: 0; height: 0; top: -3px; transform: translate(-50%, -100%); border: 6px solid transparent; border-top: 7px solid var(--accent); border-bottom: 0; transition: left .1s linear; }
+        #me-marker.dead { border-top-color: var(--bad); }
+        .track-legend { display: flex; justify-content: space-between; font: 10px/1 var(--mono); color: var(--faint); margin-bottom: 8px; }
+        .track-legend .shop { color: var(--ok); }
+        #enemy-bars div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; align-items: center; font: 10.5px/1 var(--mono); color: var(--muted); margin-top: 5px; text-transform: uppercase; letter-spacing: .04em; }
         #enemy-bars .bar > i { background: var(--bad); }
-        #scoreboard { bottom: 44px; right: 10px; font-size: 12px; min-width: 260px; }
-        #scoreboard table { border-collapse: collapse; width: 100%; }
-        #scoreboard th { color: var(--muted); font-weight: 500; text-align: right; padding: 2px 4px; }
-        #scoreboard td { text-align: right; padding: 2px 4px; }
-        #scoreboard th:first-child, #scoreboard td:first-child { text-align: left; }
-        #scoreboard tr.dead td { opacity: 0.45; }
-        #scoreboard tr.me td { color: var(--warn); }
-        .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
-        #instructions { position: absolute; bottom: 10px; width: 100%; text-align: center; text-shadow: 1px 1px 2px black; pointer-events: none; font-size: 13px; }
-        #shop { position: absolute; top: 10px; right: 10px; background: var(--panel); padding: 10px 12px; border-radius: 8px; display: none; }
-        #shop h3 { margin: 0 0 8px; font-size: 14px; }
-        .shop-item { margin-bottom: 8px; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .shop-btn { background: #4CAF50; border: none; color: white; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
-        .shop-btn:hover { background: #45a049; }
-        .shop-btn:disabled { background: #555; cursor: default; }
-        #toast { position: absolute; top: 30%; width: 100%; text-align: center; font-size: 34px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 3px 8px black; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+
+        #scoreboard { bottom: 52px; right: 12px; min-width: 290px; padding: 10px 12px; }
+        #scoreboard table { border-collapse: collapse; width: 100%; font: 11.5px/1.4 var(--mono); font-variant-numeric: tabular-nums; margin-top: 8px; }
+        #scoreboard th { color: var(--faint); font-weight: 600; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; text-align: right; padding: 3px 5px; border-bottom: 1px solid var(--line); }
+        #scoreboard td { text-align: right; padding: 3px 5px; }
+        #scoreboard th:first-child, #scoreboard td:first-child { text-align: left; font-family: var(--sans); }
+        #scoreboard tr.dead td { opacity: .45; }
+        #scoreboard tr.me td { color: var(--accent); }
+        .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+
+        #instructions { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); width: max-content; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; padding: 7px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; pointer-events: none; color: var(--muted); font-size: 11.5px; max-width: calc(100vw - 24px); }
+        kbd { font: 600 10.5px/1 var(--mono); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; margin-right: 4px; }
+
+        #shop { position: absolute; top: 12px; right: 12px; width: 300px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 12px 14px; display: none; backdrop-filter: blur(8px); }
+        #shop .eyebrow { margin-bottom: 10px; }
+        .shop-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+        .shop-item b { font-weight: 600; }
+        .shop-item small { color: var(--muted); grid-column: 1; }
+        .shop-item .cost { font: 600 11px/1 var(--mono); color: var(--warn); }
+        .shop-btn { grid-row: 1 / span 2; grid-column: 2; appearance: none; background: var(--accent); color: #04201c; border: 0; border-radius: 6px; padding: 7px 12px; font: 700 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+        .shop-btn:hover { filter: brightness(1.1); }
+        .shop-btn:disabled { background: var(--line-2); color: var(--faint); cursor: default; }
+
+        #toast { position: absolute; top: 28%; width: 100%; text-align: center; font: 800 30px/1 var(--mono); letter-spacing: .18em; text-shadow: 0 3px 12px rgba(0, 0, 0, .8); pointer-events: none; opacity: 0; transition: opacity .3s; }
         #toast.show { opacity: 1; }
-        #damage-flash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(255,0,0,0.75); opacity: 0; }
+        #damage-flash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(248, 113, 113, .75); opacity: 0; }
         #fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-        .pop { position: absolute; font-weight: 800; font-size: 18px; text-shadow: 0 2px 3px black; transform: translate(-50%, -50%); animation: rise 0.8s ease-out forwards; }
+        .pop { position: absolute; font: 800 18px/1 var(--mono); text-shadow: 0 2px 4px #000; transform: translate(-50%, -50%); animation: rise .8s ease-out forwards; }
         @keyframes rise { to { transform: translate(-50%, -260%); opacity: 0; } }
+        #win { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 32px 40px; text-align: center; z-index: 10; box-shadow: 0 0 0 6px rgba(94, 234, 212, .12); }
+        #win h1 { margin: 12px 0 6px; font: 700 28px/1.1 var(--sans); letter-spacing: -.02em; }
+        #win p { margin: 0; color: var(--muted); }
+        @media (max-width: 860px) { #wave-panel { top: auto; bottom: 64px; left: 12px; transform: none; width: 260px; min-width: 0; } #scoreboard { display: none; } }
     </style>
 </head>
 <body>
     <div id="ui" class="panel">
-        <h2>River Escape</h2>
+        <div class="eyebrow"><i></i>River Escape</div>
         <div id="mode">Connecting…</div>
-        <div id="health">Health: 100</div>
+        <div id="status" hidden></div>
+        <div class="hull"><span class="label">Hull</span><span id="health">100 / 100</span></div>
         <div class="bar"><i id="health-bar"></i></div>
-        <div id="coins">Coins: 50</div>
+        <div class="kpis">
+            <div class="kpi"><b><span id="kpi-kn">0.0</span><small>kn</small></b><span class="label">Speed</span></div>
+            <div class="kpi"><b><span id="kpi-ms">0.0</span><small>m/s</small></b><span class="label">Velocity</span></div>
+            <div class="kpi"><b id="kpi-hdg">000°</b><span class="label">Heading</span></div>
+            <div class="kpi"><b id="kpi-alt">afloat</b><span class="label">Waterline</span></div>
+            <div class="kpi"><b id="coins">50</b><span class="label">Coins</span></div>
+            <div class="kpi"><b id="kpi-threats">0</b><span class="label">Threats</span></div>
+        </div>
         <div id="my-upgrades"></div>
     </div>
 
     <div id="wave-panel" class="panel">
-        <div id="wave-label">WAVE 1 / 10</div>
+        <div class="wave-head"><span id="wave-label">WAVE 1 / 10</span><span id="distance">1500 m</span></div>
         <div id="wave-pips"></div>
-        <div id="distance">1500 m to the river mouth</div>
+        <div id="river-track"><span id="me-marker"></span></div>
+        <div class="track-legend"><span>START</span><span class="shop">▨ CITY SHOP</span><span>│ CHECKPOINT</span><span>MOUTH</span></div>
         <div id="enemy-bars"></div>
     </div>
 
     <div id="scoreboard" class="panel">
+        <div class="eyebrow"><i></i>Crew</div>
         <table>
-            <thead><tr><th>Crew</th><th>Kills</th><th>Dmg</th><th>HP</th><th>Score</th></tr></thead>
+            <thead><tr><th>Name</th><th>Kills</th><th>Dmg</th><th>HP</th><th>Score</th></tr></thead>
             <tbody id="score-rows"></tbody>
         </table>
     </div>
 
     <div id="shop">
-        <h3>City Shop (Press E to close)</h3>
-        <div class="shop-item">Motor (Faster speed, harder turning) - 10c <button class="shop-btn" data-upgrade="motor">Buy</button></div>
-        <div class="shop-item">Squeaky Hammer (More damage) - 15c <button class="shop-btn" data-upgrade="weapon">Buy</button></div>
-        <div class="shop-item">Raft Armor (+50 Max Health) - 20c <button class="shop-btn" data-upgrade="armor">Buy</button></div>
+        <div class="eyebrow"><i></i>City shop · <kbd>E</kbd> close</div>
+        <div class="shop-item"><b>Motor <span class="cost">10c</span></b><small>+thrust on W, heavier helm</small><button class="shop-btn" data-upgrade="motor">Buy</button></div>
+        <div class="shop-item"><b>Squeaky Hammer <span class="cost">15c</span></b><small>30 damage per hit</small><button class="shop-btn" data-upgrade="weapon">Buy</button></div>
+        <div class="shop-item"><b>Raft Armor <span class="cost">20c</span></b><small>+50 max hull</small><button class="shop-btn" data-upgrade="armor">Buy</button></div>
     </div>
 
     <div id="toast"></div>
     <div id="damage-flash"></div>
     <div id="fx"></div>
+    <div id="win" hidden><div class="eyebrow"><i></i>Run complete</div><h1>River escaped</h1><p>You and your crew survived.</p></div>
 
     <div id="instructions">
-        WASD paddle/steer | SPACE jump | LEFT CLICK attack | RIGHT CLICK block | E shop near the city | M mute
+        <span><kbd>W</kbd><kbd>S</kbd>paddle</span><span><kbd>A</kbd><kbd>D</kbd>steer</span><span><kbd>Space</kbd>jump</span>
+        <span><kbd>LMB</kbd>attack</span><span><kbd>RMB</kbd>block</span><span><kbd>Mouse</kbd>orbit</span><span><kbd>E</kbd>shop</span><span><kbd>M</kbd>mute</span>
     </div>
 
     <script type="importmap">

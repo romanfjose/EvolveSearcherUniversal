@@ -26,9 +26,10 @@ You don't need a flag. If the page can't reach a Socket.io server, it switches t
 
 | Input | Action |
 |---|---|
-| `W` / `S` | Paddle both sides forward / back |
-| `A` / `D` | Paddle right side only / left side only (steer) |
-| `Space` | Jump. The raft goes into your inventory mid-air. Standing on a plank or tree (y > 1) makes you immune to the wizard |
+| `W` / `S` | Paddle forward / back water at half power |
+| `A` / `D` | Steer left / right. The turn rate is direct and dies within 0.4 s of letting go |
+| `Space` | Jump from the water or a plank. The raft goes into your inventory mid-air and you splash back down onto the surface. Standing on a plank or tree (y > 1) makes you immune to the wizard |
+| Mouse | Orbit the chase camera; it eases back behind the raft after about a second |
 | Left click | Attack (click the scene first to lock the mouse). The lunge adds a small forward thrust |
 | Right click (hold) | Block: 80 % less damage, and you can't be thrown |
 | `E` | Open the shop at the city on the right bank (x > 10, z −150…−250) |
@@ -48,7 +49,7 @@ All the numbers live in [`shared/game-core.js`](shared/game-core.js). The test s
 
   | Upgrade | Cost | Effect |
   |---|---|---|
-  | Motor | 10 | +100 thrust while paddling forward; turning is heavier |
+  | Motor | 10 | +200 N thrust while paddling forward; 30 % slower turn rate |
   | Squeaky Hammer | 15 | 30 damage per hit instead of 10 |
   | Raft Armor | 20 | +50 max HP |
 
@@ -67,6 +68,16 @@ The bots follow a small state machine: `follow → engage → evade → advance`
 
 Bots buy upgrades in the city band in this order: hammer, armor, motor.
 
+## Raft handling
+
+`stepWatercraftKinematics` in [`shared/game-core.js`](shared/game-core.js) is the controller, and the tests run it directly. In the browser, `driveWatercraft` sets the velocity at a fixed 60 Hz step, cannon-es resolves collisions and integrates, and `settleOnWater` applies the floor.
+
+- **Water floor.** A raft at or below the waterline that is not rising is held on `WATER_SURFACE_Y` (0.25) with zero vertical speed. No input can push it underwater.
+- **Yaw only.** The physics body has `angularFactor (0, 1, 0)`. Banking into turns, the planing nose-up, the bob and the oar strokes exist only on the Three.js child group.
+- **Keel.** Horizontal velocity is split along the heading (drag 6.7 /s) and across it (8 × that). Both are solved exactly per step, so the raft carves where it points at any frame rate.
+- **Helm.** `A`/`D` set a target yaw rate. The rate reaches it, and drops back to zero on release, at 16 /s.
+- **Jump.** Jumping sets 18 m/s upward against 30 m/s² gravity. The raft rises 5.4 m and is in the air for 1.2 s.
+
 ## Architecture
 
 ```
@@ -76,8 +87,10 @@ shared/loopback.js    in-browser Socket.io stand-in: owns a game state, ticks it
                       and delivers routed events to local handlers (structured-cloned like wire data)
 server.js             Express + Socket.io: the same core, with events routed to rooms
 public/js/net.js      transport picker: real server if reachable, otherwise loopback
-public/js/main.js     Three.js rendering and cannon-es raft physics (client-authoritative movement)
-public/js/hud.js      HUD (health, wave pips, enemy bars, scoreboard, toasts, damage numbers), WebAudio SFX
+public/js/main.js     Three.js rendering, cannon-es collisions driven by the shared watercraft controller
+                      (client-authoritative movement), chase camera, wake/splash FX
+public/js/hud.js      HUD (hull, speed/heading telemetry, river progress, wave pips, enemy bars, scoreboard,
+                      toasts, damage numbers), WebAudio SFX
 docs/index.html       static landing page → ../public/index.html?offline&bots=N
 ```
 
@@ -115,9 +128,9 @@ The server listens on `PORT` (default `3000`) and serves `public/`, with `shared
 npm test
 ```
 
-The suite has 70 `node:test` cases, with no browser and no dependencies:
+The suite has 77 `node:test` cases, with no browser and no dependencies:
 
-- raft physics math
+- raft physics math and the watercraft controller (never below the waterline, keel grip, helm stop, jump arc)
 - upgrade costs and stats
 - wave scaling
 - spawning

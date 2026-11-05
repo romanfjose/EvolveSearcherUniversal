@@ -20,6 +20,7 @@ const enemyAt = (state, type, pos, extra = {}) => {
     Object.assign(state.enemies[type].position, pos);
     return Object.assign(state.enemies[type], extra);
 };
+const raftAt = (yaw = 0, y = G.WATER_SURFACE_Y) => ({ position: { x: 0, y, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, angularVelocity: { x: 0, y: 0, z: 0 }, yaw });
 const runTicks = (state, n) => { const out = []; for (let i = 0; i < n; i++) out.push(...G.tick(state)); return out; };
 
 describe('raft physics math', () => {
@@ -38,39 +39,20 @@ describe('raft physics math', () => {
         assert.equal(G.riverCurrentForce(30, -1000), 0);
     });
 
-    test('buoyancy is a spring centred 0.5 above the surface, off beyond the band', () => {
-        assert.equal(G.buoyancyForce(0), 30);
-        assert.equal(G.buoyancyForce(-0.5), 60);
-        assert.equal(G.buoyancyForce(0.5), 0);
-        assert.ok(G.buoyancyForce(0.9) < 0); // skimming rafts are pulled back down
-        assert.equal(G.buoyancyForce(1), 0);
-        assert.equal(G.isSubmerged(0.999), true);
-        assert.equal(G.isSubmerged(1), false);
+    test('thrust: W paddles both sides, motor only adds while paddling, S backs water at half power', () => {
+        assert.equal(G.watercraftThrust({ w: true }), 400);
+        assert.equal(G.watercraftThrust({ w: true }, ['motor']), 600);
+        assert.equal(G.watercraftThrust({ a: true }, ['motor']), 0);
+        assert.equal(G.watercraftThrust({ s: true }), -200);
+        assert.equal(G.watercraftThrust({}, [], true), 100);
     });
 
-    test('paddle forces: W both, A right only, D left only, S reverses', () => {
-        assert.deepEqual(G.paddleForces({ w: true }), { left: 200, right: 200 });
-        assert.deepEqual(G.paddleForces({ a: true }), { left: 0, right: 200 });
-        assert.deepEqual(G.paddleForces({ d: true }), { left: 200, right: 0 });
-        assert.deepEqual(G.paddleForces({ s: true }), { left: -200, right: -200 });
-        assert.deepEqual(G.paddleForces({ w: true, a: true }), { left: 200, right: 400 });
-        assert.deepEqual(G.paddleForces({}), { left: 0, right: 0 });
-    });
-
-    test('motor boosts only while paddling forward; attacking lunges', () => {
-        assert.deepEqual(G.paddleForces({ w: true }, ['motor']), { left: 300, right: 300 });
-        assert.deepEqual(G.paddleForces({ a: true }, ['motor']), { left: 0, right: 200 });
-        assert.deepEqual(G.paddleForces({}, [], true), { left: 50, right: 50 });
-    });
-
-    test('steady-state speed matches the per-frame drag recurrence', () => {
-        for (const force of [100, 500, 700]) {
-            let v = 0;
-            for (let i = 0; i < 600; i++) v = PHYSICS.waterDragPerFrame * (v + force / PLAYER.mass / PHYSICS.fps);
-            assert.ok(Math.abs(v - G.steadyStateSpeed(force)) < 1e-9);
-        }
+    test('steady-state speed is F/(m·k) and the controller converges to it', () => {
         assert.ok(Math.abs(G.steadyStateSpeed(100) - 3) < 1e-9); // drifting
         assert.ok(Math.abs(G.steadyStateSpeed(500) - 15) < 1e-9); // paddling + current
+        const craft = raftAt(Math.PI * 0); // heading downriver, so the current adds to the paddle
+        for (let i = 0; i < 600; i++) G.stepWatercraftKinematics(craft, { w: true }, 1 / 60);
+        assert.ok(Math.abs(-craft.velocity.z - G.steadyStateSpeed(400 - G.riverCurrentForce(0, craft.position.z))) < 0.05);
     });
 
     test('water clears from muddy start to the finish line', () => {
@@ -89,6 +71,119 @@ describe('raft physics math', () => {
     });
 });
 
+describe('arcade watercraft controller', () => {
+    const H = 1 / 60;
+    const fwd = (c) => { const h = G.headingOf(c.yaw); return c.velocity.x * h.x + c.velocity.z * h.z; };
+    const lat = (c) => { const h = G.headingOf(c.yaw); return c.velocity.x * -h.z + c.velocity.z * h.x; };
+
+    test('full W + motor + attack thrust while carving A/D never goes underwater, at any yaw', () => {
+        const rng = G.createRng(7);
+        for (let k = 0; k < 24; k++) {
+            const craft = raftAt((k / 24) * 2 * Math.PI - Math.PI);
+            for (let i = 0; i < 1000; i++) {
+                const left = Math.floor(i / 90) % 2 === 0;
+                const input = { w: true, a: left, d: !left, s: rng() < 0.05, attacking: true, upgrades: ['motor'] };
+                G.stepWatercraftKinematics(craft, input, H * (0.5 + rng())); // jittery frame times too
+                assert.ok(craft.position.y >= G.WATER_SURFACE_Y, `y=${craft.position.y} at yaw ${craft.yaw}, step ${i}`);
+                assert.ok(Number.isFinite(craft.position.x + craft.position.z + craft.yaw));
+            }
+        }
+    });
+
+    test('keel grip: lateral slip decays at least 5x faster than forward speed', () => {
+        for (const yaw of [0, 0.7, -2.4, Math.PI]) {
+            const craft = raftAt(yaw);
+            craft.position.x = 40; // outside the channel: no current, pure drag
+            const h = G.headingOf(yaw);
+            craft.velocity.x = 10 * h.x + 10 * -h.z;
+            craft.velocity.z = 10 * h.z + 10 * h.x;
+            const f0 = fwd(craft), l0 = lat(craft);
+            G.stepWatercraftKinematics(craft, {}, 0.1);
+            const fwdRate = -Math.log(fwd(craft) / f0);
+            const latRate = -Math.log(lat(craft) / l0);
+            assert.ok(latRate >= 5 * fwdRate, `forward rate ${fwdRate}, lateral rate ${latRate}`);
+        }
+    });
+
+    test('handling is frame-rate independent', () => {
+        const run = (hz) => {
+            const craft = raftAt(0.3);
+            craft.position.x = 40;
+            for (let i = 0; i < hz; i++) G.stepWatercraftKinematics(craft, { w: true, a: true }, 1 / hz);
+            return craft;
+        };
+        const a = run(30), b = run(240);
+        assert.ok(Math.abs(fwd(a) - fwd(b)) < 0.01 * fwd(b)); // within 1 % after a full second of carving
+        assert.ok(Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) < 0.15);
+        assert.ok(Math.abs(a.angularVelocity.y - b.angularVelocity.y) < 1e-9);
+    });
+
+    test('A turns left, D turns right, at the full rate within a fraction of a second', () => {
+        const left = raftAt();
+        const right = raftAt();
+        for (let i = 0; i < 18; i++) { G.stepWatercraftKinematics(left, { a: true }, H); G.stepWatercraftKinematics(right, { d: true }, H); }
+        assert.ok(left.angularVelocity.y > 0.99 * PHYSICS.turnRate);
+        assert.ok(right.angularVelocity.y < -0.99 * PHYSICS.turnRate);
+        assert.ok(left.yaw > 0 && right.yaw < 0);
+    });
+
+    test('releasing A/D stops the rotation dead within 0.4 s', () => {
+        for (const upgrades of [[], ['motor']]) {
+            const craft = raftAt();
+            for (let i = 0; i < 60; i++) G.stepWatercraftKinematics(craft, { w: true, d: true, upgrades }, H);
+            let t = 0;
+            while (craft.angularVelocity.y !== 0 && t < 1) { G.stepWatercraftKinematics(craft, { w: true, upgrades }, H); t += H; }
+            assert.ok(t <= 0.4, `still turning after ${t.toFixed(3)} s`);
+            const yaw = craft.yaw;
+            for (let i = 0; i < 120; i++) G.stepWatercraftKinematics(craft, { w: true, upgrades }, H);
+            assert.equal(craft.yaw, yaw);
+        }
+    });
+
+    test('SPACE jumps above safeHeight in a parabola and lands back exactly on the surface', () => {
+        const craft = raftAt();
+        const { jumped } = G.stepWatercraftKinematics(craft, { space: true, w: true }, H);
+        assert.equal(jumped, true);
+        let peak = 0;
+        let landed = null;
+        for (let i = 0; i < 300 && landed === null; i++) {
+            const r = G.stepWatercraftKinematics(craft, { w: true }, H);
+            assert.ok(craft.position.y >= G.WATER_SURFACE_Y);
+            peak = Math.max(peak, craft.position.y);
+            if (r.impact !== null) landed = r.impact;
+        }
+        const apex = G.WATER_SURFACE_Y + PHYSICS.jumpVelocity ** 2 / (2 * PHYSICS.gravity);
+        assert.ok(peak > PLAYER.safeHeight && Math.abs(peak - apex) < 0.4);
+        assert.ok(landed > PHYSICS.jumpVelocity * 0.9); // comes down about as fast as it went up
+        assert.equal(craft.position.y, G.WATER_SURFACE_Y);
+        assert.equal(craft.velocity.y, 0);
+        assert.equal(G.stepWatercraftKinematics(craft, {}, H).jumped, false); // no jump without SPACE
+    });
+
+    test('mid-air SPACE does not double-jump; a solid footing (plank) allows the jump', () => {
+        const craft = raftAt(0, 3);
+        assert.equal(G.driveWatercraft(craft, { space: true }, H).jumped, false);
+        assert.equal(G.driveWatercraft(craft, { space: true, onSolid: true }, H).jumped, true);
+    });
+
+    test('the water floor lifts anything that ended up below the surface', () => {
+        const craft = raftAt(0, -3);
+        craft.velocity.y = -20;
+        assert.equal(G.settleOnWater(craft), 20);
+        assert.deepEqual([craft.position.y, craft.velocity.y], [G.WATER_SURFACE_Y, 0]);
+        assert.equal(G.settleOnWater(raftAt(0, 2)), null);
+    });
+
+    test('heading and yaw conventions agree with yawQuaternion', () => {
+        for (const [dx, dz] of [[0, -1], [-1, 0], [1, 1], [0.3, -2]]) {
+            const yaw = G.yawOfQuaternion(G.yawQuaternion(dx, dz));
+            const h = G.headingOf(yaw);
+            const n = Math.hypot(dx, dz);
+            assert.ok(Math.abs(h.x - dx / n) < 1e-9 && Math.abs(h.z - dz / n) < 1e-9);
+        }
+    });
+});
+
 describe('upgrades', () => {
     test('costs and starting purse: a fresh raft can afford the full kit exactly once', () => {
         const total = Object.values(G.UPGRADES).reduce((s, u) => s + u.cost, 0);
@@ -97,8 +192,8 @@ describe('upgrades', () => {
     });
 
     test('upgradeStats derives combat and handling numbers', () => {
-        assert.deepEqual(G.upgradeStats([]), { attackDamage: 10, maxHealthBonus: 0, motorBoost: 0, angularDrag: 1 });
-        assert.deepEqual(G.upgradeStats(['motor', 'weapon', 'armor']), { attackDamage: 30, maxHealthBonus: 50, motorBoost: 100, angularDrag: 0.95 });
+        assert.deepEqual(G.upgradeStats([]), { attackDamage: 10, maxHealthBonus: 0, motorBoost: 0, turnRate: PHYSICS.turnRate });
+        assert.deepEqual(G.upgradeStats(['motor', 'weapon', 'armor']), { attackDamage: 30, maxHealthBonus: 50, motorBoost: 100, turnRate: PHYSICS.turnRate * 0.7 });
     });
 
     test('canPurchase explains every refusal', () => {

@@ -107,13 +107,19 @@ describe('AI companion bots', () => {
         const bot = s.players.b0;
         bot.position = { x: 0, y: PLAYER.restY, z: 0 };
         G.spawnEnemy(s, 'whiteGuy', 0);
-        G.resolveEnemyHit(s, 'b0', 'whiteGuy', false);
+        const events = G.resolveEnemyHit(s, 'b0', 'whiteGuy', false);
         assert.ok(bot.velocity.y >= 10);
+        assert.deepEqual(bot.velocity, G.throwVelocity(named(events, 'playerThrown')[0].data.force)); // same launch as the human client
         s.enemies.whiteGuy.health = 0;
         let peak = 0;
-        for (let t = 0; t < 60; t++) { G.stepBot(s, bot, DT); peak = Math.max(peak, bot.position.y); }
+        for (let t = 0; t < 60; t++) {
+            G.stepBot(s, bot, DT);
+            assert.ok(bot.position.y >= G.WATER_SURFACE_Y);
+            peak = Math.max(peak, bot.position.y);
+        }
         assert.ok(peak > PLAYER.safeHeight);
-        assert.equal(bot.position.y, PLAYER.restY);
+        assert.equal(bot.position.y, G.WATER_SURFACE_Y);
+        assert.deepEqual(bot.velocity, { x: 0, y: 0, z: 0 });
         assert.ok(Math.abs(bot.position.x) <= BOT.xLimit);
     });
 

@@ -5,31 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dream River Racing Survival</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: sans-serif; }
-        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; }
-        #instructions { position: absolute; bottom: 10px; width: 100%; text-align: center; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; }
-        #shop { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; color: white; border-radius: 5px; display: none; }
-        .shop-item { margin-bottom: 10px; }
+        :root { --panel: rgba(8, 20, 32, 0.72); --ink: #f4f8fb; --muted: #9fb4c4; --ok: #5fd38d; --warn: #ffcf4a; --bad: #ff5a5a; }
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: system-ui, sans-serif; color: var(--ink); }
+        .panel { position: absolute; background: var(--panel); border-radius: 8px; padding: 10px 12px; pointer-events: none; backdrop-filter: blur(3px); }
+        .bar { height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; }
+        .bar > i { display: block; height: 100%; width: 100%; background: var(--ok); transition: width 0.15s; }
+        #ui { top: 10px; left: 10px; min-width: 190px; }
+        #ui h2 { margin: 0 0 6px; font-size: 16px; }
+        #mode { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+        #health { font-size: 14px; margin-bottom: 4px; }
+        #coins, #my-upgrades { font-size: 13px; color: var(--muted); margin-top: 6px; }
+        #wave-panel { top: 10px; left: 50%; transform: translateX(-50%); width: 280px; text-align: center; }
+        #wave-label { font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+        #wave-pips { display: flex; gap: 3px; margin-bottom: 6px; }
+        #wave-pips span { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.15); }
+        #wave-pips span.on { background: var(--warn); }
+        #distance { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+        #enemy-bars div { display: grid; grid-template-columns: 70px 1fr; gap: 6px; align-items: center; font-size: 11px; margin-top: 3px; text-align: left; }
+        #enemy-bars .bar > i { background: var(--bad); }
+        #scoreboard { bottom: 44px; right: 10px; font-size: 12px; min-width: 260px; }
+        #scoreboard table { border-collapse: collapse; width: 100%; }
+        #scoreboard th { color: var(--muted); font-weight: 500; text-align: right; padding: 2px 4px; }
+        #scoreboard td { text-align: right; padding: 2px 4px; }
+        #scoreboard th:first-child, #scoreboard td:first-child { text-align: left; }
+        #scoreboard tr.dead td { opacity: 0.45; }
+        #scoreboard tr.me td { color: var(--warn); }
+        .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+        #instructions { position: absolute; bottom: 10px; width: 100%; text-align: center; text-shadow: 1px 1px 2px black; pointer-events: none; font-size: 13px; }
+        #shop { position: absolute; top: 10px; right: 10px; background: var(--panel); padding: 10px 12px; border-radius: 8px; display: none; }
+        #shop h3 { margin: 0 0 8px; font-size: 14px; }
+        .shop-item { margin-bottom: 8px; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
         .shop-btn { background: #4CAF50; border: none; color: white; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
         .shop-btn:hover { background: #45a049; }
+        .shop-btn:disabled { background: #555; cursor: default; }
+        #toast { position: absolute; top: 30%; width: 100%; text-align: center; font-size: 34px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 3px 8px black; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+        #toast.show { opacity: 1; }
+        #damage-flash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(255,0,0,0.75); opacity: 0; }
+        #fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+        .pop { position: absolute; font-weight: 800; font-size: 18px; text-shadow: 0 2px 3px black; transform: translate(-50%, -50%); animation: rise 0.8s ease-out forwards; }
+        @keyframes rise { to { transform: translate(-50%, -260%); opacity: 0; } }
     </style>
 </head>
 <body>
-    <div id="ui">
+    <div id="ui" class="panel">
         <h2>River Escape</h2>
+        <div id="mode">Connecting…</div>
         <div id="health">Health: 100</div>
+        <div class="bar"><i id="health-bar"></i></div>
         <div id="coins">Coins: 50</div>
-    </div>
-    
-    <div id="shop">
-        <h3>City Shop (Press E to close)</h3>
-        <div class="shop-item">Motor (Faster speed, harder turning) - 10c <button class="shop-btn" onclick="buyUpgrade('motor')">Buy</button></div>
-        <div class="shop-item">Squeaky Hammer (More damage) - 15c <button class="shop-btn" onclick="buyUpgrade('weapon')">Buy</button></div>
-        <div class="shop-item">Raft Armor (+50 Max Health) - 20c <button class="shop-btn" onclick="buyUpgrade('armor')">Buy</button></div>
+        <div id="my-upgrades"></div>
     </div>
 
+    <div id="wave-panel" class="panel">
+        <div id="wave-label">WAVE 1 / 10</div>
+        <div id="wave-pips"></div>
+        <div id="distance">1500 m to the river mouth</div>
+        <div id="enemy-bars"></div>
+    </div>
+
+    <div id="scoreboard" class="panel">
+        <table>
+            <thead><tr><th>Crew</th><th>Kills</th><th>Dmg</th><th>HP</th><th>Score</th></tr></thead>
+            <tbody id="score-rows"></tbody>
+        </table>
+    </div>
+
+    <div id="shop">
+        <h3>City Shop (Press E to close)</h3>
+        <div class="shop-item">Motor (Faster speed, harder turning) - 10c <button class="shop-btn" data-upgrade="motor">Buy</button></div>
+        <div class="shop-item">Squeaky Hammer (More damage) - 15c <button class="shop-btn" data-upgrade="weapon">Buy</button></div>
+        <div class="shop-item">Raft Armor (+50 Max Health) - 20c <button class="shop-btn" data-upgrade="armor">Buy</button></div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="damage-flash"></div>
+    <div id="fx"></div>
+
     <div id="instructions">
-        WASD to steer/paddle | SPACE to jump | CLICK to attack | Approach City and press E to Shop
+        WASD paddle/steer | SPACE jump | LEFT CLICK attack | RIGHT CLICK block | E shop near the city | M mute
     </div>
 
     <script type="importmap">
@@ -41,12 +94,8 @@
             }
         }
     </script>
-    <script src="/socket.io/socket.io.js"></script>
+    <!-- Served by server.js; 404s harmlessly on static hosts, which switches the game to offline loopback mode. -->
+    <script src="socket.io/socket.io.js"></script>
     <script type="module" src="js/main.js"></script>
-    <script>
-        function buyUpgrade(type) {
-            window.buyUpgradeEvent(type);
-        }
-    </script>
 </body>
 </html>

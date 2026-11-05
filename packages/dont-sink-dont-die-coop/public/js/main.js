@@ -1,14 +1,25 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import {
+    RIVER, CHECKPOINTS, FINISH_Z, PHYSICS, PLAYER, ENEMY_TYPES,
+    paddleForces, riverCurrentForce, isSubmerged, buoyancyForce, waterClarity, upgradeStats, isInShopZone,
+} from '../../shared/game-core.js';
+import { createNetSocket } from './net.js';
+import { createHud, createSfx } from './hud.js';
 
-// Socket.io
-const socket = io();
+// Real Socket.io server when reachable, otherwise the in-browser loopback with AI bots.
+const socket = createNetSocket();
+const hud = createHud();
+const sfx = createSfx();
+socket.onMode((mode) => hud.setMode(mode, socket.bots));
 
-window.buyUpgradeEvent = (type) => {
-    socket.emit('buyUpgrade', type);
-};
+for (const btn of document.querySelectorAll('[data-upgrade]')) {
+    btn.addEventListener('click', () => socket.emit('buyUpgrade', btn.dataset.upgrade));
+}
 
-let myStats = { coins: 50, upgrades: [] };
+let myStats = { coins: PLAYER.startCoins, upgrades: [] };
+let myColor = 0xffffff;
+let myMaxHealth = PLAYER.startHealth;
 let shopOpen = false;
 
 // Setup Three.js Scene
@@ -95,8 +106,8 @@ const contactMaterial = new CANNON.ContactMaterial(physicsMaterial, physicsMater
 world.addContactMaterial(contactMaterial);
 
 // --- Environment ---
-const riverWidth = 30;
-const riverLength = 2000; // Longer for worm
+const riverWidth = RIVER.width;
+const riverLength = RIVER.length;
 
 const riverGeo = new THREE.PlaneGeometry(riverWidth, riverLength, 10, 100);
 const riverMesh = new THREE.Mesh(riverGeo, riverMaterial);
@@ -130,8 +141,7 @@ world.addBody(cityBody);
 
 // --- Checkpoints ---
 const checkpoints = [];
-for (let i = 1; i <= 8; i++) {
-    const cpZ = -i * 150;
+for (const cpZ of CHECKPOINTS) {
     const cpMesh = new THREE.Mesh(new THREE.BoxGeometry(riverWidth, 10, 2), checkpointMaterial);
     cpMesh.position.set(0, 5, cpZ);
     scene.add(cpMesh);
@@ -139,7 +149,7 @@ for (let i = 1; i <= 8; i++) {
 }
 
 // --- Finish Line ---
-const finishLineZ = -1500;
+const finishLineZ = FINISH_Z;
 const finishMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.8 });
 const finishMesh = new THREE.Mesh(new THREE.BoxGeometry(riverWidth, 20, 2), finishMaterial);
 finishMesh.position.set(0, 10, finishLineZ);
@@ -224,6 +234,19 @@ enemyMeshes.longWorm.rotation.x = Math.PI / 2; // Lie flat
 
 for (let key in enemyMeshes) scene.add(enemyMeshes[key]);
 let enemiesData = null;
+const hitPulse = { whiteGuy: 0, mudAlien: 0, longWorm: 0 };
+let cameraShake = 0;
+
+/** Project a world position to CSS pixels for floating combat text. */
+function toScreen(pos, lift = 2) {
+    const v = new THREE.Vector3(pos.x, pos.y + lift, pos.z).project(camera);
+    if (v.z > 1) return null;
+    return { x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight };
+}
+function popAt(pos, text, color, lift) {
+    const at = toScreen(pos, lift);
+    if (at) hud.pop(at, text, color);
+}
 
 socket.on('enemiesUpdate', (data) => {
     enemiesData = data;
@@ -243,6 +266,35 @@ socket.on('enemiesUpdate', (data) => {
     }
 });
 socket.on('enemyRespawn', (e) => { if(enemyMeshes[e.id]) enemyMeshes[e.id].visible = true; });
+
+socket.on('enemyHit', (d) => {
+    const mesh = enemyMeshes[d.id];
+    if (!mesh) return;
+    hitPulse[d.id] = 1;
+    const mine = d.by === socket.id;
+    const attacker = mine ? myRaft : otherPlayers[d.by];
+    if (attacker && !mine) swingPaddle(attacker.paddle);
+    const squeaky = mine ? myStats.upgrades.includes('weapon') : d.damage > PLAYER.baseDamage;
+    if (attacker) sfx.hit(squeaky, mine ? 1 : 0.35);
+    popAt(mesh.position, `-${d.damage}`, mine ? '#ffd84a' : d.by.startsWith('police') ? '#7fb2ff' : '#ffffff', 3);
+});
+
+socket.on('enemyKilled', (d) => {
+    if (enemyMeshes[d.id]) popAt(enemyMeshes[d.id].position, 'KO!', '#ff9d3c', 4);
+    if (d.by === socket.id) sfx.kill();
+});
+
+socket.on('waveChanged', (d) => {
+    hud.toast(`WAVE ${d.wave}`);
+    sfx.wave();
+});
+
+socket.on('teamWiped', (d) => {
+    hud.toast(`CREW SUNK — regrouping in ${Math.round(d.respawnInMs / 1000)}s`, d.respawnInMs);
+    sfx.down();
+});
+
+socket.on('scoreboard', (sb) => hud.renderScoreboard(sb, socket.id));
 
 // --- NPCs ---
 let npcMeshes = {};
@@ -308,6 +360,11 @@ function createRaftMesh(color, upgrades=[]) {
     return { group: group, raft: raftMesh, paddle: weaponMesh, dude: dudeBody };
 }
 
+function swingPaddle(paddle) {
+    paddle.rotation.x = Math.PI / 4;
+    setTimeout(() => { paddle.rotation.x = 0; }, 200);
+}
+
 function reRenderMyRaft(p) {
     if (myRaft) {
         scene.remove(myRaft.mesh);
@@ -326,7 +383,10 @@ socket.on('currentPlayers', (players) => {
             const p = players[id];
             myStats.coins = p.coins;
             myStats.upgrades = p.upgrades;
-            document.getElementById('coins').innerText = `Coins: ${myStats.coins}`;
+            myColor = p.color;
+            myMaxHealth = p.maxHealth;
+            hud.setStats(myStats);
+            hud.setHealth(p.health, p.maxHealth);
             
             const raftBody = new CANNON.Body({
                 mass: 5,
@@ -346,6 +406,7 @@ socket.on('currentPlayers', (players) => {
             const p = players[id];
             const visuals = createRaftMesh(p.color, p.upgrades);
             visuals.group.position.set(p.position.x, p.position.y, p.position.z);
+            visuals.group.visible = !p.isDead;
             otherPlayers[id] = visuals;
         }
     });
@@ -374,26 +435,46 @@ socket.on('playerMoved', (p) => {
 socket.on('playerHealthUpdate', (data) => {
     if (data.id === socket.id) {
         myHealth = data.health;
-        document.getElementById('health').innerText = `Health: ${Math.max(0, myHealth)}`;
+        if (data.maxHealth) myMaxHealth = data.maxHealth;
+        if (!isDead) hud.setHealth(myHealth, myMaxHealth);
+        if (data.damage > 0) {
+            hud.flashDamage(data.blocked ? 0 : data.damage / 40);
+            cameraShake = data.blocked ? 0.15 : 0.5;
+            sfx.hurt(data.blocked);
+            if (myRaft) popAt(myRaft.mesh.position, data.blocked ? `BLOCK -${data.damage}` : `-${data.damage}`, '#ff5a5a', 2.5);
+        }
+    } else if (data.damage > 0 && otherPlayers[data.id]) {
+        popAt(otherPlayers[data.id].group.position, `-${data.damage}`, '#ff8a8a', 2.5);
     }
 });
 
 socket.on('playerStatsUpdate', (p) => {
     myStats.coins = p.coins;
     myStats.upgrades = p.upgrades;
-    document.getElementById('coins').innerText = `Coins: ${myStats.coins}`;
+    hud.setStats(myStats);
 });
 
-socket.on('upgradePurchased', (type) => {
-    // Rerender local raft to show upgrade visually
-    // In a real app we'd fetch full player data, but we can fake it:
-    reRenderMyRaft({color: myRaft.mesh.material.color.getHex(), upgrades: myStats.upgrades, position: myRaft.body.position, quaternion: myRaft.body.quaternion});
+socket.on('upgradePurchased', () => {
+    reRenderMyRaft({ color: myColor, upgrades: myStats.upgrades });
+});
+
+socket.on('playerUpgraded', (d) => {
+    const old = otherPlayers[d.id];
+    if (!old) return;
+    const visuals = createRaftMesh(d.color, d.upgrades);
+    visuals.group.position.copy(old.group.position);
+    visuals.group.quaternion.copy(old.group.quaternion);
+    visuals.group.visible = old.group.visible;
+    scene.remove(old.group);
+    otherPlayers[d.id] = visuals;
 });
 
 socket.on('playerDied', (id) => {
     if (id === socket.id) {
         isDead = true;
-        document.getElementById('health').innerText = "DEAD - Spectating";
+        hud.setStatus('DEAD - Spectating', 'var(--bad)');
+        hud.toast('YOU SANK — reach a checkpoint, crew!');
+        sfx.down();
         if (myRaft) myRaft.mesh.visible = false;
     } else if (otherPlayers[id]) {
         otherPlayers[id].group.visible = false;
@@ -404,7 +485,8 @@ socket.on('playerRevived', (p) => {
     if (p.id === socket.id) {
         isDead = false;
         myHealth = p.health;
-        document.getElementById('health').innerText = `Health: ${myHealth}`;
+        hud.setStatus('');
+        hud.setHealth(myHealth, myMaxHealth);
         if (myRaft) {
             myRaft.mesh.visible = true;
             myRaft.body.position.set(0, 5, p.position.z);
@@ -425,9 +507,8 @@ socket.on('playerThrown', (data) => {
 
 socket.on('gameWon', (winningPlayerId) => {
     gameWon = true;
-    document.getElementById('health').innerText = `YOU WIN! CO-OP ESCAPE!`;
-    document.getElementById('health').style.color = '#00FF00';
-    document.getElementById('health').style.fontSize = '2em';
+    hud.setStatus('YOU WIN! CO-OP ESCAPE!', 'var(--ok)');
+    sfx.kill();
     // Let's pop up a generic win div
     const winDiv = document.createElement('div');
     winDiv.innerHTML = "<h1>RIVER ESCAPED!</h1><p>You and your friends survived.</p>";
@@ -469,6 +550,10 @@ const cameraDistance = 15;
 window.addEventListener('contextmenu', e => e.preventDefault());
 
 // Pointer Lock for camera movement
+const unlockAudio = () => sfx.unlock();
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+
 document.body.addEventListener('click', () => {
     if (!shopOpen && !inIntroSequence) {
         document.body.requestPointerLock();
@@ -494,6 +579,7 @@ document.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('keydown', (e) => { 
+    if (e.key.toLowerCase() === 'm') hud.toast(sfx.toggle() ? 'SOUND OFF' : 'SOUND ON', 800);
     if (inIntroSequence) return; // Disable controls during intro
 
     if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; 
@@ -504,8 +590,8 @@ window.addEventListener('keydown', (e) => {
         if (shopOpen) {
             document.getElementById('shop').style.display = 'none';
             shopOpen = false;
-        } else if (myRaft && myRaft.mesh.position.x > 10 && myRaft.mesh.position.z > -250 && myRaft.mesh.position.z < -150) {
-            // Near city
+        } else if (myRaft && isInShopZone(myRaft.mesh.position)) {
+            hud.setStats(myStats);
             document.getElementById('shop').style.display = 'block';
             shopOpen = true;
         }
@@ -527,7 +613,7 @@ window.addEventListener('mousedown', (e) => {
             for(const key in enemiesData) {
                 const enemy = enemiesData[key];
                 if (enemy.health > 0) {
-                    if (myRaft.mesh.position.distanceTo(enemyMeshes[key].position) < 4) {
+                    if (myRaft.mesh.position.distanceTo(enemyMeshes[key].position) < PLAYER.attackRange) {
                         socket.emit('playerHitEnemy', { enemyId: key });
                     }
                 }
@@ -557,7 +643,8 @@ window.addEventListener('mouseup', (e) => {
 
 // --- Game Loop ---
 const clock = new THREE.Clock();
-const baseRiverForce = new CANNON.Vec3(0, 0, -100); // Re-tuned for fluid dynamics
+const muddyColor = new THREE.Color('#5c4a3d');
+const clearColor = new THREE.Color('#0f5e9c');
 let lastSync = 0;
 let lastEnemyHit = 0;
 
@@ -590,70 +677,25 @@ function animate() {
         waterTex.offset.y -= delta * 0.5;
 
         // Dynamically change water color from muddy to clear based on Z progress
-        const maxMudZ = -100;
-        const maxClearZ = -1500; // Finish line
-        let progress = (myRaft.body.position.z - maxMudZ) / (maxClearZ - maxMudZ);
-        progress = Math.max(0, Math.min(1, progress));
-
-        const muddyColor = new THREE.Color('#5c4a3d'); // Deeper muddy brown
-        const clearColor = new THREE.Color('#0f5e9c'); // Deeper clear blue, less bright
-        riverMaterial.color.lerpColors(muddyColor, clearColor, progress);
+        riverMaterial.color.lerpColors(muddyColor, clearColor, waterClarity(myRaft.body.position.z));
 
         // Fluid Dynamics (Buoyancy and Drag)
-        const waterLevel = 0; // River mesh is at y=0
-        const depth = waterLevel - myRaft.body.position.y;
-
-        // If raft is in water
-        if (depth > -1) {
+        const { x: px, y: py, z: pz } = myRaft.body.position;
+        if (isSubmerged(py)) {
             canJump = true; // Allow jumping off water surface
+            myRaft.body.applyForce(new CANNON.Vec3(0, buoyancyForce(py), 0), myRaft.body.position);
 
-            // Buoyancy force pushing up
-            const buoyancyForce = new CANNON.Vec3(0, (depth + 0.5) * 60, 0);
-            myRaft.body.applyForce(buoyancyForce, myRaft.body.position);
+            // Simulated fluid drag (damps movement inside water)
+            myRaft.body.velocity.scale(PHYSICS.waterDragPerFrame, myRaft.body.velocity);
+            myRaft.body.angularVelocity.scale(PHYSICS.waterDragPerFrame, myRaft.body.angularVelocity);
 
-            // Apply simulated fluid drag (damps movement inside water)
-            myRaft.body.velocity.scale(0.9, myRaft.body.velocity);
-            myRaft.body.angularVelocity.scale(0.9, myRaft.body.angularVelocity);
-
-            // Dynamic river mechanic: current pushes raft downriver
-            const riverForceMultiplier = 1 + Math.max(0, -myRaft.body.position.z / 500);
-            const currentForce = new CANNON.Vec3(0, 0, baseRiverForce.z * riverForceMultiplier);
-            if (myRaft.body.position.x > -15 && myRaft.body.position.x < 15) {
-                myRaft.body.applyForce(currentForce, myRaft.body.position);
-            }
+            // River current strengthens downriver; none outside the channel
+            const current = riverCurrentForce(px, pz);
+            if (current !== 0) myRaft.body.applyForce(new CANNON.Vec3(0, 0, current), myRaft.body.position);
         }
 
-        // Raft Movement Dynamics
-        let paddleForceLeft = 0;
-        let paddleForceRight = 0;
-        const basePaddleForce = 200; // Tuned for fluid drag
-
-        if (keys.w) {
-            paddleForceLeft += basePaddleForce;
-            paddleForceRight += basePaddleForce;
-        }
-        if (keys.s) {
-            paddleForceLeft -= basePaddleForce;
-            paddleForceRight -= basePaddleForce;
-        }
-        if (keys.a) {
-            paddleForceRight += basePaddleForce; // Right paddle only
-        }
-        if (keys.d) {
-            paddleForceLeft += basePaddleForce; // Left paddle only
-        }
-
-        if (myStats.upgrades.includes('motor')) {
-            // Motor gives a general forward boost if W is pressed
-            if (keys.w) {
-                 paddleForceLeft += 100;
-                 paddleForceRight += 100;
-            }
-        }
-        if (isAttacking) {
-            paddleForceLeft += 50;
-            paddleForceRight += 50;
-        }
+        // Raft Movement Dynamics (A drives the right paddle, D the left one)
+        const { left: paddleForceLeft, right: paddleForceRight } = paddleForces(keys, myStats.upgrades, isAttacking);
 
         // Apply forces locally
         // Raft width is raftSize.w = 2, so left/right offsets are approx x = -1 and x = 1
@@ -670,12 +712,11 @@ function animate() {
         }
 
         // Motor simulates harder turning via angular drag
-        if (myStats.upgrades.includes('motor')) {
-             myRaft.body.angularVelocity.scale(0.95, myRaft.body.angularVelocity);
-        }
+        const angularDrag = upgradeStats(myStats.upgrades).angularDrag;
+        if (angularDrag !== 1) myRaft.body.angularVelocity.scale(angularDrag, myRaft.body.angularVelocity);
 
         if (keys.space && canJump) {
-            myRaft.body.velocity.y = 15; // Increased jump velocity so raft can reach obstacles
+            myRaft.body.velocity.y = PHYSICS.jumpVelocity; // high enough to reach planks and trees
             canJump = false;
             // Put raft in inventory when jumping
             if (myRaft.raftMesh) myRaft.raftMesh.visible = false;
@@ -702,11 +743,11 @@ function animate() {
         myRaft.mesh.quaternion.copy(myRaft.body.quaternion);
 
         // Enemy collision / damage
-        if (enemiesData && now - lastEnemyHit > 1000) {
+        if (enemiesData && now - lastEnemyHit > PLAYER.hitCooldownMs) {
             for(const key in enemiesData) {
                 const enemy = enemiesData[key];
                 if (enemy.health > 0) {
-                    if (myRaft.mesh.position.distanceTo(enemyMeshes[key].position) < (key === 'longWorm' ? 5 : 3)) {
+                    if (myRaft.mesh.position.distanceTo(enemyMeshes[key].position) < ENEMY_TYPES[key].hitRadius) {
                         socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking: isBlocking });
                         lastEnemyHit = now;
                     }
@@ -743,6 +784,12 @@ function animate() {
         }
     }
 
+    // Hit feedback: enemies swell briefly when struck
+    for (const key in hitPulse) {
+        hitPulse[key] = Math.max(0, hitPulse[key] - delta * 5);
+        enemyMeshes[key].scale.setScalar(1 + 0.35 * hitPulse[key]);
+    }
+
     // Camera
     if (myRaft) {
         if (inIntroSequence) {
@@ -770,6 +817,11 @@ function animate() {
             const desiredCamPos = new THREE.Vector3(camX, camY, camZ);
             camera.position.lerp(desiredCamPos, 0.2); // Smooth camera movement
             camera.lookAt(targetPos.x, targetPos.y + 1, targetPos.z);
+            if (cameraShake > 0) {
+                camera.position.x += (Math.random() - 0.5) * cameraShake;
+                camera.position.y += (Math.random() - 0.5) * cameraShake;
+                cameraShake = Math.max(0, cameraShake - delta * 2);
+            }
         }
     }
 

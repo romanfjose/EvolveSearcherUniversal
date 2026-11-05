@@ -402,7 +402,9 @@ function boot() {
 
   function renderAll() {
     renderLanes(); renderEngines(); renderList(); renderDiagnostics(); renderReport();
-    if (state.group) showGroup(state.group);
+    const vs = visible();
+    if (!state.group || !vs.some(x => x.key === state.group)) state.group = vs[0]?.key || '';
+    showGroup(state.group);
   }
 
   function renderLanes() {

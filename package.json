@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node ui/serve.mjs",
-    "test": "node --test ui/*.test.mjs 0-SelfEvolveUniversalTemplate/tools/*.test.mjs"
+    "test": "node --test ui/*.test.mjs 0-SelfEvolveUniversalTemplate/tools/*.test.mjs",
+    "test:all": "node scripts/test-all-packages.mjs"
   },
   "engines": {
     "node": ">=20"

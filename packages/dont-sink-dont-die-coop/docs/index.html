@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Don't Sink, Don't Die</title>
+    <style>
+        :root { --bg: #0b1d2a; --card: #12293a; --ink: #eef5fa; --muted: #9fb4c4; --accent: #ffcf4a; --line: #24465e; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+               background: radial-gradient(circle at 50% 0%, #1b4e6e, var(--bg) 70%); color: var(--ink); font-family: system-ui, sans-serif; }
+        main { width: 100%; max-width: 560px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+        h1 { margin: 0 0 4px; font-size: 28px; }
+        p { color: var(--muted); line-height: 1.5; margin: 0 0 18px; }
+        fieldset { border: 0; padding: 0; margin: 0 0 20px; }
+        legend { font-weight: 600; margin-bottom: 8px; }
+        .bots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .bots label { border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; }
+        .bots input { display: none; }
+        .bots input:checked + span { color: var(--accent); font-weight: 700; }
+        .bots label:has(input:checked) { border-color: var(--accent); }
+        .bots small { display: block; color: var(--muted); margin-top: 4px; font-size: 12px; }
+        a.play { display: block; text-align: center; background: var(--accent); color: #1a1300; font-weight: 800; letter-spacing: 1px;
+                 text-decoration: none; padding: 14px; border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 14px; }
+        td { padding: 5px 0; border-top: 1px solid var(--line); }
+        td:first-child { color: var(--accent); font-family: ui-monospace, monospace; width: 40%; }
+        footer { margin-top: 16px; font-size: 12px; color: var(--muted); }
+        footer a { color: var(--muted); }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Don't Sink, Don't Die</h1>
+    <p>Co-op 3D raft survival down a 1.5 km river. This build needs no server: the game runs its authoritative
+       tick loop in your browser and fills the raft with AI companions who fight, shop and revive you at checkpoints.</p>
+
+    <fieldset>
+        <legend>AI crew</legend>
+        <div class="bots">
+            <label><input type="radio" name="bots" value="1"><span>1 bot</span><small>wizard opener</small></label>
+            <label><input type="radio" name="bots" value="2" checked><span>2 bots</span><small>mud alien opener</small></label>
+            <label><input type="radio" name="bots" value="3"><span>3 bots</span><small>long worm opener</small></label>
+        </div>
+    </fieldset>
+
+    <a class="play" id="play" href="../public/index.html?offline&bots=2">PLAY OFFLINE</a>
+
+    <table>
+        <tr><td>W A S D</td><td>Paddle and steer</td></tr>
+        <tr><td>Space</td><td>Jump onto planks and trees (the wizard can't reach you there)</td></tr>
+        <tr><td>Left click</td><td>Attack (click the scene first to lock the mouse)</td></tr>
+        <tr><td>Right click</td><td>Block: 80% damage reduction, no throw</td></tr>
+        <tr><td>E</td><td>Shop at the city on the right bank (≈200 m)</td></tr>
+        <tr><td>M</td><td>Mute</td></tr>
+    </table>
+    <footer>Want real friends instead? Run the Socket.io server: see the <a href="../README.md">README</a>.</footer>
+</main>
+<script>
+    const play = document.getElementById('play');
+    for (const input of document.querySelectorAll('input[name=bots]')) {
+        input.addEventListener('change', () => { play.href = `../public/index.html?offline&bots=${input.value}`; });
+    }
+</script>
+</body>
+</html>

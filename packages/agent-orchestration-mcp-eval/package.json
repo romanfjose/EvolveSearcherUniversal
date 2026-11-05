@@ -1,0 +1,21 @@
+{
+  "name": "agent-orchestration-mcp-eval",
+  "version": "0.3.0",
+  "description": "Zero-dependency MCP server (JSON-RPC 2.0 over stdio and HTTP) exposing deterministic multi-agent routing and budget admission, agent-response evaluation, and dossier linting, with a zero-dependency Web Inspector, a native eval harness, Promptfoo adapters and a benchmark.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "start:http": "node src/http.mjs",
+    "inspector": "node src/http.mjs",
+    "eval": "node evals/run-evals.mjs",
+    "bench": "node scripts/benchmark.mjs",
+    "sync-docs": "node scripts/sync-docs.mjs",
+    "sanitize": "node scripts/sanitize-check.mjs",
+    "test": "node --test && node evals/run-evals.mjs && node scripts/sanitize-check.mjs"
+  }
+}

@@ -159,6 +159,8 @@ function render(s) {
   syncField("#settle", s.settings?.settle);
   syncField("#minreply", s.settings?.minReply);
   if (document.activeElement !== $("#deepscan")) $("#deepscan").checked = s.settings?.deep !== false;
+  if (document.activeElement !== $("#dedupe")) $("#dedupe").checked = s.settings?.dedupe !== false;
+  if (document.activeElement !== $("#redact")) $("#redact").checked = !!s.settings?.redact;
   if (document.activeElement !== $("#showfab")) $("#showfab").checked = !!s.settings?.showFab;
 
   $("#learned").textContent = s.learned
@@ -943,9 +945,11 @@ function wire() {
       to: Number($("#to").value) || 0,
       deep: $("#deepscan").checked,
       showFab: $("#showfab").checked,
+      dedupe: $("#dedupe").checked,
+      redact: $("#redact").checked,
     },
   });
-  ["#settle", "#minreply", "#from", "#to", "#deepscan", "#showfab"]
+  ["#settle", "#minreply", "#from", "#to", "#deepscan", "#showfab", "#dedupe", "#redact"]
     .forEach((sel) => $(sel).addEventListener("change", pushSettings));
 
   // The range lives in shared storage on purpose: set "last 3" once, then

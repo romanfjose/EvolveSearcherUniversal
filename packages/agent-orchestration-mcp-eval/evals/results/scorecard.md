@@ -1,0 +1,230 @@
+# Eval scorecard: agent-orchestration-policy
+
+Fixtures: `evals/cases.json` (version 3). Deterministic: rerunning `npm run eval` reproduces this file byte for byte.
+
+**Overall: 206/206 cases pass (100.0%). False accepts: 0. False rejects: 0.**
+
+| Category | Pass | Accuracy | Should-accept | False rejects | Should-reject | False accepts |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Seat routing (role and mode) | 10/10 | 100.0% | 5 | 0 | 5 | 0 |
+| Budget admission (reserve, judgment, breaker, accounting bypasses) | 19/19 | 100.0% | 5 | 0 | 14 | 0 |
+| Input schema compliance | 4/4 | 100.0% | 0 | 0 | 4 | 0 |
+| Evidence acceptance (precision on valid responses) | 4/4 | 100.0% | 4 | 0 | 0 | 0 |
+| Hallucination rejection (anchor, schema, claims, citations) | 13/13 | 100.0% | 0 | 0 | 13 | 0 |
+| Dossier dedup and lint | 14/14 | 100.0% | 3 | 0 | 11 | 0 |
+| Numeric injection (NaN, Infinity, -0, overflow, float boundaries) | 32/32 | 100.0% | 7 | 0 | 25 | 0 |
+| Prototype pollution and malformed schema keywords | 24/24 | 100.0% | 2 | 0 | 22 | 0 |
+| Unicode edge cases (normalization, invisible characters, IDN) | 34/34 | 100.0% | 8 | 0 | 26 | 0 |
+| Slice coordinate boundaries | 28/28 | 100.0% | 11 | 0 | 17 | 0 |
+| URL canonicalization and link lint | 24/24 | 100.0% | 4 | 0 | 20 | 0 |
+
+## Cases
+
+| Case | Category | Result |
+| :--- | :--- | :---: |
+| `route-grunt-cheap` | seat-routing | PASS |
+| `route-scout-mid` | seat-routing | PASS |
+| `route-mechanic-heavy` | seat-routing | PASS |
+| `route-sniper-readonly` | seat-routing | PASS |
+| `route-auditor-judgment-granted` | seat-routing | PASS |
+| `route-auditor-write-denied` | seat-routing | PASS |
+| `route-unknown-role-denied` | seat-routing | PASS |
+| `route-prototype-key-denied` | seat-routing | PASS |
+| `route-unknown-mode-denied` | seat-routing | PASS |
+| `route-missing-budget-denied` | seat-routing | PASS |
+| `admit-within-share` | budget-admission | PASS |
+| `admit-reserve-floor-refused` | budget-admission | PASS |
+| `admit-reserve-boundary-accepted` | budget-admission | PASS |
+| `admit-exact-capacity-accepted` | budget-admission | PASS |
+| `admit-reserve-100-refuses-all` | budget-admission | PASS |
+| `admit-judgment-default-refused` | budget-admission | PASS |
+| `admit-judgment-within-allowance` | budget-admission | PASS |
+| `admit-judgment-allowance-exhausted` | budget-admission | PASS |
+| `breaker-open-at-default-threshold` | budget-admission | PASS |
+| `breaker-closed-below-threshold` | budget-admission | PASS |
+| `breaker-open-custom-threshold` | budget-admission | PASS |
+| `bypass-negative-usedCU-rejected` | budget-admission | PASS |
+| `bypass-negative-judgmentUsedCU-rejected` | budget-admission | PASS |
+| `bypass-zero-capacity-rejected` | budget-admission | PASS |
+| `bypass-negative-capacity-rejected` | budget-admission | PASS |
+| `bypass-string-usedCU-rejected` | budget-admission | PASS |
+| `bypass-reservePct-out-of-range-rejected` | budget-admission | PASS |
+| `bypass-fractional-failures-rejected` | budget-admission | PASS |
+| `bypass-zero-threshold-rejected` | budget-admission | PASS |
+| `bypass-cu-override-rejected` | input-validation | PASS |
+| `input-unknown-top-level-rejected` | input-validation | PASS |
+| `input-dossier-no-arguments-rejected` | input-validation | PASS |
+| `input-contract-unsupported-keyword-rejected` | input-validation | PASS |
+| `accept-anchor-schema-slice` | evidence-accept | PASS |
+| `accept-anchor-only-skips-optional-checks` | evidence-accept | PASS |
+| `accept-anchor-after-blank-lines` | evidence-accept | PASS |
+| `accept-forbidden-phrase-absent` | evidence-accept | PASS |
+| `reject-wrong-anchor` | hallucination-rejection | PASS |
+| `reject-anchor-not-first-line` | hallucination-rejection | PASS |
+| `reject-forbidden-claim` | hallucination-rejection | PASS |
+| `reject-forbidden-claim-case-insensitive` | hallucination-rejection | PASS |
+| `reject-missing-json-payload` | hallucination-rejection | PASS |
+| `reject-json-payload-does-not-parse` | hallucination-rejection | PASS |
+| `reject-schema-wrong-type` | hallucination-rejection | PASS |
+| `reject-schema-enum-violation` | hallucination-rejection | PASS |
+| `reject-schema-extra-property` | hallucination-rejection | PASS |
+| `reject-fabricated-slice-text` | hallucination-rejection | PASS |
+| `reject-slice-past-end-of-source` | hallucination-rejection | PASS |
+| `reject-slice-inverted-range` | hallucination-rejection | PASS |
+| `reject-slice-invalid-escape` | hallucination-rejection | PASS |
+| `dedup-canonicalizes-and-drops-duplicates` | dossier-lint | PASS |
+| `dedup-all-unique-accepted` | dossier-lint | PASS |
+| `dedup-invalid-scheme-flagged` | dossier-lint | PASS |
+| `dedup-credentials-flagged` | dossier-lint | PASS |
+| `lint-good-dossier-accepted` | dossier-lint | PASS |
+| `lint-missing-section-flagged` | dossier-lint | PASS |
+| `lint-section-out-of-order-flagged` | dossier-lint | PASS |
+| `lint-duplicate-source-flagged` | dossier-lint | PASS |
+| `lint-non-canonical-link-flagged` | dossier-lint | PASS |
+| `lint-bare-url-flagged` | dossier-lint | PASS |
+| `lint-placeholder-flagged` | dossier-lint | PASS |
+| `lint-empty-sources-flagged` | dossier-lint | PASS |
+| `lint-missing-title-flagged` | dossier-lint | PASS |
+| `dedup-and-lint-together-accepted` | dossier-lint | PASS |
+| `num-capacity-infinity` | numeric-injection | PASS |
+| `num-capacity-neg-infinity` | numeric-injection | PASS |
+| `num-used-nan` | numeric-injection | PASS |
+| `num-reserve-nan` | numeric-injection | PASS |
+| `num-judgment-allowance-infinity` | numeric-injection | PASS |
+| `num-judgment-used-neg-infinity` | numeric-injection | PASS |
+| `num-failures-infinity` | numeric-injection | PASS |
+| `num-threshold-nan` | numeric-injection | PASS |
+| `num-capacity-string` | numeric-injection | PASS |
+| `num-used-null` | numeric-injection | PASS |
+| `num-used-boolean` | numeric-injection | PASS |
+| `num-capacity-max-value-overflow` | numeric-injection | PASS |
+| `num-used-above-max` | numeric-injection | PASS |
+| `num-capacity-at-max-admitted` | numeric-injection | PASS |
+| `num-capacity-min-subnormal-refused` | numeric-injection | PASS |
+| `num-used-negative-zero-admitted` | numeric-injection | PASS |
+| `num-capacity-negative-zero` | numeric-injection | PASS |
+| `num-capacity-zero` | numeric-injection | PASS |
+| `num-reserve-100-refuses-all` | numeric-injection | PASS |
+| `num-reserve-just-over-100` | numeric-injection | PASS |
+| `num-reserve-just-below-0` | numeric-injection | PASS |
+| `num-share-exact-boundary-admitted` | numeric-injection | PASS |
+| `num-share-boundary-plus-epsilon-refused` | numeric-injection | PASS |
+| `num-float-accumulation-admitted` | numeric-injection | PASS |
+| `num-judgment-exact-allowance-admitted` | numeric-injection | PASS |
+| `num-judgment-allowance-short-refused` | numeric-injection | PASS |
+| `num-failures-fractional` | numeric-injection | PASS |
+| `num-failures-below-threshold-admitted` | numeric-injection | PASS |
+| `num-failures-at-threshold-refused` | numeric-injection | PASS |
+| `num-threshold-zero` | numeric-injection | PASS |
+| `num-threshold-above-max` | numeric-injection | PASS |
+| `num-exponent-notation-admitted` | numeric-injection | PASS |
+| `proto-role-dunder-proto` | prototype-pollution | PASS |
+| `proto-role-constructor` | prototype-pollution | PASS |
+| `proto-role-tostring` | prototype-pollution | PASS |
+| `proto-role-hasownproperty` | prototype-pollution | PASS |
+| `proto-mode-dunder-proto` | prototype-pollution | PASS |
+| `proto-budget-own-dunder-proto` | prototype-pollution | PASS |
+| `proto-budget-constructor-prototype` | prototype-pollution | PASS |
+| `proto-args-own-dunder-proto` | prototype-pollution | PASS |
+| `proto-budget-only-in-proto-missing` | prototype-pollution | PASS |
+| `proto-contract-own-dunder-proto` | prototype-pollution | PASS |
+| `proto-schema-keyword-dunder-proto` | prototype-pollution | PASS |
+| `proto-schema-keyword-constructor` | prototype-pollution | PASS |
+| `proto-payload-dunder-proto-rejected` | prototype-pollution | PASS |
+| `proto-payload-dunder-proto-typed` | prototype-pollution | PASS |
+| `proto-required-constructor-not-inherited` | prototype-pollution | PASS |
+| `proto-required-tostring-not-inherited` | prototype-pollution | PASS |
+| `proto-required-constructor-own-accepted` | prototype-pollution | PASS |
+| `proto-schema-required-string` | prototype-pollution | PASS |
+| `proto-schema-type-typo` | prototype-pollution | PASS |
+| `proto-schema-minimum-string` | prototype-pollution | PASS |
+| `proto-schema-properties-array` | prototype-pollution | PASS |
+| `proto-schema-enum-empty` | prototype-pollution | PASS |
+| `proto-forbidden-dunder-proto-text` | prototype-pollution | PASS |
+| `proto-url-query-dunder-proto` | prototype-pollution | PASS |
+| `uni-anchor-cjk-accepted` | unicode-edge | PASS |
+| `uni-anchor-nfd-vs-nfc-rejected` | unicode-edge | PASS |
+| `uni-anchor-leading-bom-rejected` | unicode-edge | PASS |
+| `uni-anchor-trailing-zwsp-rejected` | unicode-edge | PASS |
+| `uni-anchor-line-separator-rejected` | unicode-edge | PASS |
+| `uni-claim-fullwidth-rejected` | unicode-edge | PASS |
+| `uni-claim-zero-width-split-rejected` | unicode-edge | PASS |
+| `uni-claim-soft-hyphen-rejected` | unicode-edge | PASS |
+| `uni-claim-bidi-override-rejected` | unicode-edge | PASS |
+| `uni-claim-nbsp-rejected` | unicode-edge | PASS |
+| `uni-claim-line-wrapped-rejected` | unicode-edge | PASS |
+| `uni-claim-turkish-dotted-i-rejected` | unicode-edge | PASS |
+| `uni-claim-ligature-rejected` | unicode-edge | PASS |
+| `uni-claim-accented-variant-rejected` | unicode-edge | PASS |
+| `uni-claim-unrelated-unicode-accepted` | unicode-edge | PASS |
+| `uni-claim-invisible-only-phrase-ignored` | unicode-edge | PASS |
+| `uni-slice-exact-accepted` | unicode-edge | PASS |
+| `uni-slice-json-escape-accepted` | unicode-edge | PASS |
+| `uni-slice-surrogate-escape-accepted` | unicode-edge | PASS |
+| `uni-slice-lone-surrogate-rejected` | unicode-edge | PASS |
+| `uni-slice-nfc-vs-nfd-rejected` | unicode-edge | PASS |
+| `uni-slice-arabic-indic-digits-rejected` | unicode-edge | PASS |
+| `uni-slice-fullwidth-digits-rejected` | unicode-edge | PASS |
+| `uni-slice-uppercase-prefix-rejected` | unicode-edge | PASS |
+| `uni-url-idn-punycode-duplicate` | unicode-edge | PASS |
+| `uni-url-fullwidth-host-duplicate` | unicode-edge | PASS |
+| `uni-url-unicode-path-vs-encoded-duplicate` | unicode-edge | PASS |
+| `uni-url-percent-hex-case-duplicate` | unicode-edge | PASS |
+| `uni-url-embedded-tab-stripped-duplicate` | unicode-edge | PASS |
+| `uni-url-bidi-in-path-encoded` | unicode-edge | PASS |
+| `uni-url-host-with-space-invalid` | unicode-edge | PASS |
+| `uni-lint-nbsp-heading-missing-section` | unicode-edge | PASS |
+| `uni-lint-unicode-title-accepted` | unicode-edge | PASS |
+| `uni-lint-fullwidth-hash-title-rejected` | unicode-edge | PASS |
+| `slice-first-line-accepted` | slice-boundary | PASS |
+| `slice-last-line-accepted` | slice-boundary | PASS |
+| `slice-whole-source-accepted` | slice-boundary | PASS |
+| `slice-l0-rejected` | slice-boundary | PASS |
+| `slice-l0-l0-rejected` | slice-boundary | PASS |
+| `slice-one-past-end-rejected` | slice-boundary | PASS |
+| `slice-start-past-end-rejected` | slice-boundary | PASS |
+| `slice-reversed-range-rejected` | slice-boundary | PASS |
+| `slice-short-end-form-accepted` | slice-boundary | PASS |
+| `slice-leading-zeros-accepted` | slice-boundary | PASS |
+| `slice-huge-coordinate-rejected` | slice-boundary | PASS |
+| `slice-max-safe-plus-one-rejected` | slice-boundary | PASS |
+| `slice-max-safe-past-end-rejected` | slice-boundary | PASS |
+| `slice-empty-quote-rejected` | slice-boundary | PASS |
+| `slice-empty-source-rejected` | slice-boundary | PASS |
+| `slice-blank-source-line-accepted` | slice-boundary | PASS |
+| `slice-span-over-blank-accepted` | slice-boundary | PASS |
+| `slice-trailing-space-in-quote-rejected` | slice-boundary | PASS |
+| `slice-padded-line-accepted` | slice-boundary | PASS |
+| `slice-no-space-after-colon-accepted` | slice-boundary | PASS |
+| `slice-invalid-json-escape-rejected` | slice-boundary | PASS |
+| `slice-spaced-range-rejected` | slice-boundary | PASS |
+| `slice-negative-coordinate-rejected` | slice-boundary | PASS |
+| `slice-unquoted-text-rejected` | slice-boundary | PASS |
+| `slice-one-good-one-bad-rejected` | slice-boundary | PASS |
+| `slice-no-citations-passes` | slice-boundary | PASS |
+| `slice-crlf-response-accepted` | slice-boundary | PASS |
+| `slice-inside-code-fence-still-checked` | slice-boundary | PASS |
+| `url-uppercase-utm-stripped` | url-canonicalization | PASS |
+| `url-ref-and-ref-src-stripped` | url-canonicalization | PASS |
+| `url-mc-and-gclid-stripped` | url-canonicalization | PASS |
+| `url-http-default-port` | url-canonicalization | PASS |
+| `url-repeated-trailing-slashes` | url-canonicalization | PASS |
+| `url-dot-segments-resolved` | url-canonicalization | PASS |
+| `url-encoded-dot-segments-resolved` | url-canonicalization | PASS |
+| `url-fragment-only-difference` | url-canonicalization | PASS |
+| `url-whitespace-trimmed` | url-canonicalization | PASS |
+| `url-non-default-port-kept` | url-canonicalization | PASS |
+| `url-www-not-merged` | url-canonicalization | PASS |
+| `url-http-vs-https-not-merged` | url-canonicalization | PASS |
+| `url-repeated-key-order-preserved` | url-canonicalization | PASS |
+| `url-javascript-scheme` | url-canonicalization | PASS |
+| `url-data-scheme` | url-canonicalization | PASS |
+| `url-ftp-scheme` | url-canonicalization | PASS |
+| `url-protocol-relative` | url-canonicalization | PASS |
+| `url-username-only` | url-canonicalization | PASS |
+| `url-empty-string` | url-canonicalization | PASS |
+| `url-lint-javascript-link-flagged` | url-canonicalization | PASS |
+| `url-lint-bare-url-in-summary` | url-canonicalization | PASS |
+| `url-lint-sources-before-summary` | url-canonicalization | PASS |
+| `url-lint-lowercase-todo` | url-canonicalization | PASS |
+| `url-lint-noncanonical-percent-case` | url-canonicalization | PASS |

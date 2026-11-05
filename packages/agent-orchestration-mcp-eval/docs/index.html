@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive playground for the agent-eval-policy MCP tools: seat routing and budget admission, contract and citation checks, and dossier URL linting. Runs the same ES modules the server runs, entirely in the page.">
+  <title>MCP Policy Playground</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div>
+        <h1>MCP Policy &amp; Eval Playground</h1>
+        <p class="sub">The three <code>agent-eval-policy</code> tools, running in this page from the same ES modules the MCP server runs. No network, no CDN.</p>
+      </div>
+      <div class="engine" id="engine" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="engine-label">Engine: in-page modules</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Playground sections">
+      <button role="tab" id="tab-seats" aria-controls="panel-seats" aria-selected="true">Seat router &amp; budget</button>
+      <button role="tab" id="tab-contract" aria-controls="panel-contract" aria-selected="false" tabindex="-1">Contract &amp; citations</button>
+      <button role="tab" id="tab-dossier" aria-controls="panel-dossier" aria-selected="false" tabindex="-1">Dossier linter</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Tab 1 -->
+    <section class="panel" id="panel-seats" role="tabpanel" aria-labelledby="tab-seats">
+      <div class="grid two">
+        <div class="card">
+          <h2>Budget snapshot</h2>
+          <p class="hint">Every seat below is decided by <code>route_agent_seat</code> with this snapshot. Out-of-range values fail closed.</p>
+          <div class="sliders" id="sliders"></div>
+          <div class="row">
+            <label class="inline">Mode
+              <select id="mode">
+                <option value="read-only">read-only</option>
+                <option value="workspace-write">workspace-write</option>
+              </select>
+            </label>
+            <span class="muted small">failureThreshold = 3 (default)</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>Studio seats</h2>
+            <span class="badge neutral" id="seats-check" hidden></span>
+          </div>
+          <div class="budget-bar" id="budget-bar" aria-hidden="true"></div>
+          <div class="legend small" id="budget-legend"></div>
+          <div class="seats" id="seats"></div>
+          <p class="breaker" id="breaker"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>100-step mission: naive flagship routing vs. bicameral seat routing</h2>
+        </div>
+        <p class="hint">A seeded plan of worker steps (50% grunt, 25% scout, 15% mechanic/sniper, 10% auditor by weight). <b>Naive</b> sends every step to the flagship judgment seat (3.6 CU). <b>Bicameral</b> sends each step to the seat its role needs. Both are admitted step by step through the same policy and the budget above.</p>
+        <div class="row">
+          <label class="inline">Seed <input type="number" id="seed" value="42" min="0" max="4294967295" step="1"></label>
+          <label class="inline">Steps <input type="number" id="steps" value="100" min="1" max="1000" step="1"></label>
+        </div>
+        <div class="tiles" id="tiles"></div>
+        <figure class="chart">
+          <svg id="chart" viewBox="0 0 640 240" role="img" aria-labelledby="chart-title"><title id="chart-title">Cumulative planned compute units per step</title></svg>
+          <figcaption class="legend small">
+            <span><i class="sw naive"></i>Naive (all flagship)</span>
+            <span><i class="sw bicameral"></i>Bicameral seats</span>
+            <span><i class="sw share"></i>Agent share (capacity minus reserve)</span>
+          </figcaption>
+        </figure>
+        <h3>Bicameral trace</h3>
+        <p class="hint">One cell per step, colored by seat. A struck-out cell was refused by admission. Hover or focus a cell for its decision.</p>
+        <div class="strip" id="strip"></div>
+        <div class="legend small" id="strip-legend"></div>
+        <ul class="refusals small" id="refusals"></ul>
+      </div>
+    </section>
+
+    <!-- Tab 2 -->
+    <section class="panel" id="panel-contract" role="tabpanel" aria-labelledby="tab-contract" hidden>
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head">
+            <h2>Agent response</h2>
+            <label class="inline small">Preset <select id="contract-preset"></select></label>
+          </div>
+          <p class="hint" id="contract-preset-note"></p>
+          <textarea id="response" rows="12" spellcheck="false" aria-label="Agent response"></textarea>
+          <h3>Contract (JSON)</h3>
+          <textarea id="contract" rows="16" spellcheck="false" aria-label="Contract JSON"></textarea>
+          <p class="error" id="contract-error" role="alert"></p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>evaluate_agent_response</h2>
+            <span class="badge neutral" id="contract-check" hidden></span>
+          </div>
+          <div id="verdict"></div>
+          <div id="checks"></div>
+          <h3>Source lines</h3>
+          <ol class="source" id="source-lines"></ol>
+          <div class="row">
+            <label class="inline small">Cite L<input type="number" id="cite-a" value="1" min="1" step="1"></label>
+            <label class="inline small">to L<input type="number" id="cite-b" value="1" min="1" step="1"></label>
+            <button type="button" id="cite-insert" class="secondary">Append citation to response</button>
+          </div>
+          <details><summary>Raw result</summary><pre id="contract-raw"></pre></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3 -->
+    <section class="panel" id="panel-dossier" role="tabpanel" aria-labelledby="tab-dossier" hidden>
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head">
+            <h2>Inputs</h2>
+            <label class="inline small">Preset <select id="dossier-preset"></select></label>
+          </div>
+          <h3>URLs (one per line)</h3>
+          <textarea id="urls" rows="9" spellcheck="false" aria-label="URLs, one per line"></textarea>
+          <h3>Dossier markdown</h3>
+          <textarea id="markdown" rows="16" spellcheck="false" aria-label="Dossier markdown"></textarea>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>dedup_and_lint_dossier</h2>
+            <span class="badge neutral" id="dossier-check" hidden></span>
+          </div>
+          <div id="dossier-verdict"></div>
+          <h3>Canonical URLs</h3>
+          <div class="table-wrap"><table class="urls"><thead><tr><th>#</th><th>Input</th><th>Canonical</th><th>Status</th></tr></thead><tbody id="url-rows"></tbody></table></div>
+          <h3>Lint</h3>
+          <ul class="violations" id="lint"></ul>
+          <details><summary>Raw result</summary><pre id="dossier-raw"></pre></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot small">
+    Served over HTTP at <code>/inspector/</code> by <code>npm run start:http</code>, every result is also cross-checked against the live <code>POST /mcp</code> endpoint.
+    Opened as static files, everything runs in the page.
+  </footer>
+</body>
+</html>

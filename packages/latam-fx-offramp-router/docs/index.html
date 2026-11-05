@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CashoutRails Visualizer</title>
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222220; --line: #2c2c2a; --axis: #383835;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781; --accent: #3987e5;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --pos: #3987e5; --neg: #e66767; --mid: #383835; --good: #0ca30c; --bad: #d03b3b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f3f3f0; --line: #e1e0d9; --axis: #c3c2b7;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d68; --accent: #2a78d6;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --pos: #2a78d6; --neg: #e34948; --mid: #f0efec; --good: #006300;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f3f3f0; --line: #e1e0d9; --axis: #c3c2b7;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d68; --accent: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --pos: #2a78d6; --neg: #e34948; --mid: #f0efec; --good: #006300;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 40px; }
+header h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--ink-2); max-width: 80ch; }
+.pill { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--s4); border: 1px solid color-mix(in srgb, var(--s4) 45%, transparent); vertical-align: 2px; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 16px; margin: 16px 0; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.ctl output { font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.kpi .k { font-size: 12px; color: var(--muted); }
+.kpi .v { font-size: 22px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .s { font-size: 12px; color: var(--ink-2); }
+.up { color: var(--good); } .down { color: var(--neg); }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.panel h2 { font-size: 14px; margin: 0 0 2px; }
+.panel .sub { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.span2 { grid-column: 1 / -1; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font-size: 11px; font-family: system-ui, sans-serif; }
+.grid-line { stroke: var(--line); stroke-width: 1; }
+.base-line { stroke: var(--axis); stroke-width: 1; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 500; color: var(--muted); font-size: 12px; }
+td.name { white-space: normal; min-width: 220px; }
+.bar { height: 8px; border-radius: 0 4px 4px 0; background: var(--s1); }
+.stack { display: flex; gap: 2px; height: 22px; margin: 6px 0 10px; }
+.stack div { border-radius: 4px; min-width: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.matrix td { text-align: center; font-family: var(--mono); font-size: 12px; padding: 5px 4px; border: 2px solid var(--surface); border-radius: 4px; color: var(--ink); cursor: default; }
+.matrix th { text-align: center; }
+.matrix td.cur { outline: 2px solid var(--ink); outline-offset: -2px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; color: var(--ink); box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; max-width: 260px; }
+#err { display: none; padding: 12px; border: 1px solid var(--neg); border-radius: 8px; margin: 12px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>CashoutRails — USD → ARS order-book, corridor &amp; treasury visualizer <span class="pill">illustrative snapshot</span></h1>
+    <p>Every number below is computed by the package's own <code>src/</code> modules against the bundled snapshot, reshaped by the sliders. Research tool only — confirm live quotes with <code>node check-routes.mjs</code> before moving money.</p>
+  </header>
+  <div id="err">ES modules cannot load over <code>file://</code>. From the package folder run <code>npm run viz</code> and open <code>http://localhost:8138/docs/</code>.</div>
+
+  <section class="controls" aria-label="Scenario controls">
+    <div class="ctl"><label for="amt">Withdrawal amount <output id="amtO"></output></label><input id="amt" type="range" min="100" max="25000" step="100" value="5000"></div>
+    <div class="ctl"><label for="mep">MEP compra (ARS) <output id="mepO"></output></label><input id="mep" type="range" min="1200" max="1800" step="1" value="1478"></div>
+    <div class="ctl"><label for="spr">CCL / MEP spread <output id="sprO"></output></label><input id="spr" type="range" min="-2" max="10" step="0.1" value="1.5"></div>
+    <div class="ctl"><label for="prem">USDT bid vs CCL <output id="premO"></output></label><input id="prem" type="range" min="-3" max="5" step="0.1" value="0.9"></div>
+    <div class="ctl"><label for="depth">Bitso book depth <output id="depthO"></output></label><input id="depth" type="range" min="0.05" max="4" step="0.05" value="1"></div>
+    <div class="ctl"><label for="used">Bitso 30-day usage (of $6,000) <output id="usedO"></output></label><input id="used" type="range" min="0" max="6000" step="100" value="0"></div>
+  </section>
+
+  <section class="kpis" id="kpis" aria-live="polite"></section>
+
+  <section class="grid">
+    <div class="panel">
+      <h2>Bitso usdt_ars bid depth</h2>
+      <p class="sub">Cumulative USDT resting at or above each price. Marker = full ticket sold through Payoneer→Bitso (0.971 × USD).</p>
+      <svg id="depthSvg" viewBox="0 0 560 260" role="img" aria-label="Cumulative bid depth chart"></svg>
+    </div>
+    <div class="panel">
+      <h2>VWAP slippage vs. size</h2>
+      <p class="sub">Slippage of the VWAP below top-of-book, by USDT sold.</p>
+      <svg id="slipSvg" viewBox="0 0 560 260" role="img" aria-label="Slippage curve"></svg>
+    </div>
+
+    <div class="panel span2">
+      <h2>Optimal multi-venue split</h2>
+      <p class="sub" id="splitSub"></p>
+      <div class="stack" id="stack"></div>
+      <div class="legend" id="stackLegend"></div>
+      <div class="scroll"><table id="splitTbl"></table></div>
+    </div>
+
+    <div class="panel span2">
+      <h2>Corridor ranking at this ticket</h2>
+      <p class="sub" id="paritySub"></p>
+      <div class="scroll"><table id="corrTbl"></table></div>
+    </div>
+
+    <div class="panel span2">
+      <h2>30-day treasury breakeven f* — USD yield vs. plazo fijo</h2>
+      <p class="sub">Cell = ARS depreciation over 30 days needed for USD parking to tie the plazo fijo. Blue: your expected depreciation beats f* (USD wins). Red: plazo fijo wins.</p>
+      <div class="controls" style="margin:8px 0">
+        <div class="ctl"><label for="tna">Plazo fijo TNA <output id="tnaO"></output></label><input id="tna" type="range" min="10" max="50" step="0.5" value="22"></div>
+        <div class="ctl"><label for="apy">USD APY <output id="apyO"></output></label><input id="apy" type="range" min="0" max="10" step="0.1" value="3.8"></div>
+        <div class="ctl"><label for="dev">Expected 30d depreciation <output id="devO"></output></label><input id="dev" type="range" min="0" max="6" step="0.05" value="1.5"></div>
+        <div class="ctl"><label for="rt">Round-trip conversion cost <output id="rtO"></output></label><input id="rt" type="range" min="0" max="2" step="0.05" value="0.6"></div>
+      </div>
+      <div class="scroll"><table class="matrix" id="matrix"></table></div>
+      <p class="note" id="beNote"></p>
+    </div>
+  </section>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+  setTimeout(() => { if (!window.__vizReady) document.getElementById('err').style.display = 'block'; }, 1500);
+</script>
+<script type="module">
+import { reshapeBook, walkOrderBook, cumulativeDepth, slippageCurve, bookDepth } from '../src/orderbook.mjs';
+import { CORRIDORS, quoteCorridor, keepFactor, parityThresholds, corridorById } from '../src/corridors.mjs';
+import { findOptimalSplit, venuesFromCorridors, DEFAULT_SPLIT_VENUES } from '../src/split.mjs';
+import { breakevenDepreciation, compareOutcomes } from '../src/breakeven.mjs';
+import { marketFromRaw } from '../src/market.mjs';
+import { SNAPSHOT } from '../src/snapshot.mjs';
+
+window.__vizReady = true;
+const $ = (id) => document.getElementById(id);
+const BASE = marketFromRaw(SNAPSHOT);
+const SERIES = { payo_bitso_stacked: '--s1', payo_santander_wire: '--s2', payo_belo_usdc: '--s3', payo_prex_mep: '--s4' };
+const SHORT = { payo_bitso_stacked: 'Bitso book', payo_santander_wire: 'USD wire → MEP', payo_belo_usdc: 'Belo', payo_prex_mep: 'Prex @ MEP' };
+const fmt = (n, d = 0) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const sgn = (n, d = 2) => (n >= 0 ? '+' : '') + n.toFixed(d) + '%';
+const tip = $('tip');
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = 'block'; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
+const hideTip = () => { tip.style.display = 'none'; };
+
+/** Scenario: re-anchor the snapshot to slider-set MEP, CCL spread, USDT premium and depth. */
+function scenario(s) {
+  const ccl = s.mep * (1 + s.spr / 100);
+  const top = ccl * (1 + s.prem / 100);
+  const k = top / BASE.bids[0].price;
+  const venues = Object.fromEntries(Object.entries(BASE.venues).map(([id, v]) => [id, {
+    ...v, usdtBid: v.usdtBid && v.usdtBid * k, usdcBid: v.usdcBid && v.usdcBid * k, bestBid: v.bestBid * k }]));
+  const ranking = BASE.venueRanking.map((v) => ({ ...v, bestBid: v.bestBid * k }));
+  return { ...BASE, mepBid: s.mep, cclBid: ccl, bids: reshapeBook(BASE.bids, { bestPrice: top, depthMult: s.depth }),
+    venues, venueRanking: ranking, topVenue: ranking[0] };
+}
+
+function axes(svg, W, H, m, xs, ys, xTicks, yTicks, xf, yf) {
+  let g = '';
+  for (const t of yTicks) g += `<line class="grid-line" x1="${m.l}" x2="${W - m.r}" y1="${ys(t)}" y2="${ys(t)}"/><text x="${m.l - 6}" y="${ys(t) + 4}" text-anchor="end">${yf(t)}</text>`;
+  for (const t of xTicks) g += `<text x="${xs(t)}" y="${H - m.b + 16}" text-anchor="middle">${xf(t)}</text>`;
+  g += `<line class="base-line" x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}"/>`;
+  return g;
+}
+const ticks = (lo, hi, n = 5) => Array.from({ length: n + 1 }, (_, i) => lo + ((hi - lo) * i) / n);
+
+function lineChart(svg, pts, { xMax, yLo, yHi, xf, yf, marker, label, tipf, area }) {
+  const W = 560, H = 260, m = { l: 58, r: 14, t: 10, b: 26 };
+  const xs = (x) => m.l + (x / xMax) * (W - m.l - m.r);
+  const ys = (y) => H - m.b - ((y - yLo) / (yHi - yLo || 1)) * (H - m.t - m.b);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${xs(p.x).toFixed(1)},${ys(p.y).toFixed(1)}`).join('');
+  let g = axes(svg, W, H, m, xs, ys, ticks(0, xMax), ticks(yLo, yHi, 4), xf, yf);
+  if (area) g += `<path d="${d}L${xs(pts.at(-1).x)},${H - m.b}L${xs(0)},${H - m.b}Z" fill="var(--s1)" opacity=".18"/>`;
+  g += `<path d="${d}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>`;
+  if (marker && marker.x <= xMax) {
+    g += `<line x1="${xs(marker.x)}" x2="${xs(marker.x)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>`;
+    g += `<circle cx="${xs(marker.x)}" cy="${ys(marker.y)}" r="5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>`;
+    g += `<text x="${Math.min(xs(marker.x) + 8, W - 120)}" y="${m.t + 12}" style="fill:var(--ink)">${label}</text>`;
+  }
+  g += `<line id="${svg.id}X" y1="${m.t}" y2="${H - m.b}" stroke="var(--muted)" visibility="hidden"/><circle id="${svg.id}P" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  svg.innerHTML = g;
+  svg.onmousemove = (e) => {
+    const r = svg.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * W;
+    const xv = ((x - m.l) / (W - m.l - m.r)) * xMax;
+    if (xv < 0 || xv > xMax) return hideTip();
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p.x - xv) < Math.abs(best.x - xv)) best = p;
+    const cx = $(svg.id + 'X'), cp = $(svg.id + 'P');
+    cx.setAttribute('x1', xs(best.x)); cx.setAttribute('x2', xs(best.x)); cx.setAttribute('visibility', 'visible');
+    cp.setAttribute('cx', xs(best.x)); cp.setAttribute('cy', ys(best.y)); cp.setAttribute('visibility', 'visible');
+    showTip(e, tipf(best));
+  };
+  svg.onmouseleave = () => { hideTip(); $(svg.id + 'X')?.setAttribute('visibility', 'hidden'); $(svg.id + 'P')?.setAttribute('visibility', 'hidden'); };
+}
+
+function render() {
+  const s = { amt: +$('amt').value, mep: +$('mep').value, spr: +$('spr').value, prem: +$('prem').value, depth: +$('depth').value, used: +$('used').value };
+  $('amtO').textContent = '$' + fmt(s.amt); $('mepO').textContent = fmt(s.mep); $('sprO').textContent = sgn(s.spr, 1);
+  $('premO').textContent = sgn(s.prem, 1); $('depthO').textContent = s.depth.toFixed(2) + '×'; $('usedO').textContent = '$' + fmt(s.used);
+  const M = scenario(s);
+  const usdt = s.amt * 0.971;
+  const walk = walkOrderBook(M.bids, usdt, { presorted: true });
+  const total = bookDepth(M.bids);
+
+  // Depth chart (price vs cumulative qty, step function)
+  const cum = cumulativeDepth(M.bids);
+  const xMax = Math.min(total, Math.max(usdt * 3, 20000 * s.depth));
+  const dPts = [{ x: 0, y: M.bids[0].price, q: 0 }];
+  let prevQ = 0;
+  for (const c of cum) { dPts.push({ x: prevQ, y: c.price }, { x: Math.min(c.cumQty, xMax), y: c.price }); prevQ = c.cumQty; if (prevQ >= xMax) break; }
+  const yLo = dPts.at(-1).y, yHi = M.bids[0].price;
+  lineChart($('depthSvg'), dPts, { xMax, yLo: yLo - (yHi - yLo) * 0.05, yHi, area: true,
+    xf: (v) => fmt(v / 1000, 0) + 'k', yf: (v) => fmt(v, 0),
+    marker: { x: Math.min(usdt, walk.filled), y: walk.worstPrice || yHi }, label: `${fmt(usdt)} USDT → worst ${fmt(walk.worstPrice, 2)}`,
+    tipf: (p) => `<b>${fmt(p.x)} USDT</b> cumulative<br>at ≥ ARS ${fmt(p.y, 2)}` });
+
+  // Slippage curve
+  const sizes = Array.from({ length: 120 }, (_, i) => (xMax * (i + 1)) / 120);
+  const curve = slippageCurve(M.bids, sizes, 'bids').map((c) => ({ x: c.qty, y: c.slippagePct, vwap: c.vwap, complete: c.complete }));
+  const sMax = Math.max(0.05, ...curve.map((c) => c.y)) * 1.1;
+  lineChart($('slipSvg'), [{ x: 0, y: 0, vwap: yHi, complete: true }, ...curve], { xMax, yLo: 0, yHi: sMax,
+    xf: (v) => fmt(v / 1000, 0) + 'k', yf: (v) => v.toFixed(2) + '%',
+    marker: { x: usdt, y: walk.slippagePct }, label: `${walk.slippagePct.toFixed(3)}% at ticket`,
+    tipf: (p) => `<b>${fmt(p.x)} USDT</b><br>VWAP ARS ${fmt(p.vwap, 2)}<br>slippage ${p.y.toFixed(3)}%${p.complete ? '' : '<br><b>book exhausted</b>'}` });
+
+  // Split
+  const venues = venuesFromCorridors(DEFAULT_SPLIT_VENUES, M, { payo_bitso_stacked: { usedMonthUsd: s.used } });
+  const split = findOptimalSplit(s.amt, venues, { mepBid: M.mepBid });
+  $('splitSub').textContent = `Maximises net ARS across ${DEFAULT_SPLIT_VENUES.length} venues within today's tier capacity (Bitso $1k/day · $6k/30d, Belo $5k/day · $20k/mo).` +
+    (split.gainVsBestSingleArs > 0.005 ? ` Beats best single venue (${SHORT[split.bestSingle.id]}) by ARS ${fmt(split.gainVsBestSingleArs)}.` : '');
+  $('stack').innerHTML = split.tranches.map((t) => `<div style="flex:${t.usd} 0 0;background:var(${SERIES[t.id]})" data-id="${t.id}"></div>`).join('') +
+    (split.unallocatedUsd > 0 ? `<div style="flex:${split.unallocatedUsd} 0 0;background:var(--mid)" data-id="unallocated"></div>` : '');
+  $('stack').querySelectorAll('div').forEach((el) => {
+    const t = split.tranches.find((x) => x.id === el.dataset.id);
+    el.onmousemove = (e) => showTip(e, t ? `<b>${SHORT[t.id]}</b><br>USD ${fmt(t.usd, 2)} · ${(t.usd / s.amt * 100).toFixed(1)}%<br>ARS ${fmt(t.netArs)}` : `<b>Unallocated</b><br>USD ${fmt(split.unallocatedUsd, 2)}`);
+    el.onmouseleave = hideTip;
+  });
+  $('stackLegend').innerHTML = DEFAULT_SPLIT_VENUES.map((id) => `<span><span class="sw" style="background:var(${SERIES[id]})"></span>${SHORT[id]}</span>`).join('');
+  $('splitTbl').innerHTML = '<tr><th>Venue</th><th>USD</th><th>Net ARS</th><th>ARS / USD</th><th>Slippage</th><th>Fees (USD eq.)</th><th>Constraint</th></tr>' +
+    split.tranches.map((t) => `<tr><td><span class="sw" style="background:var(${SERIES[t.id]})"></span>${SHORT[t.id]}</td><td>${fmt(t.usd, 2)}</td><td>${fmt(t.netArs)}</td><td>${fmt(t.effRate, 2)}</td><td>${t.slippagePct ? t.slippagePct.toFixed(3) + '%' : '—'}</td><td>${fmt(t.feesUsd, 2)}</td><td>${t.binding ? t.binding + ' cap' : '—'}</td></tr>`).join('') +
+    `<tr><td><b>Total</b></td><td><b>${fmt(split.allocatedUsd, 2)}</b></td><td><b>${fmt(split.netArs)}</b></td><td><b>${fmt(split.effRate, 2)}</b></td><td colspan="3">${split.unallocatedUsd > 0 ? `USD ${fmt(split.unallocatedUsd, 2)} over today's capacity` : ''}</td></tr>`;
+
+  // Corridors
+  const quotes = CORRIDORS.map((d) => quoteCorridor(d, s.amt, M)).sort((a, b) => b.netArs - a.netArs);
+  const maxNet = quotes[0].netArs;
+  const stacked = corridorById('payo_bitso_stacked');
+  const par = parityThresholds({ mep: M.mepBid, ccl: M.cclBid, bid: M.bids[0].price, keep: keepFactor([...stacked.pre, ...stacked.post].map((l) => l.pct)) });
+  $('paritySub').innerHTML = `Stacked Bitso beats raw MEP only above ARS ${fmt(par.minBidToBeatMep, 2)} (MEP ${sgn(par.requiredPremiumVsMepPct, 3)}). Top bid now ${sgn(par.bidVsMepPct)} vs MEP → headroom <b class="${par.headroomPct >= 0 ? 'up' : 'down'}">${sgn(par.headroomPct, 3)}</b>.`;
+  $('corrTbl').innerHTML = '<tr><th>Corridor</th><th>Net ARS</th><th>ARS / USD</th><th>vs MEP</th><th>Fee haircut</th><th>Slippage</th><th style="width:22%">Relative</th></tr>' +
+    quotes.map((q) => `<tr><td class="name">${q.name}${q.group === 'direct' ? ' <span class="pill" style="color:var(--s3);border-color:currentColor">direct</span>' : ''}</td><td>${fmt(q.netArs)}</td><td>${fmt(q.effRate, 2)}</td><td class="${q.vsMepPct >= 0 ? 'up' : 'down'}">${sgn(q.vsMepPct)}</td><td>${q.haircutPct.toFixed(3)}%</td><td>${q.slippagePct ? q.slippagePct.toFixed(3) + '%' : '—'}${q.unfilledUnits > 0 ? ' (thin)' : ''}</td><td><div class="bar" style="width:${(q.netArs / maxNet * 100).toFixed(1)}%"></div></td></tr>`).join('');
+
+  // KPIs
+  $('kpis').innerHTML = [
+    ['Optimal split net', 'ARS ' + fmt(split.netArs), `${fmt(split.effRate, 2)} ARS/USD · <span class="${split.vsMepPct >= 0 ? 'up' : 'down'}">${sgn(split.vsMepPct ?? 0)} vs MEP</span>`],
+    ['Full ticket on Bitso book', walk.slippagePct.toFixed(3) + '%', `VWAP ${fmt(walk.vwap, 2)} · ${walk.levelsConsumed} levels${walk.complete ? '' : ' · <span class="down">book exhausted</span>'}`],
+    ['Crypto-rail headroom', sgn(par.headroomPct, 2), par.cryptoBeatsMepAtBid ? 'Bitso stacked beats raw MEP' : 'raw MEP beats Bitso stacked'],
+    ['Best direct corridor', 'ARS ' + fmt(quotes.find((q) => q.group === 'direct').netArs), quotes.find((q) => q.group === 'direct').name],
+  ].map(([k, v, sub]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`).join('');
+
+  renderMatrix();
+}
+
+function renderMatrix() {
+  const tna = +$('tna').value / 100, apy = +$('apy').value / 100, dev = +$('dev').value / 100, rt = +$('rt').value / 100;
+  $('tnaO').textContent = (tna * 100).toFixed(1) + '%'; $('apyO').textContent = (apy * 100).toFixed(1) + '%';
+  $('devO').textContent = (dev * 100).toFixed(2) + '%'; $('rtO').textContent = (rt * 100).toFixed(2) + '%';
+  const tnas = Array.from({ length: 9 }, (_, i) => 0.10 + i * 0.05);
+  const apys = Array.from({ length: 11 }, (_, i) => i * 0.01);
+  const opts = { costIn: rt / 2, costOut: rt / 2 };
+  const near = (arr, v) => arr.reduce((b, x) => (Math.abs(x - v) < Math.abs(b - v) ? x : b), arr[0]);
+  const ct = near(tnas, tna), ca = near(apys, apy);
+  let h = '<tr><th>TNA ╲ APY</th>' + apys.map((a) => `<th>${(a * 100).toFixed(0)}%</th>`).join('') + '</tr>';
+  for (const t of tnas) {
+    h += `<tr><th>${(t * 100).toFixed(0)}%</th>`;
+    for (const a of apys) {
+      const f = breakevenDepreciation({ tna: t, apy: a, ...opts });
+      const gap = dev - f; // >0 → USD wins
+      const w = Math.min(1, Math.abs(gap) / 0.02) * 80;
+      const col = `color-mix(in oklab, var(${gap >= 0 ? '--pos' : '--neg'}) ${w.toFixed(0)}%, var(--mid))`;
+      h += `<td class="${t === ct && a === ca ? 'cur' : ''}" style="background:${col}" data-t="${t}" data-a="${a}" data-f="${f}">${(f * 100).toFixed(2)}</td>`;
+    }
+    h += '</tr>';
+  }
+  $('matrix').innerHTML = h;
+  $('matrix').querySelectorAll('td').forEach((td) => {
+    td.onmousemove = (e) => {
+      const t = +td.dataset.t, a = +td.dataset.a, f = +td.dataset.f;
+      const o = compareOutcomes({ tna: t, apy: a, ...opts, f: dev });
+      showTip(e, `<b>TNA ${(t * 100).toFixed(0)}% vs APY ${(a * 100).toFixed(0)}%</b><br>f* = ${(f * 100).toFixed(3)}% / 30d<br>At ${(dev * 100).toFixed(2)}% depreciation: ${o.winner === 'usd' ? 'USD' : 'plazo fijo'} wins by ${Math.abs(o.edgePct).toFixed(3)}%`);
+    };
+    td.onmouseleave = hideTip;
+  });
+  const f = breakevenDepreciation({ tna, apy, ...opts });
+  const o = compareOutcomes({ tna, apy, ...opts, f: dev });
+  $('beNote').innerHTML = `At ${(tna * 100).toFixed(1)}% TNA vs ${(apy * 100).toFixed(1)}% APY with ${(rt * 100).toFixed(2)}% round-trip cost, <b>f* = ${(f * 100).toFixed(3)}%</b> per 30 days. ` +
+    `Expecting ${(dev * 100).toFixed(2)}%: <b class="${o.winner === 'usd' ? 'up' : 'down'}">${o.winner === 'usd' ? 'USD parking' : 'plazo fijo'}</b> ahead by ${Math.abs(o.edgePct).toFixed(3)}%. Outlined cell = nearest grid point.`;
+}
+
+for (const id of ['amt', 'mep', 'spr', 'prem', 'depth', 'used']) $(id).addEventListener('input', render);
+for (const id of ['tna', 'apy', 'dev', 'rt']) $(id).addEventListener('input', renderMatrix);
+render();
+</script>
+</body>
+</html>

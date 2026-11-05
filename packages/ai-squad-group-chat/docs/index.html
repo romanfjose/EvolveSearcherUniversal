@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<!-- Generated from ../index.html by scripts/sync-docs.mjs. Edit the canonical file, then run `npm run docs`. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Grupal con IA</title>
+<meta name="description" content="Multi-persona AI group chat and War Room deliberation studio: @mentions, reply threads, 3-round red-team debates with decision memos, offline demo engine, ES/EN.">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <h1 data-i18n="chats">Chats</h1>
+      <div class="side-actions">
+        <div class="help-wrap">
+          <button class="icon-btn" data-i18n-title="tipsTitle" data-i18n-aria-label="tipsTitle" title="Tips" aria-label="Tips">?</button>
+          <div class="help-tooltip" role="tooltip" data-i18n="tipsText">
+            Tips: use ➕ to create a squad, reply or edit from each message, and @ to mention characters.
+          </div>
+        </div>
+        <button class="icon-btn" data-i18n-title="newGroupTitle" title="New group" onclick="newGroup()">➕</button>
+      </div>
+    </div>
+    <div class="group-list" id="groupList"></div>
+  </aside>
+
+  <main class="chat">
+    <div class="chat-head">
+      <div class="group-avatar" style="width:40px;height:40px;font-size:20px;" id="headAvatar">🤖</div>
+      <div class="titles" onclick="openSettings()">
+        <div class="t" id="headGroupName"></div>
+        <div class="s" id="headMembers"></div>
+      </div>
+      <button class="engine-badge" id="engineBadge" type="button" onclick="openSetup()">Offline demo</button>
+      <button class="icon-btn" id="statusBtn" data-i18n-title="statusesHint" title="Statuses" onclick="openStatusViewer()">◉</button>
+      <button class="pill-btn" id="langBtn" title="Language / idioma" onclick="toggleLanguage()">ES</button>
+      <button class="pill-btn" id="keyBtn" data-i18n-title="keyTitle" title="OpenRouter key" onclick="openSetup()">Key</button>
+      <button class="icon-btn" data-i18n-title="shareTitle" data-i18n-aria-label="shareTitle" title="Export & replay" aria-label="Export & replay" onclick="openShare()">📤</button>
+      <button class="icon-btn" data-i18n-title="clearChatTitle" title="Clear this chat" onclick="clearRound()">🧹</button>
+      <button class="icon-btn" data-i18n-title="settingsTitle" title="Group settings" onclick="openSettings()">⚙️</button>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="composer">
+      <div class="reply-bar" id="replyBar">
+        <div class="reply-meta">
+          <div class="reply-target" id="replyTarget"></div>
+          <div class="reply-preview" id="replyPreview"></div>
+        </div>
+        <button class="mini-btn" data-i18n-title="cancelReply" title="Cancel reply" onclick="cancelReply()">x</button>
+      </div>
+      <div class="mention-box" id="mentionBox"></div>
+      <div class="quick-actions" id="quickActions">
+        <button class="quick-chip" type="button" onclick="sendQuickPrompt('fact')">📖 <span data-i18n="quickFact">Random fact</span></button>
+        <button class="quick-chip" type="button" onclick="sendQuickPrompt('dadjoke')">🎤 <span data-i18n="quickDadJoke">Dad joke</span></button>
+        <button class="quick-chip" type="button" onclick="sendQuickPrompt('gossip')">🍿 <span data-i18n="quickGossip">Gossip</span></button>
+      </div>
+      <div class="composer-row">
+        <textarea id="input" rows="1" data-i18n-placeholder="composerPlaceholder" placeholder="Type a message" onkeydown="onKey(event)" oninput="handleComposerInput(this)"></textarea>
+        <button class="dice-btn" id="surpriseBtn" type="button" onclick="insertSurprisePrompt()" title="Sorprendeme" aria-label="Sorprendeme">🎲</button>
+        <button class="drama-btn" id="dramaBtn" type="button" onclick="dropDramaBomb()" title="Armar drama" aria-label="Armar drama">⚡</button>
+        <button class="send-btn" id="sendBtn" onclick="send()" data-i18n-title="send" title="Send">➤</button>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Statuses -->
+<div class="overlay" id="statusOverlay">
+  <div class="modal small">
+    <h2 data-i18n="statusesTitle">Statuses</h2>
+    <p class="hint" id="statusHint" data-i18n="statusesDescription">Daily lines for the characters. They load only when you open this screen.</p>
+    <div class="status-list" id="statusList"></div>
+    <div class="status-loading" id="statusLoading"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeStatusViewer()" data-i18n="close">Close</button>
+      <button class="btn primary" id="statusRefreshBtn" onclick="refreshDailyStatuses(true)" data-i18n="refreshStatuses">Refresh statuses</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal settings-modal">
+    <h2 id="settingsTitle" data-i18n="settingsTitle">Group settings</h2>
+    <p class="hint" data-i18n="settingsHint">
+      Saved in this browser. This build uses OpenRouter only, so setup stays simple.
+    </p>
+
+    <div class="settings-grid">
+      <div>
+        <label data-i18n="groupName">Group name</label>
+        <input type="text" id="cfgGroupName">
+      </div>
+      <div>
+        <label data-i18n="groupEmoji">Group emoji</label>
+        <input type="text" id="cfgGroupEmoji" class="emoji-in" maxlength="4">
+      </div>
+    </div>
+
+    <div>
+      <label data-i18n="replyStyle">Reply style</label>
+      <select id="cfgMode">
+        <option value="normal" data-i18n="modeNormal">Everyone replies, in order</option>
+        <option value="chaos" data-i18n="modeChaos">Chaos - random 2-4 members reply</option>
+        <option value="deliberation" data-i18n="modeDeliberation">War Room - 3-round debate + decision memo</option>
+      </select>
+    </div>
+    <div class="people-intro">
+      <div>
+        <h3 data-i18n="members">Choose your people</h3>
+        <p class="hint" data-i18n="peopleHint">Pick a personality or make your own. Free models are ready automatically.</p>
+      </div>
+    </div>
+    <div id="aiCards"></div>
+    <button class="btn ghost small" onclick="addMemberCard()" data-i18n="addMember">+ Add person</button>
+
+    <details class="advanced-panel">
+      <summary>⚙️ <span data-i18n="advanced">Advanced</span></summary>
+      <div class="advanced-content">
+        <div class="key-status">
+          <strong id="settingsKeyState">OpenRouter key</strong>
+          <span id="settingsKeyHint">Required once on this device.</span>
+          <button class="btn ghost small" onclick="openSetup(3)" data-i18n="editKey">Edit key</button>
+        </div>
+
+        <div>
+          <label for="cfgUserName" data-i18n="userName">Your name</label>
+          <input type="text" id="cfgUserName" autocomplete="name" maxlength="40">
+          <p class="hint" data-i18n="userNameHint">Characters can use it naturally when replying.</p>
+        </div>
+
+        <div>
+          <label data-i18n="contextWindow">Context window</label>
+          <input type="text" id="cfgCtx" inputmode="numeric">
+          <p class="hint" data-i18n="contextHint">Only the last N messages are sent each turn, so long chats stay cheap.</p>
+        </div>
+
+        <div class="tune-grid">
+          <div class="tune-card">
+            <div class="tune-head">
+              <label for="cfgLen" data-i18n="messageLength">Message length</label>
+              <output id="cfgLenOut">0</output>
+            </div>
+            <input type="range" id="cfgLen" min="-5" max="5" step="1" value="0" oninput="updateTuneLabels()">
+            <p class="hint" data-i18n="lengthHint">Lower is tighter. Higher gives more room.</p>
+          </div>
+          <div class="tune-card">
+            <div class="tune-head">
+              <label for="cfgTemp" data-i18n="randomness">Randomness</label>
+              <output id="cfgTempOut">1.0</output>
+            </div>
+            <input type="range" id="cfgTemp" min="0.2" max="1.6" step="0.1" value="1.0" oninput="updateTuneLabels()">
+            <p class="hint" data-i18n="randomHint">Lower is steadier. Higher gets weirder.</p>
+          </div>
+        </div>
+
+        <label class="check-row">
+          <input type="checkbox" id="cfgAmbient">
+          <span><strong data-i18n="ambientTitle">Catch-up chatter</strong><span data-i18n="ambientHint">When you come back after a while, the group can add a little ongoing conversation for you to jump into.</span></span>
+        </label>
+
+        <h3 data-i18n="promptsFile">Prompts file</h3>
+        <p class="hint" style="margin-bottom:6px;" data-i18n="promptsHint">Optional import/export for personality prompts.</p>
+        <div class="file-row">
+          <button class="btn ghost small" onclick="linkPromptsFile()">🔗 <span data-i18n="linkFile">Link file</span></button>
+          <button class="btn ghost small" onclick="loadPromptsFromFile()">📥 <span data-i18n="load">Load</span></button>
+          <button class="btn ghost small" onclick="savePromptsToFile(true)">💾 <span data-i18n="saveNow">Save now</span></button>
+          <button class="btn ghost small" onclick="exportPromptsDownload()">⬇ <span data-i18n="export">Export</span></button>
+          <span class="file-status" id="fileStatus" data-i18n="noFileLinked">No file linked</span>
+        </div>
+      </div>
+    </details>
+
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeSettings()" data-i18n="cancel">Cancel</button>
+      <button class="btn primary" id="settingsSaveBtn" onclick="saveSettings()" data-i18n="save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- First run OpenRouter setup -->
+<div class="overlay" id="setupOverlay">
+  <div class="modal setup-modal">
+    <div class="setup-body">
+      <div class="setup-step active">
+        <h2 id="setupTitle">Hold up — one quick thing</h2>
+        <p class="hint" id="setupText">We only need your free OpenRouter API key and then you can use AISquad. The key is free and AISquad uses free models, so you do not need to pay to get started.</p>
+        <a class="btn primary setup-api-link" href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener" id="openRouterLink">Get my free API key</a>
+        <label for="setupKeyInput" id="setupKeyLabel">Paste your OpenRouter API key</label>
+        <div class="key-input-row">
+          <input type="password" id="setupKeyInput" autocomplete="off" placeholder="sk-or-v1-...">
+        </div>
+        <p class="setup-note">🔒 <span data-i18n="setupStorageNote">It stays saved only in this browser.</span></p>
+        <label for="setupNameInput" id="setupNameLabel">Your name</label>
+        <input type="text" id="setupNameInput" autocomplete="name" maxlength="40" placeholder="How should the chat call you?">
+        <label id="setupLanguageLabel">Language</label>
+        <select id="setupLanguage" onchange="setLanguage(this.value)">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+      <div class="setup-actions">
+        <button class="btn ghost" onclick="closeSetup()" data-i18n="continueOffline">Continue with the offline demo</button>
+        <button class="btn primary" onclick="setupNext()" id="setupNextBtn">Start using AISquad</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Export & replay -->
+<div class="overlay" id="shareOverlay">
+  <div class="modal small">
+    <h2 data-i18n="shareTitle">Export &amp; replay</h2>
+    <p class="hint" data-i18n="shareHint">Files are generated in your browser. API keys are never included.</p>
+    <button class="type-choice" type="button" onclick="exportTranscriptMd()">
+      <span class="big">📝</span>
+      <span><span class="tt" data-i18n="exportMd">Transcript (.md)</span><br>
+      <span class="td" data-i18n="exportMdDesc">One-click Markdown export of this chat, memos included.</span></span>
+    </button>
+    <button class="type-choice" type="button" onclick="exportSquadJson()">
+      <span class="big">🧩</span>
+      <span><span class="tt" data-i18n="exportJson">Squad template (.json)</span><br>
+      <span class="td" data-i18n="exportJsonDesc">Share the members, prompts and settings so anyone can import the squad.</span></span>
+    </button>
+    <label class="check-row">
+      <input type="checkbox" id="shareIncludeTranscript">
+      <span><strong data-i18n="includeTranscript">Include transcript</strong><span data-i18n="includeTranscriptHint">Lets whoever imports it replay this chat.</span></span>
+    </label>
+    <button class="type-choice" type="button" onclick="importSquadJson()">
+      <span class="big">📥</span>
+      <span><span class="tt" data-i18n="importJson">Import squad (.json)</span><br>
+      <span class="td" data-i18n="importJsonDesc">Load a shared squad template as a new group.</span></span>
+    </button>
+    <button class="type-choice" type="button" onclick="replayChat()">
+      <span class="big">▶️</span>
+      <span><span class="tt" data-i18n="replay">Replay this chat</span><br>
+      <span class="td" data-i18n="replayDesc">Watch the conversation play back message by message.</span></span>
+    </button>
+    <input type="file" id="squadImportInput" accept=".json,application/json" hidden onchange="onSquadFileChosen(this)">
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeShare()" data-i18n="close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="../i18n.js"></script>
+<script src="../personas.js"></script>
+<script src="../squad-core.js"></script>
+<script src="../offline-engine.js"></script>
+<script src="../app.js"></script>
+
+<!-- New group chooser -->
+<div class="overlay" id="newGroupOverlay">
+  <div class="modal small">
+    <h2 data-i18n="newGroupTitle">New group</h2>
+    <p class="hint" data-i18n="newGroupHint">Pick a prebuilt vibe, or roll your own. You can change everything later in ⚙️.</p>
+    <div class="template-list" id="squadTemplates"></div>
+    <h3 style="margin-top:14px;" data-i18n="freeform">Freeform</h3>
+    <button class="type-choice" onclick="createGroup('squad')">
+      <span class="big">🤖</span>
+      <span><span class="tt" data-i18n="buildSquad">Build your squad</span><br>
+      <span class="td" data-i18n="buildSquadDesc">Choose your people and go. Free models are already set up.</span></span>
+    </button>
+    <button class="type-choice" onclick="createGroup('chaos')">
+      <span class="big">🌪️</span>
+      <span><span class="tt" data-i18n="chaosChat">Chaos Chat</span><br>
+      <span class="td" data-i18n="chaosDesc">60 premade personas in one group. A random 2–4 answer each message. You never know who shows up.</span></span>
+    </button>
+    <button class="type-choice spin-choice" onclick="spinThenCreate(this)">
+      <span class="big">🎲</span>
+      <span><span class="tt" data-i18n="spinSquad">Spin a squad</span><br>
+      <span class="td" data-i18n="spinDesc">Roulette mode: instantly rolls 3-5 random characters.</span></span>
+    </button>
+    <button class="type-choice" type="button" onclick="importSquadJson()">
+      <span class="big">📥</span>
+      <span><span class="tt" data-i18n="importJson">Import squad (.json)</span><br>
+      <span class="td" data-i18n="importJsonDesc">Load a shared squad template as a new group.</span></span>
+    </button>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeNewGroup()" data-i18n="cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quick personality edit -->
+<div class="overlay" id="quickEditOverlay">
+  <div class="modal small">
+    <h2 id="qeTitle">Member</h2>
+    <p class="hint" data-i18n="quickEditHint">Tweak this member on the fly — takes effect on their next reply.</p>
+    <label data-i18n="premadePersonality">Premade personality</label>
+    <select id="qePersona" onchange="qePersonaPicked()"></select>
+    <div class="card-top" style="margin-top:10px; padding-right:0;">
+      <div><label style="margin-top:0;" data-i18n="emoji">Emoji</label>
+        <input type="text" class="emoji-in" id="qeEmoji" maxlength="4"></div>
+      <div class="name-in"><label style="margin-top:0;" data-i18n="name">Name</label>
+        <input type="text" id="qeName"></div>
+    </div>
+    <label data-i18n="personalityPrompt">Personality prompt</label>
+    <textarea id="qePrompt" style="min-height:110px;"></textarea>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeQuickEdit()" data-i18n="cancel">Cancel</button>
+      <button class="btn primary" onclick="saveQuickEdit()" data-i18n="save">Save</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

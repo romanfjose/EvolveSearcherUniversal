@@ -1,0 +1,14 @@
+{
+    "name":  "ai-chat-exporter-mv3",
+    "version":  "0.9.0",
+    "private":  true,
+    "description":  "Chat Replay — MV3 extension: capture prompts, replay them across AI web chats, export clean Markdown.",
+    "license":  "MIT",
+    "type":  "commonjs",
+    "scripts":  {
+                    "test":  "node --test test/platforms.test.js test/md.test.js test/prepare.test.js test/ecommerce.test.js"
+                },
+    "engines":  {
+                    "node":  "\u003e=20"
+                }
+}

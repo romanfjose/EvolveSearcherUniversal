@@ -47,6 +47,20 @@
    the whole document.
    ============================================================ */
 
+/* v0.9 — reasoning panels and the sites that guessed:
+   - A thinking/"Thought for 12s" panel that lives OUTSIDE the answer
+     body (Gemini's <model-thoughts>, GLM, Qwen) is handed to the
+     exporter as turn.think, so it lands in the transcript as a foldout
+     instead of vanishing. One inside the body is folded by md.js.
+   - DeepSeek renders the reasoning with the same .ds-markdown class as
+     the answer, so the heuristic split one reply into two turns and
+     labelled the reasoning "user". It now anchors on .ds-message.
+   - Grok labelled turns by strict alternation; one missing bubble
+     flipped every role after it. Roles now come from the row's
+     alignment (items-end = you), alternation only as a last resort.
+   - The insertion primitives replay uses (insertText, pressEnter…) live
+     here as `inject`, so they're testable against every site fixture. */
+
 const ChatReplayAdapters = (() => {
 
   const $ = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
@@ -197,8 +211,14 @@ const ChatReplayAdapters = (() => {
     return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
   }
 
+  // First match with text that isn't inside a reasoning panel — Kimi and
+  // Qwen render the reasoning with the same markdown class as the answer,
+  // and it comes first.
   function pickBody(turn, sels) {
-    for (const s of sels) { const e = $(s, turn); if (e && (e.innerText || "").trim()) return e; }
+    for (const s of sels) {
+      const e = $$(s, turn).find((x) => (x.innerText || "").trim() && !inThink(x, turn));
+      if (e) return e;
+    }
     return turn;
   }
 
@@ -228,6 +248,34 @@ const ChatReplayAdapters = (() => {
     let a = n;
     while (a.parentElement && a.parentElement !== root) a = a.parentElement;
     return a.parentElement === root ? a : null;
+  }
+
+  /* ------- reasoning panels ------- */
+
+  // md.js owns the definition of "this is a thinking panel"; adapters.js
+  // also loads in the popup, where md.js doesn't, so guard the lookup.
+  const isThink = (el) => !!el && typeof ChatReplayMd !== "undefined" && ChatReplayMd.isThinking(el);
+  const THINK_CANDS = "model-thoughts,details,[class*='think'],[class*='Think'],[class*='reason'],[data-testid*='think'],[data-testid*='reason'],[data-thinking]";
+
+  function inThink(el, stop) {
+    for (let a = el; a && a !== stop; a = a.parentElement) if (isThink(a)) return true;
+    return false;
+  }
+  // Text a block shows that isn't reasoning — a sibling holding only a
+  // thinking panel is not "another turn" to the heuristics below.
+  function ownText(el) {
+    if (isThink(el)) return "";
+    let t = el.textContent || "";
+    for (const k of $$(THINK_CANDS, el)) if (isThink(k) && !inThink(k.parentElement, el)) t = t.replace(k.textContent || "", "");
+    return t.trim();
+  }
+
+  function attachThink(turns) {
+    return (turns || []).map((t) => {
+      if (t.role !== "assistant" || t.think || !t.el || !t.body || t.body === t.el) return t;
+      const k = $$(THINK_CANDS, t.el).find((n) => isThink(n) && !n.contains(t.body) && !t.body.contains(n) && (n.textContent || "").trim());
+      return k ? { ...t, think: k } : t;
+    });
   }
 
   /* ------- layout-based role inference -------
@@ -414,14 +462,14 @@ const ChatReplayAdapters = (() => {
   // markdown, walk up to the turn wrapper, and read the siblings.
   function heuristicTurns() {
     const marks = outermost($$("[class*='markdown'],[class*='prose'],[class*='message-content'],[class*='response-content']")
-      .filter(visible).filter((el) => !ours(el) && (el.innerText || "").trim()));
+      .filter(visible).filter((el) => !ours(el) && !inThink(el) && (el.innerText || "").trim()));
     if (!marks.length) return [];
     // Walk up from the rendered markdown to the element that represents
     // the whole turn — but STOP as soon as the next parent up would also
     // swallow a sibling that has text of its own. Without that guard the
     // walk climbs all the way to the scroll container, and the entire
     // conversation collapses into a single "assistant" turn.
-    const hasText = (el) => ((el.innerText || el.textContent || "").trim().length > 0);
+    const hasText = (el) => ownText(el).length > 0;
     const blocks = marks.map((m) => {
       let a = m;
       while (a.parentElement && a.parentElement !== document.body) {
@@ -452,8 +500,7 @@ const ChatReplayAdapters = (() => {
     const out = [];
     for (const child of Array.from(parent.children)) {
       if (ours(child) || !visible(child)) continue;
-      const txt = (child.innerText || "").trim();
-      if (!txt) continue;
+      if (!ownText(child)) continue;
       const idx = blocks.indexOf(child);
       if (idx >= 0) out.push({ role: "assistant", el: child, body: marks[idx] });
       else out.push({ role: "user", el: child, body: child });
@@ -507,6 +554,8 @@ const ChatReplayAdapters = (() => {
 
   // Fill in the derived members every adapter shares.
   function derive(adp) {
+    const rawTurns = adp.turns;
+    adp.turns = () => attachThink(rawTurns.call(adp));
     if (!adp.transcript) {
       adp.transcript = () => (adp.turns() || [])
         .map((t) => ({ role: t.role, text: stripSrLabels((t.body || t.el).innerText) }))
@@ -587,6 +636,19 @@ const ChatReplayAdapters = (() => {
           : pickBody(n, ["message-content .markdown", "message-content", "[class*='response-text']"]);
         return { role: isUser ? "user" : "assistant", el: n, body };
       });
+    },
+
+    // Gemini renders each typed line as its own <p class="query-text-line">,
+    // so innerText puts a blank line between every line of a prompt and
+    // a replay would send that. Rebuild the prompt line by line.
+    transcript() {
+      return gemini.turns().map((t) => {
+        const lines = t.role === "user" ? $$(".query-text-line", t.body) : [];
+        const text = lines.length
+          ? lines.map((l) => (l.innerText || "").replace(/\n+$/, "")).join("\n").trim()
+          : stripSrLabels((t.body || t.el).innerText);
+        return { role: t.role, text };
+      }).filter((t) => t.text);
     },
 
     getTranscriptRoot() {
@@ -999,7 +1061,9 @@ const ChatReplayAdapters = (() => {
     },
     getInput() { return $(".chat-input-editor[contenteditable='true']") || generic.getInput(); },
     getSendButton() {
-      const b = $("[class*='send-button'], [data-testid='send-button']");
+      // The innermost one: Kimi wraps .send-button in .send-button-container,
+      // and a click on the wrapper never reaches the handler inside it.
+      const b = $(".send-button") || $$("[class*='send-button'], [data-testid='send-button']").filter(visible).pop();
       if (b && visible(b)) return b;
       return generic.getSendButton(kimi.getInput());
     },
@@ -1015,8 +1079,18 @@ const ChatReplayAdapters = (() => {
     options: {},
     async applyConfig() { return { ok: true, note: "" }; },
     turns() {
-      // DeepSeek ships hashed class names, but the rendered-answer
-      // container `.ds-markdown` has been stable — anchor on it.
+      // DeepSeek ships hashed class names; `.ds-message` (one per turn,
+      // both sides) and `.ds-markdown` (rendered text) are the stable
+      // hooks. The reasoning panel ALSO renders as .ds-markdown, so a
+      // turn is the model's only if it holds markdown outside reasoning.
+      const msgs = outermost($$(".ds-message").filter(visible).filter((n) => !ours(n) && (n.innerText || "").trim()));
+      if (msgs.length) {
+        return msgs.sort(byDocOrder).map((n) => {
+          const answers = outermost($$(".ds-markdown", n).filter((m) => !inThink(m, n)));
+          if (!answers.length) return { role: "user", el: n, body: n };
+          return { role: "assistant", el: n, body: answers.length === 1 ? answers[0] : n };
+        });
+      }
       if (!$$(".ds-markdown").filter(visible).length) return genericTurns();
       return heuristicTurns();
     },
@@ -1033,9 +1107,29 @@ const ChatReplayAdapters = (() => {
     newChatUrl: "https://chat.qwen.ai/",
     options: {},
     async applyConfig() { return { ok: true, note: "" }; },
-    turns: genericTurns,
-    getTranscriptRoot: generic.getTranscriptRoot,
-    getInput: generic.getInput,
+    TURN_SEL: "[class*='qwen-chat-message-user'],[class*='qwen-chat-message-assistant'],[class*='chat-user-message-container'],[class*='chat-response-message-container']",
+    turns() {
+      const nodes = outermost($$(qwen.TURN_SEL).filter(visible).filter((n) => !ours(n) && (n.innerText || "").trim()));
+      if (!nodes.length) return genericTurns();
+      return nodes.sort(byDocOrder).map((n) => {
+        const isUser = /(qwen-chat-message-user|chat-user-message)/.test(n.getAttribute("class") || "");
+        return {
+          role: isUser ? "user" : "assistant",
+          el: n,
+          body: isUser
+            ? pickBody(n, ["[class*='user-message-content']", "[class*='user-message']"])
+            : pickBody(n, ["[class*='response-message-content'] [class*='markdown']", "[class*='qwen-markdown']",
+                           "[class*='markdown']", "[class*='response-message-content']"]),
+        };
+      });
+    },
+    getTranscriptRoot() { return containerOf(qwen.TURN_SEL) || generic.getTranscriptRoot(); },
+    getInput() { return $("#chat-input") || generic.getInput(); },
+    getSendButton() {
+      const b = $("#send-message-button") || $("button.send-button");
+      if (b && visible(b)) return b;
+      return generic.getSendButton(qwen.getInput());
+    },
   });
 
   /* ================= Grok ================= */
@@ -1048,12 +1142,25 @@ const ChatReplayAdapters = (() => {
     options: {},
     async applyConfig() { return { ok: true, note: "" }; },
     turns() {
-      const nodes = outermost($$("[class*='message-bubble']").filter(visible));
+      const nodes = outermost($$("[class*='message-bubble']").filter(visible)).sort(byDocOrder);
       if (!nodes.length) return genericTurns();
-      return nodes.sort(byDocOrder).map((n, i) => ({
-        role: i % 2 === 0 ? "user" : "assistant",
+      // The row a bubble sits in says who's speaking: items-end is you,
+      // items-start is Grok. Geometry next; alternation only if neither.
+      const rowRole = (n) => {
+        for (let a = n, d = 0; a && d < 4; a = a.parentElement, d++) {
+          const c = " " + (a.getAttribute("class") || "") + " ";
+          if (/\s(items-end|justify-end|self-end)\s/.test(c)) return "user";
+          if (/\s(items-start|justify-start|self-start)\s/.test(c)) return "assistant";
+        }
+        return null;
+      };
+      const container = containerOfNodes(nodes);
+      const guesses = nodes.map((n) => rowRole(n) || alignRole(n, container));
+      const roles = guesses.some(Boolean) ? guesses.map((g) => g || "assistant") : nodes.map((_, i) => (i % 2 ? "assistant" : "user"));
+      return nodes.map((n, i) => ({
+        role: roles[i],
         el: n,
-        body: pickBody(n, ["[class*='markdown']", "[class*='prose']"]),
+        body: pickBody(n, ["[class*='response-content-markdown']", "[class*='markdown']", "[class*='prose']"]),
       }));
     },
     getTranscriptRoot: generic.getTranscriptRoot,
@@ -1311,7 +1418,7 @@ const ChatReplayAdapters = (() => {
     if (!cfg || !cfg.user) return adp;
     adp.turns = () => {
       const t = learnedTurns(cfg);
-      return t.length ? t : genericTurns();
+      return attachThink(t.length ? t : genericTurns());
     };
     adp.transcript = () => adp.turns()
       .map((t) => ({ role: t.role, text: stripSrLabels((t.body || t.el).innerText) }))
@@ -1324,6 +1431,85 @@ const ChatReplayAdapters = (() => {
   }
 
   const learn = { ladder, reconcile, matchSig, learnedTurns, applyLearned, sigLabel, sigEqual, BODY_SELS };
+
+  /* ================= prompt injection (replay) ================= */
+
+  function readInputText(input) {
+    if (!input) return "";
+    return (input.tagName === "TEXTAREA" || input.tagName === "INPUT")
+      ? (input.value || "") : (input.innerText || "");
+  }
+
+  function insertText(input, text) {
+    input.focus();
+    if (input.tagName === "TEXTAREA" || input.tagName === "INPUT") {
+      // React tracks the value through the prototype setter; assigning
+      // input.value directly is swallowed and the send button stays dead.
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
+      if (setter) setter.call(input, text); else input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(input);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand("insertText", false, text);
+    // ProseMirror (ChatGPT / Claude) calls event.preventDefault() inside its
+    // beforeinput handler when inserting into its own document state, causing
+    // execCommand("insertText") to return false even though the text WAS inserted.
+    // Only fall back to setting innerText if the editor is genuinely still empty.
+    const current = (input.innerText || input.textContent || "").trim();
+    if (!current) {
+      input.innerText = text;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+  }
+
+  function insertTextFast(input, text) {
+    input.focus();
+    if (text && text.length > 1500 && input.tagName !== "TEXTAREA" && input.tagName !== "INPUT") {
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const dt = new DataTransfer();
+        dt.setData("text/plain", text);
+        const ev = new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: dt,
+        });
+        input.dispatchEvent(ev);
+        if (readInputText(input).trim().length > 0 || ev.defaultPrevented) {
+          return;
+        }
+      } catch { /* fall back to standard insertText */ }
+    }
+    insertText(input, text);
+  }
+
+  function pressEnter(input) {
+    const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    input.dispatchEvent(new KeyboardEvent("keydown", o));
+    input.dispatchEvent(new KeyboardEvent("keypress", o));
+    input.dispatchEvent(new KeyboardEvent("keyup", o));
+  }
+
+  // The replay window over n captured prompts. 1-based, inclusive —
+  // the numbers the popup shows. 0 / a stale high `to` means "to the end".
+  function replayRange(n, fromIn, toIn) {
+    const from = Math.max(1, Math.min(Number(fromIn) || 1, n || 1));
+    let to = Number(toIn) || 0;
+    if (!to || to > n) to = n;
+    if (to < from) to = from;
+    return { from, to, count: Math.max(0, Math.min(to, n) - from + 1) };
+  }
+
+  const inject = { readInputText, insertText, insertTextFast, pressEnter, replayRange };
 
   /* ================= registry ================= */
 
@@ -1401,6 +1587,6 @@ const ChatReplayAdapters = (() => {
 
   return {
     forHost, generic, findButtonByHint, nearestButtonToInput, clickByText, humanClick, composerScope,
-    diagnose, launchTargets, visible, scrollRootFrom, stripSrLabels, learn,
+    diagnose, launchTargets, visible, scrollRootFrom, stripSrLabels, learn, inject,
   };
 })();

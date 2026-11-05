@@ -19,6 +19,66 @@ back to generic heuristics — and if those aren't enough, **Teach this site**
 
 ---
 
+## New in v0.9 — exports that survive math, code chrome and reasoning panels
+
+**[▶ Adapter playground](docs/index.html)** runs the extension's real
+`adapters.js` and `md.js` in your browser. Pick a platform fixture, or paste
+a chat page's HTML, and watch the turn split, the Markdown export and the
+prompt-replay queue update live. It is a static file. Open it from a checkout
+or from GitHub Pages; nothing leaves the browser.
+
+What changed in the export:
+
+- **Math round-trips as TeX.** KaTeX (ChatGPT, Claude, DeepSeek, Kimi, Qwen,
+  Grok, GLM) paints each formula twice: a MathML copy and an `aria-hidden`
+  HTML copy. The old walker read the MathML text, so `x^2` came out as
+  `x2x^2`. The TeX source is now read from KaTeX's `<annotation>`, Gemini's
+  `data-math`, or MathJax's `alttext`, and written as `$…$` / `$$…$$`.
+- **Code blocks keep their language.** The language label usually sits
+  outside `<code>`: Gemini's header bar, DeepSeek's banner, ChatGPT's sticky
+  header, the Grok, Kimi and Qwen headers. It is now read from there and no
+  longer leaks into the export as a stray `python` line above the block.
+  Highlighters that render one `<div>` per line (CodeMirror on Qwen) keep
+  their newlines. Line-number gutters are dropped. A sample that itself
+  contains ```` ``` ```` fences gets a longer outer fence.
+- **Reasoning panels become a foldout.** "Thought for 9 seconds" panels
+  (Gemini `<model-thoughts>`, DeepSeek, Kimi, Qwen, GLM) export as
+  `<details><summary>…</summary>` ahead of the answer. You can also quote
+  or drop them (`thinking: "inline" | "drop"`). DeepSeek uses `.ds-markdown`
+  for both reasoning and answer, so the heuristic used to split one reply
+  into two turns and label the reasoning "user". The adapter now anchors
+  on `.ds-message`.
+- **Prompts keep their line breaks** in the Markdown, and a typed `## ` line
+  is escaped so it can't pose as a turn boundary. Replay sends Gemini
+  prompts line for line, without a blank line between each one.
+- **Tables:** a nested table no longer leaks its rows into the outer one.
+  Cells keep `<br>`, `colspan` pads correctly, and alignment is read from
+  the column header.
+- **Grok** roles come from each row's alignment, not from strict
+  alternation, so one missing bubble no longer flips every role after it.
+  The **Kimi** send click now goes to the inner `.send-button`; a click on
+  its wrapper never reached the handler.
+
+Two new export options, under **Export** in the popup:
+
+- **drop duplicate turns** (on by default). Duplicates are removed
+  deterministically: the same turn read twice in a row, a streaming snapshot
+  followed by the finished turn (the longer one is kept), and a whole
+  exchange that a virtualised list rendered twice. A prompt asked twice
+  with *different* answers is kept.
+- **redact emails, keys, tokens, cards & phones** (off by default). This
+  covers emails; OpenAI, Anthropic, AWS, Google and Stripe keys; GitHub and
+  Slack tokens; JWTs; bearer tokens; `password=`-style values; PEM private
+  keys; Luhn-checked card numbers; mod-97-checked IBANs; US SSNs; and
+  international phone numbers. Each distinct value gets a stable
+  placeholder, so `[EMAIL_1]` means the same address in every turn. The
+  count is written to the front matter (`redacted: 3`).
+
+`md.js` → `ChatReplayMd.prepare(turns, { dedupe, redact })` is the single
+step between harvesting and any export builder.
+
+---
+
 ## New in v0.8 — the search page, not just the listing
 
 Adding products one listing at a time solved the wrong half of the
@@ -738,44 +798,33 @@ treated as stuck and skipped.
 
 ## Tests
 
-`test/` holds a headless harness: jsdom, the real `md.js` / `adapters.js` /
-`content.js`, and synthetic geometry so the layout-based role inference can
-actually be exercised. It covers the Outlier split, the fallbacks, the
-ChatGPT/Claude adapters against regression, markdown fidelity, and the
-clipboard-blocked path end to end.
-
-`run2.js` also drives the v0.5 message API the way the popup does — stubbing
-`chrome.runtime.onMessage` and calling the registered listener directly — and
-asserts the things the popup can't see for itself: that **no panel is
-injected into the page**, that export hands the markdown back rather than
-writing it, that a built transcript is retained for a popup that was closed
-mid-scan, and that settings and prompts round-trip.
-
-`run3.js` drives the replay loop for real against a fake composer and a fake
-model that answers after a beat, so the send → wait → send cycle genuinely
-runs. It covers the range (only the selected slice is sent; a new prompt list
-resets it), per-tab resume (a halt must not move the shared range), and **two
-tabs replaying different ranges to completion at the same time** without
-leaking prompts into each other.
-
-`run4.js` covers the v0.8 search path: the card reader against current
-markup **and** against the same page with its class names scrambled,
-its refusal to fire on a product page, deduplication of a product that
-appears in both a carousel and the grid, and the table/detail/plain/JSON
-renderings.
-
-`run5.js` boots `popup.html` in jsdom with a stubbed `chrome` and clicks
-the buttons, which is the only way to test the parts that can lose data:
-that the list is emptied *only* after a clipboard write that succeeded,
-that a formatting toggle re-renders from the cached read instead of
-re-scraping, and that a saved search is still copyable from a chat tab
-with no listing under it.
-
 ```bash
-npm install jsdom
-node test/run.js && node test/run2.js && node test/run3.js && \
-  node test/run4.js && node test/run5.js
+npm test
 ```
+
+The suite has no dependencies. It runs on `node:test` (Node ≥ 20) over
+[`test/dom.js`](test/dom.js), a small DOM written for it: an HTML parser,
+a CSS selector engine, `innerText`, Range/Selection, events and
+`execCommand`. It loads the extension's own files unmodified. Two browser
+behaviours are reproduced on purpose because the code depends on them:
+SVG and MathML elements report a lowercase `tagName`, and geometry comes
+from `data-box="left,top,width,height"`. That lets layout-based role
+inference run without a layout engine.
+
+| File | Covers |
+|---|---|
+| [`fixtures/fixtures.js`](test/fixtures/fixtures.js) | Hand-reduced copies of each site's turn markup: ChatGPT, Claude, Gemini, DeepSeek, Kimi, Qwen, Grok, GLM/Z.ai, Outlier, plus a Mercado Libre results page. Every chat fixture carries the same three exchanges, so one `EXPECT` checks them all. The playground loads this same file. |
+| [`platforms.test.js`](test/platforms.test.js) | Per platform: adapter resolution, exact role order, prompts captured verbatim, code language and text, nested fences, TeX, tables, lists, reasoning foldouts, no UI chrome in the export, one `##` per turn, prompt injection into the real composer (textarea setter / ProseMirror `beforeinput`), the send button, and idle detection. |
+| [`md.test.js`](test/md.test.js) | Converter edge cases: MathJax, `<br>`/per-line-div code, gutters, inline backticks, code inside lists, nested tables, `colspan`, alignment, `<details>`, task lists. |
+| [`prepare.test.js`](test/prepare.test.js) | Dedupe rules and their determinism. Every redaction rule, plus the look-alikes it must leave alone (prices, versions, Luhn-invalid numbers, IPs). |
+| [`ecommerce.test.js`](test/ecommerce.test.js) | The results page: cents rebuilt from the superscript, sponsored flag, tracker URL dropped, carousel duplicate removed, structural fallback when class names change. |
+| [`legacy.test.js`](test/legacy.test.js) | Runs the scenario scripts `run.js`–`run5.js`. These cover the Outlier role split, the headless message API and clipboard fallback, the replay loop (range, per-tab resume, two tabs at once, wake pings), the search extractor, and the popup's copy-then-clear path. |
+
+The fixtures are **not** scraped captures, because every site needs a login.
+They copy the hooks the adapters depend on (tags, classes, test ids,
+code-block chrome, KaTeX's double rendering, reasoning panels, the composer)
+and drop the styling noise. When a site changes, refresh its fixture from
+**Copy diagnostics**.
 
 Nothing in `test/` ships to the browser; Chrome ignores it.
 
@@ -791,6 +840,12 @@ Everything site-specific lives in `adapters.js`. Each adapter has four jobs:
 | `getInput()`     | the message box element                      |
 | `getSendButton()`| the send button element                      |
 | `isBusy()`       | `true` while the model is generating         |
+
+When a site redesigns, start from **Copy diagnostics**: its
+`firstUserTurnHTML` / `firstAssistantTurnHTML` are what to paste into that
+site's fixture in [`test/fixtures/fixtures.js`](test/fixtures/fixtures.js)
+(or into the [playground](docs/index.html)'s *Paste HTML* tab first).
+Then `npm test` says exactly which part of the export broke.
 
 To find new selectors: right-click the element on the site → *Inspect* →
 note a stable-looking class or `aria-label` → update the adapter → go to

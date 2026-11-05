@@ -164,68 +164,8 @@
 
   /* ---------------- insertion + verified send ---------------- */
 
-  function readInputText(input) {
-    if (!input) return "";
-    return (input.tagName === "TEXTAREA" || input.tagName === "INPUT")
-      ? (input.value || "") : (input.innerText || "");
-  }
-
-  function insertText(input, text) {
-    input.focus();
-    if (input.tagName === "TEXTAREA" || input.tagName === "INPUT") {
-      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
-      if (setter) setter.call(input, text); else input.value = text;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      return;
-    }
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(input);
-    sel.removeAllRanges();
-    sel.addRange(range);
-    document.execCommand("insertText", false, text);
-    // ProseMirror (ChatGPT / Claude) calls event.preventDefault() inside its
-    // beforeinput handler when inserting into its own document state, causing
-    // execCommand("insertText") to return false even though the text WAS inserted.
-    // Only fall back to setting innerText if the editor is genuinely still empty.
-    const current = (input.innerText || input.textContent || "").trim();
-    if (!current) {
-      input.innerText = text;
-      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    }
-  }
-
-  function insertTextFast(input, text) {
-    input.focus();
-    if (text && text.length > 1500 && input.tagName !== "TEXTAREA" && input.tagName !== "INPUT") {
-      try {
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(input);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        const dt = new DataTransfer();
-        dt.setData("text/plain", text);
-        const ev = new ClipboardEvent("paste", {
-          bubbles: true,
-          cancelable: true,
-          clipboardData: dt,
-        });
-        input.dispatchEvent(ev);
-        if (readInputText(input).trim().length > 0 || ev.defaultPrevented) {
-          return;
-        }
-      } catch { /* fall back to standard insertText */ }
-    }
-    insertText(input, text);
-  }
-
-  function pressEnter(input) {
-    const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-    input.dispatchEvent(new KeyboardEvent("keydown", o));
-    input.dispatchEvent(new KeyboardEvent("keypress", o));
-    input.dispatchEvent(new KeyboardEvent("keyup", o));
-  }
+  // Shared with the test suite and the docs playground — see adapters.js.
+  const { readInputText, insertTextFast, pressEnter } = ChatReplayAdapters.inject;
 
   // Fingerprint of the user side of the transcript: turn count + tail of
   // the last user message. If this changes after a send attempt, the
@@ -370,12 +310,7 @@
   // Numbers here are 1-based and INCLUSIVE, because they're the ones
   // shown in the popup and in "Sending prompt 6 of 8".
   function range() {
-    const n = state.prompts.length;
-    let from = Math.max(1, Math.min(Number(settings.from) || 1, n || 1));
-    let to = Number(settings.to) || 0;
-    if (!to || to > n) to = n;          // 0 / stale high value ⇒ "to the end"
-    if (to < from) to = from;
-    return { from, to, count: Math.max(0, to - from + 1) };
+    return ChatReplayAdapters.inject.replayRange(state.prompts.length, settings.from, settings.to);
   }
 
   async function runReplay(ui, startAtOverride) {
@@ -483,9 +418,9 @@
       if (!body) continue;
       const text = t.editTa
         ? (t.editTa.value || "").trim()
-        : ChatReplayMd.htmlToPlain(body);
+        : ChatReplayMd.htmlToPlain(body, { preWrap: t.role === "user" });
       if (!text) continue;
-      const md = t.editTa ? text : (ChatReplayMd.htmlToMd(body) || text);
+      const md = t.editTa ? text : (ChatReplayMd.turnToMd(t) || text);
       out.push({ role: t.role, text, md });
     }
     return out;
@@ -717,10 +652,22 @@
     return numbered;
   }
 
+  // Dedupe + optional redaction run on every export, AFTER the harvest
+  // cache: flipping "redact" must not cost another scroll-scan.
+  function prepared(raw) {
+    const { turns, report } = ChatReplayMd.prepare(raw, { dedupe: settings.dedupe !== false, redact: !!settings.redact });
+    const numbered = numberTurns(turns);
+    const meta = { ...exportMeta(numbered), prep: report };
+    const bits = [];
+    if (report.deduped) bits.push(`${report.deduped} duplicate${report.deduped > 1 ? "s" : ""} dropped`);
+    if (report.redactedTotal) bits.push(`${report.redactedTotal} secret${report.redactedTotal > 1 ? "s" : ""} redacted`);
+    return { turns: numbered, meta, note: bits.length ? ` · ${bits.join(" · ")}` : "" };
+  }
+
   async function doExport(ui, kind) {
-    const turns = await gatherForExport(ui);
-    if (!turns.length) { ui.setStatus("Nothing to export here yet."); return; }
-    const meta = exportMeta(turns);
+    const raw = await gatherForExport(ui);
+    if (!raw.length) { ui.setStatus("Nothing to export here yet."); return; }
+    const { turns, meta, note } = prepared(raw);
     const users = turns.filter((t) => t.role === "user").length;
 
     if (kind === "copy") {
@@ -728,7 +675,7 @@
       pendingCopy = text;
       if (await writeClipboard(text)) {
         ui.hideCopyBox();
-        ui.setStatus(`Copied ${turns.length} turns (${users} yours) as Markdown — paste it into your workspace.`);
+        ui.setStatus(`Copied ${turns.length} turns (${users} yours) as Markdown${note} — paste it into your workspace.`);
       } else {
         // The transcript is BUILT and kept. Nothing is lost — the browser
         // just wants a click it can see.
@@ -744,7 +691,7 @@
     };
     const [text, ext, mime] = map[kind] || map.md;
     download(text, ChatReplayMd.filename(meta, ext), mime);
-    ui.setStatus(`Saved ${turns.length} turns (${users} yours) as .${ext}.`);
+    ui.setStatus(`Saved ${turns.length} turns (${users} yours) as .${ext}${note}.`);
   }
 
   async function scanOnly(ui) {
@@ -1895,7 +1842,7 @@
   /* ---------------- settings ---------------- */
 
   const KEY_SETTINGS = "chatReplay.settings";
-  const settings = { settle: 4, minReply: 6, from: 1, to: 0, deep: true, showFab: false };
+  const settings = { settle: 4, minReply: 6, from: 1, to: 0, deep: true, showFab: false, dedupe: true, redact: false };
   const saveSettings = () => sset(KEY_SETTINGS, settings);
 
   function applySettings(s) {
@@ -2063,13 +2010,13 @@
       view.busy = true;
       try {
         if (kind !== "copy") { await doExport(ui, kind); return {}; }
-        const turns = await gatherForExport(ui);
-        if (!turns.length) { ui.setStatus("Nothing to export here yet."); return { markdown: "" }; }
-        const meta = exportMeta(turns);
+        const raw = await gatherForExport(ui);
+        if (!raw.length) { ui.setStatus("Nothing to export here yet."); return { markdown: "" }; }
+        const { turns, meta, note } = prepared(raw);
         const users = turns.filter((t) => t.role === "user").length;
         const text = ChatReplayMd.buildMarkdown(turns, meta);
         view.pendingCopy = text;
-        ui.setStatus(`Built ${turns.length} turns (${users} yours).`);
+        ui.setStatus(`Built ${turns.length} turns (${users} yours)${note}.`);
         return { markdown: text, turns: turns.length, users };
       } finally { view.busy = false; }
     },

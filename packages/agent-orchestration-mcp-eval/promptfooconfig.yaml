@@ -1,0 +1,9 @@
+# Promptfoo config. Run with: npx promptfoo@latest eval -c promptfooconfig.yaml
+# Fixtures come from evals/cases.json (shared with `npm run eval`). No API keys or network calls are needed:
+# the provider is a deterministic local function.
+description: agent-eval-policy deterministic fixtures
+prompts:
+  - '{{payload}}'
+providers:
+  - file://evals/promptfoo-provider.mjs
+tests: file://evals/promptfoo-tests.mjs

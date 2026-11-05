@@ -1,270 +1,170 @@
 #!/usr/bin/env node
 /**
- * CashoutRails — Live USD -> ARS Route, Order-Book & Contractor Corridor Comparator
- * Usage: node check-routes.mjs [usd_amount] [--json]
- * Default amount: 1000 USD
+ * CashoutRails — USD → ARS route, order-book, split and treasury-breakeven comparator.
+ * Usage: node check-routes.mjs [usd_amount] [--offline] [--json] [--tna=0.2199] [--apy=0.038]
+ * Default amount 1000 USD. --offline uses the bundled illustrative snapshot (src/snapshot.mjs).
+ * Math lives in src/; this file only fetches, composes and prints.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CORRIDORS, quoteCorridor, keepFactor, parityThresholds, corridorById } from './src/corridors.mjs';
+import { findOptimalSplit, venuesFromCorridors, DEFAULT_SPLIT_VENUES } from './src/split.mjs';
+import { breakevenDepreciation, tnaToPeriodRate, apyToPeriodRate } from './src/breakeven.mjs';
+import { fetchLiveRaw, marketFromRaw } from './src/market.mjs';
+import { SNAPSHOT } from './src/snapshot.mjs';
+
+export { walkOrderBook } from './src/orderbook.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_PATH = path.join(HERE, 'latest-routes.json');
+const r2 = (n) => (n == null ? null : Number(n.toFixed(2)));
 
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) CashoutRails/2.0',
-  'Accept': 'application/json',
-};
+export function buildReport(market, usdAmount, { tna = 0.2199, apy = 0.038 } = {}) {
+  const shape = (q) => ({
+    id: q.id, corridor: q.group, name: q.name, netArs: r2(q.netArs), effRate: r2(q.effRate),
+    vsMepPct: r2(q.vsMepPct), haircutPct: Number(q.haircutPct.toFixed(4)), vwap: r2(q.vwap),
+    slippagePct: Number(q.slippagePct.toFixed(4)), unfilledUnits: r2(q.unfilledUnits),
+  });
+  const quotes = CORRIDORS.map((d) => quoteCorridor(d, usdAmount, market)).sort((a, b) => b.netArs - a.netArs);
+  const payoneerRoutes = quotes.filter((q) => q.group === 'payoneer').map(shape);
+  const contractorCorridors = quotes.filter((q) => q.group === 'direct').map(shape);
 
-async function fetchJson(url) {
-  const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
-  return res.json();
-}
+  const stacked = corridorById('payo_bitso_stacked');
+  const parity = parityThresholds({
+    mep: market.mepBid, ccl: market.cclBid, bid: market.bids[0]?.price ?? 0,
+    keep: keepFactor([...stacked.pre, ...stacked.post].map((l) => l.pct)),
+  });
 
-export function walkOrderBook(bids, targetQty) {
-  let remaining = targetQty;
-  let proceedsArs = 0;
-  for (const b of bids) {
-    const price = parseFloat(b.price);
-    const amount = parseFloat(b.amount);
-    const take = Math.min(remaining, amount);
-    proceedsArs += take * price;
-    remaining -= take;
-    if (remaining <= 1e-9) break;
-  }
-  const filled = targetQty - remaining;
-  return {
-    filled,
-    unfilled: remaining,
-    vwap: filled > 0 ? proceedsArs / filled : 0,
-    grossArs: proceedsArs,
-  };
-}
+  const split = findOptimalSplit(usdAmount, venuesFromCorridors(DEFAULT_SPLIT_VENUES, market), { mepBid: market.mepBid });
 
-function fmtArs(n) {
-  return 'ARS ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-export async function computeCashoutRoutes(usdAmount = 1000) {
-  const stamp = new Date().toISOString();
-  const [bitsoBook, dolarApi, cyUsdt, cyUsdc] = await Promise.all([
-    fetchJson('https://api.bitso.com/v3/order_book/?book=usdt_ars&aggregate=false'),
-    fetchJson('https://dolarapi.com/v1/dolares'),
-    fetchJson(`https://criptoya.com/api/usdt/ars/${Math.round(usdAmount)}`),
-    fetchJson(`https://criptoya.com/api/usdc/ars/${Math.round(usdAmount)}`),
-  ]);
-
-  const mep = dolarApi.find((d) => d.casa === 'bolsa');
-  const ccl = dolarApi.find((d) => d.casa === 'contadoconliqui');
-  const mepBid = mep ? parseFloat(mep.compra) : 0;
-  const cclBid = ccl ? parseFloat(ccl.compra) : 0;
-  const rawMepArs = usdAmount * mepBid;
-
-  const bids = bitsoBook?.payload?.bids || [];
-  const usdtAfterPayoneer = usdAmount * (1 - 0.029); // 2.9% Payoneer -> Bitso fee
-  const walk = walkOrderBook(bids, usdtAfterPayoneer);
-  const bitsoNetStacked = walk.grossArs * (1 - 0.006); // 0.6% Bitso ARS taker fee
-  const bitsoNetNoStack = walk.grossArs; // if 2.9% covers conversion
-
-  const beloBid = cyUsdc?.belo?.totalBid || 0;
-  const beloNetArs = usdAmount * (1 - 0.04) * beloBid; // 4.0% Payoneer -> Belo fee
-  const prexNetArs = usdAmount * (1 - 0.038) * mepBid; // 3.8% Payoneer -> Prex at MEP
-
-  const payoneerRoutes = [
-    {
-      id: 'payo_bitso_inclusive',
-      corridor: 'payoneer',
-      name: '1. Payoneer -> Bitso (2.9% only, if inclusive)',
-      netArs: Number(bitsoNetNoStack.toFixed(2)),
-      effRate: Number((bitsoNetNoStack / usdAmount).toFixed(2)),
-      vsMepPct: Number(((bitsoNetNoStack / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 2.9,
-      note: `VWAP ${walk.vwap.toFixed(2)} on ${usdtAfterPayoneer.toFixed(2)} USDT`,
-    },
-    {
-      id: 'payo_bitso_stacked',
-      corridor: 'payoneer',
-      name: '2. Payoneer -> Bitso (2.9% + 0.6% book taker)',
-      netArs: Number(bitsoNetStacked.toFixed(2)),
-      effRate: Number((bitsoNetStacked / usdAmount).toFixed(2)),
-      vsMepPct: Number(((bitsoNetStacked / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 3.483,
-      note: `Conservative stacked model (unfilled: ${walk.unfilled.toFixed(2)} USDT)`,
-    },
-    {
-      id: 'payo_belo_usdc',
-      corridor: 'payoneer',
-      name: '3. Payoneer -> Belo (4.0% + CriptoYa totalBid)',
-      netArs: Number(beloNetArs.toFixed(2)),
-      effRate: Number((beloNetArs / usdAmount).toFixed(2)),
-      vsMepPct: Number(((beloNetArs / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 4.0,
-      note: `Belo USDC totalBid: ${beloBid.toFixed(2)}`,
-    },
-    {
-      id: 'payo_prex_mep',
-      corridor: 'payoneer',
-      name: '4. Payoneer -> Prex (3.8% @ MEP Compra)',
-      netArs: Number(prexNetArs.toFixed(2)),
-      effRate: Number((prexNetArs / usdAmount).toFixed(2)),
-      vsMepPct: Number(((prexNetArs / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 3.8,
-      note: `MEP Compra: ${mepBid.toFixed(2)}`,
-    },
-  ].sort((a, b) => b.netArs - a.netArs);
-
-  const venueIds = ['bitsoalpha', 'fiwind', 'belo', 'lemoncash', 'buenbit', 'wallbit', 'ripio'];
-  const venueQuotes = [];
-  for (const v of venueIds) {
-    const usdtBid = cyUsdt?.[v]?.totalBid || null;
-    const usdcBid = cyUsdc?.[v]?.totalBid || null;
-    if (usdtBid || usdcBid) {
-      venueQuotes.push({
-        venue: v,
-        usdtBid: usdtBid ? Number(usdtBid.toFixed(2)) : null,
-        usdcBid: usdcBid ? Number(usdcBid.toFixed(2)) : null,
-        bestBid: Number(Math.max(usdtBid || 0, usdcBid || 0).toFixed(2)),
-        bestAsset: (usdtBid || 0) >= (usdcBid || 0) ? 'USDT' : 'USDC'
-      });
-    }
-  }
-  venueQuotes.sort((a, b) => b.bestBid - a.bestBid);
-
-  // Contractor Direct ACH / Deel / Direct USDC Corridors (bypassing Payoneer's 2.9%-4% rail tax)
-  const topVenue = venueQuotes[0] || { venue: 'fiwind', bestBid: walk.vwap, bestAsset: 'USDT' };
-  const directWalk = walkOrderBook(bids, usdAmount);
-  const directBitsoNet = directWalk.grossArs * (1 - 0.005); // ~0.5% maker/taker on direct USDC/USDT deposit
-  const directTopVenueNet = usdAmount * topVenue.bestBid; // 0% entry when paid in USDC/USDT or free USD ACH -> USDC
-  const deelToAchFeePct = 0.005; // 0.5% typical virtual US ACH -> USDC bridge (Wallbit / Fiwind / Belo ACH)
-  const achBridgeNetArs = usdAmount * (1 - deelToAchFeePct) * topVenue.bestBid;
-
-  const contractorCorridors = [
-    {
-      id: 'direct_crypto_top_venue',
-      corridor: 'direct_crypto',
-      name: `A. Direct ${topVenue.bestAsset} Payout -> ${topVenue.venue} (0% rail fee)`,
-      netArs: Number(directTopVenueNet.toFixed(2)),
-      effRate: Number((directTopVenueNet / usdAmount).toFixed(2)),
-      vsMepPct: Number(((directTopVenueNet / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 0,
-      note: `For Algora/Devpost/Deel/Mercor crypto payout @ ${topVenue.bestBid.toFixed(2)} ARS/${topVenue.bestAsset}`
-    },
-    {
-      id: 'us_ach_virtual_bridge',
-      corridor: 'direct_ach',
-      name: `B. US ACH (Deel/G2i/Stripe/Ashby) -> Virtual USD ACH -> ${topVenue.venue} (~0.5% fee)`,
-      netArs: Number(achBridgeNetArs.toFixed(2)),
-      effRate: Number((achBridgeNetArs / usdAmount).toFixed(2)),
-      vsMepPct: Number(((achBridgeNetArs / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 0.5,
-      note: `Bypasses Payoneer 3.48% tax via direct US routing number`
-    },
-    {
-      id: 'direct_bitso_book',
-      corridor: 'direct_ach',
-      name: `C. Direct USD/USDT -> Bitso Order Book (0.5% book fee, no Payoneer)`,
-      netArs: Number(directBitsoNet.toFixed(2)),
-      effRate: Number((directBitsoNet / usdAmount).toFixed(2)),
-      vsMepPct: Number(((directBitsoNet / rawMepArs - 1) * 100).toFixed(2)),
-      haircutPct: 0.5,
-      note: `Bitso live book VWAP ${directWalk.vwap.toFixed(2)} on ${usdAmount.toFixed(0)} USDT`
-    }
-  ].sort((a, b) => b.netArs - a.netArs);
-
-  const bestPayoneer = payoneerRoutes[0];
-  const conservativePayoneer = payoneerRoutes.find(r => r.id === 'payo_bitso_stacked') || payoneerRoutes[0];
+  const bestPayo = payoneerRoutes[0];
+  const conservative = payoneerRoutes.find((r) => r.id === 'payo_bitso_stacked') || bestPayo;
   const bestDirect = contractorCorridors[0];
-  const safeMep = mepBid > 0 ? mepBid : (bestPayoneer.effRate || 1);
+  const mep = market.mepBid || bestPayo.effRate || 1;
+  const perK = usdAmount / 1000;
+  const edge = (a, b) => {
+    const ars = a.netArs - b.netArs;
+    return { ars: r2(ars), usd: r2(ars / mep), annualUsdAt5kMo: Math.round((ars / mep / perK) * 5 * 12) };
+  };
 
-  const deltaArsVsBestPayo = Number((bestDirect.netArs - bestPayoneer.netArs).toFixed(2));
-  const deltaUsdVsBestPayo = Number((deltaArsVsBestPayo / safeMep).toFixed(2));
-  const annualSavingsVsBestPayoAt5kMoUsd = Number(((deltaUsdVsBestPayo / (usdAmount / 1000)) * 5 * 12).toFixed(0));
-
-  const deltaArsPerTicket = Number((bestDirect.netArs - conservativePayoneer.netArs).toFixed(2));
-  const deltaUsdEquivalentPerTicket = Number((deltaArsPerTicket / safeMep).toFixed(2));
-  const annualSavingsAt5kMoUsd = Number(((deltaUsdEquivalentPerTicket / (usdAmount / 1000)) * 5 * 12).toFixed(0));
-
-  const payload = {
-    generatedAt: stamp,
+  return {
+    generatedAt: market.stamp,
+    source: market.source,
     ticketUsd: usdAmount,
     benchmarks: {
-      mepCompra: mepBid,
-      cclCompra: cclBid,
-      mepUpdatedAt: mep?.fechaActualizacion || null,
-      rawMepArs: Number(rawMepArs.toFixed(2))
+      mepCompra: market.mepBid, cclCompra: market.cclBid, mepUpdatedAt: market.mepUpdatedAt,
+      rawMepArs: r2(usdAmount * market.mepBid), bitsoTopBid: market.bids[0]?.price ?? null,
     },
+    parity: Object.fromEntries(Object.entries(parity).map(([k, v]) => [k, typeof v === 'number' ? Number(v.toFixed(4)) : v])),
     payoneerRoutes,
     contractorCorridors,
-    venueQuotes,
+    venueQuotes: market.venueRanking.map((v) => ({ venue: v.venue, usdtBid: v.usdtBid, usdcBid: v.usdcBid, bestBid: v.bestBid, bestAsset: v.bestAsset })),
+    optimalSplit: {
+      ...split,
+      netArs: r2(split.netArs), effRate: r2(split.effRate), vsMepPct: r2(split.vsMepPct),
+      gainVsBestSingleArs: r2(split.gainVsBestSingleArs),
+      tranches: split.tranches.map((t) => ({ ...t, usd: r2(t.usd), netArs: r2(t.netArs), effRate: r2(t.effRate),
+        vwap: r2(t.vwap), slippagePct: Number(t.slippagePct.toFixed(4)), feesUsd: r2(t.feesUsd),
+        capUsd: Number.isFinite(t.capUsd) ? t.capUsd : null })),
+      bestSingle: split.bestSingle && { ...split.bestSingle, netArs: r2(split.bestSingle.netArs) },
+    },
+    breakeven: {
+      tna, apy, days: 30,
+      arsPeriodPct: Number((tnaToPeriodRate(tna) * 100).toFixed(4)),
+      usdPeriodPct: Number((apyToPeriodRate(apy) * 100).toFixed(4)),
+      fStarPct: Number((breakevenDepreciation({ tna, apy }) * 100).toFixed(4)),
+    },
     arbitrageSummary: {
-      bestPayoneerRoute: bestPayoneer.name,
-      bestPayoneerEffRate: bestPayoneer.effRate,
-      conservativePayoneerEffRate: conservativePayoneer.effRate,
+      bestPayoneerRoute: bestPayo.name,
+      bestPayoneerEffRate: bestPayo.effRate,
+      conservativePayoneerEffRate: conservative.effRate,
       bestDirectRoute: bestDirect.name,
       bestDirectEffRate: bestDirect.effRate,
-      extraArsVsBestPayoneerPerTicket: deltaArsVsBestPayo,
-      extraUsdVsBestPayoneerPerTicket: deltaUsdVsBestPayo,
-      annualUsdSavedVsBestPayoneerAt5kMo: annualSavingsVsBestPayoAt5kMoUsd,
-      extraArsPerTicketByBypassingPayoneer: deltaArsPerTicket,
-      extraUsdPerTicketByBypassingPayoneer: deltaUsdEquivalentPerTicket,
-      annualUsdSavedAt5kMonthlyIncome: annualSavingsAt5kMoUsd
-    }
+      vsBestPayoneer: edge(bestDirect, bestPayo),
+      vsConservativePayoneer: edge(bestDirect, conservative),
+    },
   };
-
-  try {
-    fs.writeFileSync(CACHE_PATH, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-  } catch {}
-
-  return payload;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const jsonMode = args.includes('--json');
-  const numArg = args.find(a => !a.startsWith('-'));
-  const usdAmount = parseFloat(numArg || '1000');
-  if (isNaN(usdAmount) || usdAmount <= 0) {
-    console.error('Usage: node check-routes.mjs [usd_amount] [--json]');
-    process.exit(1);
+export async function computeCashoutRoutes(usdAmount = 1000, { offline = false, ...opts } = {}) {
+  const raw = offline ? SNAPSHOT : await fetchLiveRaw(usdAmount);
+  const report = buildReport(marketFromRaw(raw), usdAmount, opts);
+  if (!offline) {
+    try { fs.writeFileSync(CACHE_PATH, JSON.stringify(report, null, 2) + '\n', 'utf8'); } catch {}
   }
+  return report;
+}
 
-  const data = await computeCashoutRoutes(usdAmount);
-  if (jsonMode) {
-    console.log(JSON.stringify(data, null, 2));
-    return;
+const ars = (n) => 'ARS ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (n, d = 2) => (n == null ? 'n/a' : `${n >= 0 ? '+' : ''}${n.toFixed(d)}%`);
+
+function print(d) {
+  const b = d.benchmarks;
+  console.log(`\n=== CashoutRails | USD ${d.ticketUsd.toFixed(2)} | ${d.generatedAt} | ${d.source} ===`);
+  if (d.source !== 'live') console.log('  ! Offline illustrative snapshot — not a live quote.');
+  console.log(`\nBenchmarks: MEP compra ${ars(b.mepCompra)} · CCL compra ${ars(b.cclCompra)} · Bitso top bid ${ars(b.bitsoTopBid)}`);
+  const p = d.parity;
+  console.log(`Parity (2.9% + 0.6% stack, keep ${p.keep}): bid must exceed ${ars(p.minBidToBeatMep)} (MEP ${pct(p.requiredPremiumVsMepPct, 3)}); ` +
+    `now ${pct(p.bidVsMepPct)} vs MEP, CCL/MEP gap ${pct(p.cclMepSpreadPct)} → ${p.cryptoBeatsMepAtBid ? 'crypto rail wins' : 'MEP wins'} (headroom ${pct(p.headroomPct, 3)})`);
+
+  const table = (title, rows) => {
+    console.log(`\n${title}`);
+    for (const r of rows) {
+      const extra = r.slippagePct ? ` | slip ${r.slippagePct.toFixed(3)}%` : '';
+      console.log(`  ${r.name.padEnd(52)} | ${ars(r.netArs).padStart(17)} | eff ${r.effRate.toFixed(2).padStart(8)} | vs MEP ${pct(r.vsMepPct).padStart(7)}${extra}`);
+    }
+  };
+  table('Payoneer corridors:', d.payoneerRoutes);
+  table('Direct contractor corridors (no Payoneer rail fee):', d.contractorCorridors);
+  const e = d.arbitrageSummary.vsConservativePayoneer;
+  console.log(`  -> Edge vs Payoneer stacked: ${ars(e.ars)} (USD ${e.usd}/ticket · ~USD ${e.annualUsdAt5kMo}/yr at $5k/mo)`);
+
+  const s = d.optimalSplit;
+  console.log(`\nOptimal split (today's tier capacity): ${ars(s.netArs)} · eff ${s.effRate.toFixed(2)} · vs MEP ${pct(s.vsMepPct)}` +
+    (s.unallocatedUsd > 0 ? ` · UNALLOCATED USD ${s.unallocatedUsd.toFixed(2)}` : ''));
+  for (const t of s.tranches) {
+    console.log(`  ${t.name.padEnd(52)} | USD ${t.usd.toFixed(2).padStart(10)} | ${ars(t.netArs).padStart(17)} | eff ${t.effRate.toFixed(2)}` +
+      (t.slippagePct ? ` | slip ${t.slippagePct.toFixed(3)}%` : '') + (t.binding ? ` | ${t.binding} cap` : ''));
   }
+  if (s.gainVsBestSingleArs != null) console.log(`  -> vs best single venue (${s.bestSingle.id}): +${ars(s.gainVsBestSingleArs)}`);
 
-  console.log(`\n=== CashoutRails Live Comparator | Ticket: USD ${usdAmount.toFixed(2)} | ${data.generatedAt} ===\n`);
-  console.log(`Benchmarks (DolarAPI):`);
-  console.log(`  MEP Compra : ${fmtArs(data.benchmarks.mepCompra)} (100% Baseline = ${fmtArs(data.benchmarks.rawMepArs)}) [updated: ${data.benchmarks.mepUpdatedAt}]`);
-  console.log(`  CCL Compra : ${fmtArs(data.benchmarks.cclCompra)} (100% Baseline = ${fmtArs(usdAmount * data.benchmarks.cclCompra)})\n`);
+  const k = d.breakeven;
+  console.log(`\nTreasury 30d: plazo fijo ${(k.tna * 100).toFixed(2)}% TNA = ${k.arsPeriodPct.toFixed(3)}% · USD ${(k.apy * 100).toFixed(2)}% APY = ${k.usdPeriodPct.toFixed(3)}% → USD wins only if ARS depreciates > f* = ${k.fStarPct.toFixed(3)}%`);
 
-  console.log(`Payoneer Corridor Comparison (for USD ${usdAmount.toFixed(2)}):`);
-  for (const r of data.payoneerRoutes) {
-    const sign = r.vsMepPct >= 0 ? '+' : '';
-    console.log(`  ${r.name.padEnd(47)} | ${fmtArs(r.netArs).padStart(14)} | Eff: ${r.effRate.toFixed(2)} | vs MEP: ${sign}${r.vsMepPct.toFixed(2)}% | ${r.note}`);
-  }
-
-  console.log(`\nDirect Contractor ACH / Crypto Corridors (Bypassing Payoneer 2.9%-4.0% Tax):`);
-  for (const r of data.contractorCorridors) {
-    const sign = r.vsMepPct >= 0 ? '+' : '';
-    console.log(`  ${r.name.padEnd(74)} | ${fmtArs(r.netArs).padStart(14)} | Eff: ${r.effRate.toFixed(2)} | vs MEP: ${sign}${r.vsMepPct.toFixed(2)}%`);
-  }
-  console.log(`  -> Arbitrage Edge vs Payoneer Stacked: +${fmtArs(data.arbitrageSummary.extraArsPerTicketByBypassingPayoneer)} (+USD ${data.arbitrageSummary.extraUsdPerTicketByBypassingPayoneer} per $${usdAmount} ticket | ~USD ${data.arbitrageSummary.annualUsdSavedAt5kMonthlyIncome}/yr on $5k/mo contract)\n`);
-
-  console.log(`Top Local Venues — Direct 1 USDT / 1 USDC Sale (CriptoYa totalBid):`);
-  for (const v of data.venueQuotes) {
-    console.log(
-      `  ${v.venue.padEnd(14)} | USDT totalBid: ${v.usdtBid ? v.usdtBid.toFixed(2).padStart(8) : '     N/A'} | USDC totalBid: ${v.usdcBid ? v.usdcBid.toFixed(2).padStart(8) : '     N/A'}`
-    );
+  console.log('\nVenue quotes (CriptoYa totalBid):');
+  for (const v of d.venueQuotes) {
+    console.log(`  ${v.venue.padEnd(12)} | USDT ${v.usdtBid ? v.usdtBid.toFixed(2).padStart(9) : '      N/A'} | USDC ${v.usdcBid ? v.usdcBid.toFixed(2).padStart(9) : '      N/A'}`);
   }
   console.log('');
 }
 
+export function parseArgs(argv) {
+  const flag = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+  const num = argv.find((a) => !a.startsWith('-'));
+  return {
+    usd: parseFloat(num ?? '1000'),
+    json: argv.includes('--json'),
+    offline: argv.includes('--offline'),
+    tna: flag('tna') != null ? parseFloat(flag('tna')) : 0.2199,
+    apy: flag('apy') != null ? parseFloat(flag('apy')) : 0.038,
+  };
+}
+
+async function main() {
+  const a = parseArgs(process.argv.slice(2));
+  if (!(a.usd > 0) || !Number.isFinite(a.tna) || !Number.isFinite(a.apy)) {
+    console.error('Usage: node check-routes.mjs [usd_amount] [--offline] [--json] [--tna=0.2199] [--apy=0.038]');
+    process.exit(1);
+  }
+  const data = await computeCashoutRoutes(a.usd, { offline: a.offline, tna: a.tna, apy: a.apy });
+  if (a.json) console.log(JSON.stringify(data, null, 2));
+  else print(data);
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((err) => {
-    console.error('Error:', err.message);
+    console.error('Error:', err.message, '(try --offline)');
     process.exit(1);
   });
 }

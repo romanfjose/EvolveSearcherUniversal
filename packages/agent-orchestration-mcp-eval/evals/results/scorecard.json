@@ -1,0 +1,1362 @@
+{
+  "suite": "agent-orchestration-policy",
+  "fixtureVersion": 3,
+  "totals": {
+    "total": 206,
+    "passed": 206,
+    "falseAccepts": 0,
+    "falseRejects": 0,
+    "accuracy": "100.0%"
+  },
+  "categories": {
+    "seat-routing": {
+      "label": "Seat routing (role and mode)",
+      "total": 10,
+      "passed": 10,
+      "acceptFixtures": 5,
+      "rejectFixtures": 5,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "budget-admission": {
+      "label": "Budget admission (reserve, judgment, breaker, accounting bypasses)",
+      "total": 19,
+      "passed": 19,
+      "acceptFixtures": 5,
+      "rejectFixtures": 14,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "input-validation": {
+      "label": "Input schema compliance",
+      "total": 4,
+      "passed": 4,
+      "acceptFixtures": 0,
+      "rejectFixtures": 4,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "evidence-accept": {
+      "label": "Evidence acceptance (precision on valid responses)",
+      "total": 4,
+      "passed": 4,
+      "acceptFixtures": 4,
+      "rejectFixtures": 0,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "hallucination-rejection": {
+      "label": "Hallucination rejection (anchor, schema, claims, citations)",
+      "total": 13,
+      "passed": 13,
+      "acceptFixtures": 0,
+      "rejectFixtures": 13,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "dossier-lint": {
+      "label": "Dossier dedup and lint",
+      "total": 14,
+      "passed": 14,
+      "acceptFixtures": 3,
+      "rejectFixtures": 11,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "numeric-injection": {
+      "label": "Numeric injection (NaN, Infinity, -0, overflow, float boundaries)",
+      "total": 32,
+      "passed": 32,
+      "acceptFixtures": 7,
+      "rejectFixtures": 25,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "prototype-pollution": {
+      "label": "Prototype pollution and malformed schema keywords",
+      "total": 24,
+      "passed": 24,
+      "acceptFixtures": 2,
+      "rejectFixtures": 22,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "unicode-edge": {
+      "label": "Unicode edge cases (normalization, invisible characters, IDN)",
+      "total": 34,
+      "passed": 34,
+      "acceptFixtures": 8,
+      "rejectFixtures": 26,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "slice-boundary": {
+      "label": "Slice coordinate boundaries",
+      "total": 28,
+      "passed": 28,
+      "acceptFixtures": 11,
+      "rejectFixtures": 17,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    },
+    "url-canonicalization": {
+      "label": "URL canonicalization and link lint",
+      "total": 24,
+      "passed": 24,
+      "acceptFixtures": 4,
+      "rejectFixtures": 20,
+      "falseAccepts": 0,
+      "falseRejects": 0,
+      "accuracy": "100.0%"
+    }
+  },
+  "failures": [],
+  "cases": [
+    {
+      "id": "route-grunt-cheap",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "route-scout-mid",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "route-mechanic-heavy",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "route-sniper-readonly",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "route-auditor-judgment-granted",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "route-auditor-write-denied",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "route-unknown-role-denied",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "route-prototype-key-denied",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "route-unknown-mode-denied",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "route-missing-budget-denied",
+      "category": "seat-routing",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "admit-within-share",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "admit-reserve-floor-refused",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "admit-reserve-boundary-accepted",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "admit-exact-capacity-accepted",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "admit-reserve-100-refuses-all",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "admit-judgment-default-refused",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "admit-judgment-within-allowance",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "admit-judgment-allowance-exhausted",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "breaker-open-at-default-threshold",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "breaker-closed-below-threshold",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "breaker-open-custom-threshold",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-negative-usedCU-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-negative-judgmentUsedCU-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-zero-capacity-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-negative-capacity-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-string-usedCU-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-reservePct-out-of-range-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-fractional-failures-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-zero-threshold-rejected",
+      "category": "budget-admission",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "bypass-cu-override-rejected",
+      "category": "input-validation",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "input-unknown-top-level-rejected",
+      "category": "input-validation",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "input-dossier-no-arguments-rejected",
+      "category": "input-validation",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "input-contract-unsupported-keyword-rejected",
+      "category": "input-validation",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "accept-anchor-schema-slice",
+      "category": "evidence-accept",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "accept-anchor-only-skips-optional-checks",
+      "category": "evidence-accept",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "accept-anchor-after-blank-lines",
+      "category": "evidence-accept",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "accept-forbidden-phrase-absent",
+      "category": "evidence-accept",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "reject-wrong-anchor",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-anchor-not-first-line",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-forbidden-claim",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-forbidden-claim-case-insensitive",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-missing-json-payload",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-json-payload-does-not-parse",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-schema-wrong-type",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-schema-enum-violation",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-schema-extra-property",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-fabricated-slice-text",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-slice-past-end-of-source",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-slice-inverted-range",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "reject-slice-invalid-escape",
+      "category": "hallucination-rejection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "dedup-canonicalizes-and-drops-duplicates",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "dedup-all-unique-accepted",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "dedup-invalid-scheme-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "dedup-credentials-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-good-dossier-accepted",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "lint-missing-section-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-section-out-of-order-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-duplicate-source-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-non-canonical-link-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-bare-url-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-placeholder-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-empty-sources-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "lint-missing-title-flagged",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "dedup-and-lint-together-accepted",
+      "category": "dossier-lint",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-capacity-infinity",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-capacity-neg-infinity",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-used-nan",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-reserve-nan",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-judgment-allowance-infinity",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-judgment-used-neg-infinity",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-failures-infinity",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-threshold-nan",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-capacity-string",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-used-null",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-used-boolean",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-capacity-max-value-overflow",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-used-above-max",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-capacity-at-max-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-capacity-min-subnormal-refused",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-used-negative-zero-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-capacity-negative-zero",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-capacity-zero",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-reserve-100-refuses-all",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-reserve-just-over-100",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-reserve-just-below-0",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-share-exact-boundary-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-share-boundary-plus-epsilon-refused",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-float-accumulation-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-judgment-exact-allowance-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-judgment-allowance-short-refused",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-failures-fractional",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-failures-below-threshold-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "num-failures-at-threshold-refused",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-threshold-zero",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-threshold-above-max",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "num-exponent-notation-admitted",
+      "category": "numeric-injection",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "proto-role-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-role-constructor",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-role-tostring",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-role-hasownproperty",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-mode-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-budget-own-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-budget-constructor-prototype",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-args-own-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-budget-only-in-proto-missing",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-contract-own-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-schema-keyword-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-schema-keyword-constructor",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-payload-dunder-proto-rejected",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-payload-dunder-proto-typed",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-required-constructor-not-inherited",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-required-tostring-not-inherited",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-required-constructor-own-accepted",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "proto-schema-required-string",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-schema-type-typo",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-schema-minimum-string",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-schema-properties-array",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-schema-enum-empty",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-forbidden-dunder-proto-text",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "proto-url-query-dunder-proto",
+      "category": "prototype-pollution",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-anchor-cjk-accepted",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-anchor-nfd-vs-nfc-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-anchor-leading-bom-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-anchor-trailing-zwsp-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-anchor-line-separator-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-fullwidth-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-zero-width-split-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-soft-hyphen-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-bidi-override-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-nbsp-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-line-wrapped-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-turkish-dotted-i-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-ligature-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-accented-variant-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-claim-unrelated-unicode-accepted",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-claim-invisible-only-phrase-ignored",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-slice-exact-accepted",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-slice-json-escape-accepted",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-slice-surrogate-escape-accepted",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-slice-lone-surrogate-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-slice-nfc-vs-nfd-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-slice-arabic-indic-digits-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-slice-fullwidth-digits-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-slice-uppercase-prefix-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-url-idn-punycode-duplicate",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-url-fullwidth-host-duplicate",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-url-unicode-path-vs-encoded-duplicate",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-url-percent-hex-case-duplicate",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-url-embedded-tab-stripped-duplicate",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-url-bidi-in-path-encoded",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-url-host-with-space-invalid",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-lint-nbsp-heading-missing-section",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "uni-lint-unicode-title-accepted",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "uni-lint-fullwidth-hash-title-rejected",
+      "category": "unicode-edge",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-first-line-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-last-line-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-whole-source-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-l0-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-l0-l0-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-one-past-end-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-start-past-end-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-reversed-range-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-short-end-form-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-leading-zeros-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-huge-coordinate-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-max-safe-plus-one-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-max-safe-past-end-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-empty-quote-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-empty-source-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-blank-source-line-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-span-over-blank-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-trailing-space-in-quote-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-padded-line-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-no-space-after-colon-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-invalid-json-escape-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-spaced-range-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-negative-coordinate-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-unquoted-text-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-one-good-one-bad-rejected",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "slice-no-citations-passes",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-crlf-response-accepted",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "slice-inside-code-fence-still-checked",
+      "category": "slice-boundary",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-uppercase-utm-stripped",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-ref-and-ref-src-stripped",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-mc-and-gclid-stripped",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-http-default-port",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-repeated-trailing-slashes",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-dot-segments-resolved",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-encoded-dot-segments-resolved",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-fragment-only-difference",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-whitespace-trimmed",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-non-default-port-kept",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "url-www-not-merged",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "url-http-vs-https-not-merged",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "url-repeated-key-order-preserved",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": true
+    },
+    {
+      "id": "url-javascript-scheme",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-data-scheme",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-ftp-scheme",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-protocol-relative",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-username-only",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-empty-string",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-lint-javascript-link-flagged",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-lint-bare-url-in-summary",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-lint-sources-before-summary",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-lint-lowercase-todo",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    },
+    {
+      "id": "url-lint-noncanonical-percent-case",
+      "category": "url-canonicalization",
+      "pass": true,
+      "ok": false
+    }
+  ]
+}

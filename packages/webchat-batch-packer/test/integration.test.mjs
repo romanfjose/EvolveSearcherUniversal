@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { pack } from '../src/packer.mjs';
 import { unpack, plan } from '../src/unpacker.mjs';
 import { commit, diskReader, resolveSafe } from '../src/commit.mjs';
 import { main } from '../src/cli.mjs';
 import { createServer } from '../ui/serve.mjs';
 
-const EX = new URL('../examples/grant-check/', import.meta.url).pathname;
+const EX = fileURLToPath(new URL('../examples/grant-check/', import.meta.url));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wbp-'));
 const run = async (argv, cwd) => {
   const out = [], err = [], prev = process.cwd();
@@ -53,7 +54,7 @@ describe('commit to disk', () => {
   test('symlinked directory pointing outside the root is refused for read and write', () => {
     const outside = tmp();
     fs.writeFileSync(path.join(outside, 'secret.md'), 'secret');
-    fs.symlinkSync(outside, path.join(root, 'notes', 'link'));
+    fs.symlinkSync(outside, path.join(root, 'notes', 'link'), 'junction');
     const { p } = go('=== FILE: notes/link/secret.md ===\npwned\n=== END FILE ===');
     assert.equal(p[0].before, null, 'diff must not leak the outside file');
     assert.equal(commit(p, root)[0].error, 'SYMLINK_REFUSED');
@@ -63,7 +64,7 @@ describe('commit to disk', () => {
   test('symlinked target file is refused', () => {
     const outside = path.join(tmp(), 'x.md');
     fs.writeFileSync(outside, 'keep');
-    fs.symlinkSync(outside, path.join(root, 'leads', 'ln.md'));
+    try { fs.symlinkSync(outside, path.join(root, 'leads', 'ln.md')); } catch (e) { if (e.code === 'EPERM') return; throw e; }
     assert.equal(resolveSafe(root, 'leads/ln.md').error, 'SYMLINK_REFUSED');
     assert.equal(fs.readFileSync(outside, 'utf8'), 'keep');
   });

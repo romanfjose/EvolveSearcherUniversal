@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chat Grupal con IA</title>
+<meta name="description" content="Multi-persona AI group chat and War Room deliberation studio: @mentions, reply threads, 3-round red-team debates with decision memos, offline demo engine, ES/EN.">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -32,9 +33,11 @@
         <div class="t" id="headGroupName"></div>
         <div class="s" id="headMembers"></div>
       </div>
+      <button class="engine-badge" id="engineBadge" type="button" onclick="openSetup()">Offline demo</button>
       <button class="icon-btn" id="statusBtn" data-i18n-title="statusesHint" title="Statuses" onclick="openStatusViewer()">◉</button>
       <button class="pill-btn" id="langBtn" title="Language / idioma" onclick="toggleLanguage()">ES</button>
       <button class="pill-btn" id="keyBtn" data-i18n-title="keyTitle" title="OpenRouter key" onclick="openSetup()">Key</button>
+      <button class="icon-btn" data-i18n-title="shareTitle" data-i18n-aria-label="shareTitle" title="Export & replay" aria-label="Export & replay" onclick="openShare()">📤</button>
       <button class="icon-btn" data-i18n-title="clearChatTitle" title="Clear this chat" onclick="clearRound()">🧹</button>
       <button class="icon-btn" data-i18n-title="settingsTitle" title="Group settings" onclick="openSettings()">⚙️</button>
     </div>
@@ -104,6 +107,7 @@
       <select id="cfgMode">
         <option value="normal" data-i18n="modeNormal">Everyone replies, in order</option>
         <option value="chaos" data-i18n="modeChaos">Chaos - random 2-4 members reply</option>
+        <option value="deliberation" data-i18n="modeDeliberation">War Room - 3-round debate + decision memo</option>
       </select>
     </div>
     <div class="people-intro">
@@ -201,12 +205,53 @@
         </select>
       </div>
       <div class="setup-actions">
+        <button class="btn ghost" onclick="closeSetup()" data-i18n="continueOffline">Continue with the offline demo</button>
         <button class="btn primary" onclick="setupNext()" id="setupNextBtn">Start using AISquad</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Export & replay -->
+<div class="overlay" id="shareOverlay">
+  <div class="modal small">
+    <h2 data-i18n="shareTitle">Export &amp; replay</h2>
+    <p class="hint" data-i18n="shareHint">Files are generated in your browser. API keys are never included.</p>
+    <button class="type-choice" type="button" onclick="exportTranscriptMd()">
+      <span class="big">📝</span>
+      <span><span class="tt" data-i18n="exportMd">Transcript (.md)</span><br>
+      <span class="td" data-i18n="exportMdDesc">One-click Markdown export of this chat, memos included.</span></span>
+    </button>
+    <button class="type-choice" type="button" onclick="exportSquadJson()">
+      <span class="big">🧩</span>
+      <span><span class="tt" data-i18n="exportJson">Squad template (.json)</span><br>
+      <span class="td" data-i18n="exportJsonDesc">Share the members, prompts and settings so anyone can import the squad.</span></span>
+    </button>
+    <label class="check-row">
+      <input type="checkbox" id="shareIncludeTranscript">
+      <span><strong data-i18n="includeTranscript">Include transcript</strong><span data-i18n="includeTranscriptHint">Lets whoever imports it replay this chat.</span></span>
+    </label>
+    <button class="type-choice" type="button" onclick="importSquadJson()">
+      <span class="big">📥</span>
+      <span><span class="tt" data-i18n="importJson">Import squad (.json)</span><br>
+      <span class="td" data-i18n="importJsonDesc">Load a shared squad template as a new group.</span></span>
+    </button>
+    <button class="type-choice" type="button" onclick="replayChat()">
+      <span class="big">▶️</span>
+      <span><span class="tt" data-i18n="replay">Replay this chat</span><br>
+      <span class="td" data-i18n="replayDesc">Watch the conversation play back message by message.</span></span>
+    </button>
+    <input type="file" id="squadImportInput" accept=".json,application/json" hidden onchange="onSquadFileChosen(this)">
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeShare()" data-i18n="close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="i18n.js"></script>
+<script src="personas.js"></script>
+<script src="squad-core.js"></script>
+<script src="offline-engine.js"></script>
 <script src="app.js"></script>
 
 <!-- New group chooser -->
@@ -230,6 +275,11 @@
       <span class="big">🎲</span>
       <span><span class="tt" data-i18n="spinSquad">Spin a squad</span><br>
       <span class="td" data-i18n="spinDesc">Roulette mode: instantly rolls 3-5 random characters.</span></span>
+    </button>
+    <button class="type-choice" type="button" onclick="importSquadJson()">
+      <span class="big">📥</span>
+      <span><span class="tt" data-i18n="importJson">Import squad (.json)</span><br>
+      <span class="td" data-i18n="importJsonDesc">Load a shared squad template as a new group.</span></span>
     </button>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeNewGroup()" data-i18n="cancel">Cancel</button>

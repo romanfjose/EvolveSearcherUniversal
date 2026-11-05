@@ -45,7 +45,7 @@ await waitUntilReady();
 await page.getByRole("heading", { name: "Choose the version you would actually do" }).waitFor();
 await shot("06-challenge-options");
 
-await page.getByPlaceholder("Cook milanesas with instant mash…").fill("Make one simple scrambled egg");
+await page.getByPlaceholder("Describe your own small test…").fill("Make one simple scrambled egg");
 await page.getByRole("button", { name: "Build my plan" }).click();
 await waitUntilReady();
 await page.getByText("Minimum success:", { exact: true }).waitFor();

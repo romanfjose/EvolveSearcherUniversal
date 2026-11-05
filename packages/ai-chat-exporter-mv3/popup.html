@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+<header id="head">
+  <div class="hrow">
+    <span id="title">CHAT&nbsp;REPLAY</span>
+    <span id="site" title="detected site / model"></span>
+  </div>
+  <div id="progress" hidden><div id="bar"></div></div>
+  <div id="status">Connecting…</div>
+  <div id="others" hidden></div>
+</header>
+
+<!-- One click to any surface. No accordions: the old panel stacked six
+     <details> blocks and grew past the viewport, which is what forced
+     zooming out. Tabs keep the popup a fixed height instead. -->
+<nav id="tabs" role="tablist">
+  <!-- Shown on a Mercado Libre listing, where it replaces the chat
+       tabs entirely, and on any other site while the saved list is
+       non-empty — otherwise arriving at the LLM without having copied
+       is a dead end. -->
+  <button class="tab" data-tab="product" role="tab" hidden>Product</button>
+  <button class="tab" data-tab="replay"  role="tab">Replay</button>
+  <button class="tab" data-tab="export"  role="tab">Export</button>
+  <button class="tab" data-tab="prompts" role="tab">Prompts</button>
+  <button class="tab" data-tab="library" role="tab">Library</button>
+  <button class="tab" data-tab="fix"     role="tab">Fix</button>
+</nav>
+
+<main id="body">
+
+  <!-- ── PRODUCT (Mercado Libre) ───────────────────────────── -->
+  <!-- Select-all on a listing hands you the nav, four product
+       carousels and the corporate footer, with the product itself
+       scattered through the middle. This pane collects only the
+       blocks that ARE the product. -->
+  <section class="pane" data-pane="product">
+
+    <!-- Everything in here needs a listing under the popup. On a chat
+         tab with a non-empty list, #psingle is hidden and only the list
+         below survives — that's the whole point of keeping the list in
+         storage rather than in this document. -->
+    <div id="psingle">
+      <div class="count"><span id="pwhat">This page</span> <span id="pstats" class="hint"></span></div>
+      <button id="pkeep" class="btn primary" disabled>Add to list</button>
+      <button id="pcopy" class="btn ghost" disabled>Copy just this one</button>
+
+      <div class="label">Preview</div>
+      <textarea id="ppreview" rows="5" spellcheck="false" readonly></textarea>
+      <button id="prescan" class="btn ghost">Re-read the page</button>
+      <div class="sep"></div>
+    </div>
+
+    <div class="count">List <span id="pcount" class="hint"></span></div>
+    <div id="plist"></div>
+    <button id="pcopylist" class="btn primary" disabled>Copy list</button>
+    <!-- Always here, not only when the list is non-empty: after a paste
+         the whole question is "how do I get rid of these", and a button
+         that appears and disappears is one you have to go looking for. -->
+    <button id="pclear" class="btn ghost" disabled>Clear list</button>
+    <label class="check hint"><input type="checkbox" id="pautoclear">
+      empty the list as soon as it's copied (nothing can tell us when you
+      paste, so this assumes copying <em>is</em> the handover)</label>
+    <p class="hint" id="phint">Add a listing or a whole page of search
+      results, then the next one. When you're done, Copy list — one paste
+      drops all of them into any chat.</p>
+
+    <div id="pfallback" hidden>
+      <textarea id="pfalltext" rows="3" spellcheck="false" readonly></textarea>
+      <button id="pfallhide" class="btn ghost">Hide</button>
+    </div>
+
+    <div class="sep"></div>
+    <div class="label">Output</div>
+    <div class="chips" id="pformat">
+      <span class="chip" data-fmt="md">Markdown</span>
+      <span class="chip" data-fmt="plain">Plain text</span>
+      <span class="chip" data-fmt="json">JSON</span>
+    </div>
+    <label class="check hint"><input type="checkbox" id="pspecs" checked>
+      full spec sheet (<code>Características</code>)</label>
+    <label class="check hint"><input type="checkbox" id="pdesc" checked>
+      the seller's description</label>
+    <label class="check hint"><input type="checkbox" id="plog" checked>
+      delivery, stock, seller and warranty</label>
+    <label class="check hint"><input type="checkbox" id="prev">
+      buyer reviews (summary + top comments)</label>
+    <p class="hint">These apply to the list too, so five products with
+      specs off is five short blocks rather than five long ones.</p>
+
+    <!-- Search results only. A page of them is a comparison, so the
+         default is one row per result rather than fifty blocks. -->
+    <div id="psearchrow" hidden>
+      <div class="sep"></div>
+      <div class="label">Search results</div>
+      <label class="check hint"><input type="checkbox" id="ptable" checked>
+        compact table — one row per result, columns line up</label>
+      <div class="row fields">
+        <label class="mini">Keep the first #<input id="pmax" type="number" min="1" max="200" value="50"></label>
+      </div>
+    </div>
+
+    <div id="pexpandrow">
+      <label class="check hint"><input type="checkbox" id="pexpand" checked>
+        open <code>Ver todas las características</code> first — the full
+        table isn't in the page until you do</label>
+    </div>
+  </section>
+
+  <!-- ── REPLAY ────────────────────────────────────────────── -->
+  <section class="pane" data-pane="replay">
+    <div class="count">
+      Prompts loaded: <b id="count">0</b> <span id="src" class="hint"></span>
+    </div>
+
+    <button id="capture" class="btn primary">Capture prompts from this chat</button>
+    <button id="loadlast" class="btn ghost">Load last captured</button>
+
+    <!-- The range doubles as "start at #": its lower bound is where a
+         replay begins, so there's one set of numbers rather than two
+         that quietly disagree. -->
+    <div class="label">Send prompts <span id="rangesum" class="hint"></span></div>
+    <div class="row fields">
+      <label class="mini">From&nbsp;#<input id="from" type="number" min="1" value="1"></label>
+      <label class="mini">To&nbsp;#<input id="to" type="number" min="1" value="1"></label>
+    </div>
+    <div class="chips" id="quick">
+      <span class="chip" data-last="0">All</span>
+      <span class="chip" data-last="1">Last 1</span>
+      <span class="chip" data-last="2">Last 2</span>
+      <span class="chip" data-last="3">Last 3</span>
+      <span class="chip" data-last="4">Last 4</span>
+      <span class="chip" data-last="5">Last 5</span>
+    </div>
+
+    <div class="row fields">
+      <label class="mini">Settle&nbsp;(s)<input id="settle" type="number" min="1" max="60" value="4"></label>
+      <label class="mini">Min&nbsp;reply&nbsp;(s)<input id="minreply" type="number" min="0" max="120" value="6"></label>
+    </div>
+
+    <div class="row">
+      <button id="run" class="btn primary">▶ Replay here</button>
+      <button id="pause" class="btn" disabled>Pause</button>
+      <button id="stop" class="btn" disabled>Stop</button>
+    </div>
+    <button id="resume" class="btn ghost" hidden>Resume from #</button>
+
+    <p class="hint">Pick your model first, then Replay. You can close this
+      popup and start another tab replaying too — each tab runs its own,
+      and they don't wait for each other.</p>
+  </section>
+
+  <!-- ── EXPORT ────────────────────────────────────────────── -->
+  <section class="pane" data-pane="export">
+    <div class="count">This conversation <span id="turncount" class="hint"></span></div>
+
+    <button id="copymd" class="btn primary">Copy as Markdown</button>
+    <div class="row">
+      <button id="savemd" class="btn ghost">.md</button>
+      <button id="savejson" class="btn ghost">.json</button>
+      <button id="savetxt" class="btn ghost">.txt</button>
+    </div>
+    <button id="scan" class="btn ghost">Scan chat (count turns only)</button>
+
+    <label class="check hint">
+      <input type="checkbox" id="deepscan" checked>
+      scroll the whole chat first (needed for long ones)
+    </label>
+
+    <!-- Last-resort landing pad, same as v0.4.2 — but it should almost
+         never appear now: the click that triggers the write happens in
+         this document, with no 30-second scan in front of it. -->
+    <div id="copybox" hidden>
+      <textarea id="copytext" rows="3" spellcheck="false" readonly></textarea>
+      <div class="row">
+        <button id="copynow" class="btn primary">Copy now</button>
+        <button id="copyhide" class="btn ghost">Hide</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PROMPTS ───────────────────────────────────────────── -->
+  <section class="pane" data-pane="prompts">
+    <p class="hint">Separate prompts with a line containing only <code>---</code>.</p>
+    <textarea id="editor" rows="12" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="apply" class="btn primary">Apply edits</button>
+      <button id="reload" class="btn ghost">Revert</button>
+    </div>
+    <div class="row pin">
+      <input id="savename" type="text" placeholder="Name this set…">
+      <button id="savelib" class="btn ghost">Pin</button>
+    </div>
+  </section>
+
+  <!-- ── LIBRARY ───────────────────────────────────────────── -->
+  <section class="pane" data-pane="library">
+    <div id="liblist"></div>
+  </section>
+
+  <!-- ── FIX ───────────────────────────────────────────────── -->
+  <section class="pane" data-pane="fix">
+    <div class="count">Step &amp; Screenshot Recorder</div>
+    <p class="hint">Click below, then perform your manual clicks/menus on the page. Every step, selector, open menu list, and screenshot is recorded for automation.</p>
+    <button id="recstart" class="btn primary">⏺ Record steps &amp; screenshots</button>
+    <button id="reccopy" class="btn ghost" hidden>📋 Copy last recording</button>
+
+    <div class="sep"></div>
+    <div class="count">Reading this site</div>
+    <div id="learned" class="hint"></div>
+    <p class="hint">Point at one of your messages and one of the AI's, and
+      the extension works out the rest. Stored for this site only.</p>
+    <button id="teach" class="btn ghost">Teach this site</button>
+    <button id="forget" class="btn ghost" hidden>Forget what I taught</button>
+    <button id="diag" class="btn ghost">Copy diagnostics</button>
+
+    <div class="sep"></div>
+    <label class="check hint">
+      <input type="checkbox" id="showfab">
+      show the <code>⏵⏵</code> button on the page (one-click capture)
+    </label>
+    <p class="hint" id="version"></p>
+  </section>
+
+</main>
+
+<script src="adapters.js"></script>
+<script src="product-format.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

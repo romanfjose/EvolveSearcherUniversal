@@ -1,0 +1,130 @@
+/* Chat Replay — the only styles that still ship into the PAGE.
+
+   v0.5 moved the whole interface into the toolbar popup (popup.css), so
+   what's left here is the two things that genuinely have to be drawn on
+   top of the site itself:
+
+     1. the optional ⏵⏵ button (off by default now — it's what used to
+        get in the way of the page), and
+     2. the teach-this-site picker overlay, which by definition has to
+        highlight elements belonging to the site.
+
+   Everything else — the 300px panel and its dozen widgets — is gone. */
+
+#chat-replay-root {
+  position: fixed;
+  right: 16px;
+  bottom: 30px;
+  z-index: 2147483000;
+  font-family: "Iosevka", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: #e8e6df;
+}
+
+/* The root used to sit above the panel and the button hung below it at
+   bottom:-60px. With the panel gone that offset is just a bug waiting to
+   happen, so the button now sits at the root's own corner. */
+#cr-fab {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid #3a3f4a;
+  background: #14161b;
+  color: #9ee493;
+  font-size: 15px;
+  letter-spacing: -2px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+#cr-fab:hover { background: #1c1f26; }
+#cr-fab:focus-visible { outline: 2px solid #9ee493; outline-offset: 2px; }
+#cr-fab:disabled { opacity: 0.6; cursor: default; }
+
+/* v0.4.1: teach-this-site pick mode */
+#cr-highlight {
+  position: fixed;
+  display: none;
+  z-index: 2147483001;
+  pointer-events: none;
+  border: 2px solid #9ee493;
+  border-radius: 6px;
+  background: rgba(158, 228, 147, 0.14);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28);
+  transition: all 0.06s linear;
+}
+#cr-picktip {
+  position: fixed;
+  z-index: 2147483002;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #46704b;
+  background: #14161b;
+  color: #c9f2c1;
+  font: 12.5px/1.4 "Iosevka", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  max-width: 90vw;
+}
+
+/* v0.8.1: Step & Screenshot Diagnostic Recorder HUD */
+#cr-recorder-hud {
+  position: fixed;
+  z-index: 2147483003;
+  right: 16px;
+  top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #ef4444;
+  background: rgba(20, 22, 27, 0.95);
+  color: #f1f5f9;
+  font: 12px/1.35 "Iosevka", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  max-width: 92vw;
+}
+#cr-recorder-hud .cr-rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  flex-shrink: 0;
+}
+#cr-recorder-hud .cr-rec-label {
+  color: #e2e8f0;
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#cr-recorder-hud button {
+  background: #1e2430;
+  color: #e2e8f0;
+  border: 1px solid #384152;
+  border-radius: 6px;
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+#cr-recorder-hud button:hover {
+  background: #2a3242;
+}
+#cr-recorder-hud button.cr-rec-finish {
+  background: #46704b;
+  border-color: #5c9463;
+  color: #ffffff;
+  font-weight: 600;
+}
+#cr-recorder-hud button.cr-rec-finish:hover {
+  background: #538459;
+}

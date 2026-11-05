@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "Chat Replay",
+  "version": "0.8.1",
+  "description": "Capture your prompts from one AI chat, replay them in others, export any conversation as clean Markdown — and collect Mercado Libre listings and whole pages of search results into one pasteable list for models that can't browse.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:4500/*",
+    "http://localhost:4500/*",
+    "http://127.0.0.1:4490/*",
+    "http://localhost:4490/*"
+  ],
+  "action": {
+    "default_title": "Chat Replay",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gemini.google.com/*",
+        "https://chat.z.ai/*",
+        "https://chatglm.cn/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://www.kimi.com/*",
+        "https://kimi.com/*",
+        "https://kimi.moonshot.cn/*",
+        "https://chat.deepseek.com/*",
+        "https://chat.qwen.ai/*",
+        "https://grok.com/*",
+        "https://app.outlier.ai/*",
+        "https://*.outlier.ai/*",
+        "https://playground.outlier.ai/*"
+      ],
+      "js": [
+        "md.js",
+        "adapters.js",
+        "content.js"
+      ],
+      "css": [
+        "panel.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

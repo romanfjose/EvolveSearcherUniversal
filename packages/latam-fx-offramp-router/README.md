@@ -58,10 +58,52 @@ At `21.99% TNA` (`~1.81% / 30d`) vs. `3.80% USD APY` (`~0.31% / 30d`), **$f^* \a
 
 ---
 
-## 3. Live Route Comparator CLI
+## 3. Toolkit (zero dependencies, Node ≥ 20)
 
-Run the zero-dependency script during **BYMA market hours (Mon–Fri 11:00–17:00 ART)** to compare live net ARS payouts for any USD withdrawal amount (defaults to `$100` USD):
+```
+check-routes.mjs      CLI: fetch (or --offline snapshot) → compose → print / --json
+src/orderbook.mjs     walkOrderBook, depthWithin, maxSizeForSlippage, slippageCurve, cumulativeDepth, reshapeBook
+src/corridors.mjs     keepFactor/stackedHaircutPct, applyLegs, CORRIDORS registry, quoteCorridor, parityThresholds
+src/split.mjs         findOptimalSplit, venuesFromCorridors, remainingCapacity
+src/breakeven.mjs     tnaToPeriodRate, apyToPeriodRate, breakevenDepreciation (f*), compareOutcomes, breakevenMatrix
+src/market.mjs        the only network code: live API payloads → normalized market
+src/snapshot.mjs      bundled offline payloads in the live API shapes (illustrative, not a quote)
+docs/index.html       interactive visualizer (imports src/ directly — no duplicated math)
+test/                 node:test suite (unit + seeded property tests, brute-force split oracle)
+```
 
-```powershell
-node check-routes.mjs 500
+### CLI
+
+Run during **BYMA hours (Mon–Fri 11:00–17:00 ART)** for live quotes; default ticket `$1,000`:
+
+```bash
+node check-routes.mjs 5000
+node check-routes.mjs 25000 --offline --json
+node check-routes.mjs 2000 --tna=0.30 --apy=0.045
+```
+
+Live runs cache the report to `latest-routes.json` (git-ignored); `--offline` never touches it.
+
+### Optimal split (`findOptimalSplit`)
+
+Default venues for a Payoneer-balance withdrawal: Bitso `usdt_ars` book (2.9% + 0.6%), Santander USD wire (3.3%, then MEP), Prex (3.8% @ MEP), Belo (4.0%).
+Each venue is a concave piecewise-linear USD→ARS function (one segment per bid level for book venues), so taking segments in descending ARS/USD order under each venue's remaining daily/monthly capacity is **exact**; venues with fixed fees or minimum tickets are enumerated on/off. Fill is maximised first, then net ARS.
+
+Pass per-venue usage (`{ payo_bitso_stacked: { usedTodayUsd, usedMonthUsd } }`) and overrides (`fixedUsd`, `limits`) to `venuesFromCorridors`.
+Modelling assumptions to replace with your account's figures: the wire's `0.5%` MEP bond leg, and `Infinity` limits for Prex/wire.
+
+### Visualizer
+
+ES modules do not load over `file://`:
+
+```bash
+npm run viz
+```
+
+Then open `http://localhost:8138/docs/`. Sliders: ticket ($100–$25,000), MEP compra, CCL/MEP spread, USDT bid vs. CCL, book depth multiplier, Bitso 30-day usage, plus TNA / APY / expected depreciation / round-trip cost for the f* matrix.
+
+### Tests
+
+```bash
+npm test
 ```

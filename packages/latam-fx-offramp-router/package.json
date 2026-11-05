@@ -1,0 +1,22 @@
+{
+  "name": "latam-fx-offramp-router",
+  "version": "1.0.0",
+  "description": "Zero-dependency USD→ARS corridor comparator: order-book VWAP slippage, stacked fee math, MEP/CCL parity, optimal multi-venue split and USD-yield vs. plazo fijo breakeven.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "cashout-rails": "./check-routes.mjs" },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./orderbook": "./src/orderbook.mjs",
+    "./corridors": "./src/corridors.mjs",
+    "./breakeven": "./src/breakeven.mjs",
+    "./split": "./src/split.mjs"
+  },
+  "scripts": {
+    "routes": "node check-routes.mjs",
+    "offline": "node check-routes.mjs --offline",
+    "test": "node --test \"test/*.test.mjs\"",
+    "viz": "python3 -m http.server 8138"
+  },
+  "engines": { "node": ">=20" }
+}

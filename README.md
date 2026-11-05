@@ -104,6 +104,8 @@ Throughput comes from one run on Node 22 in a cloud container, so timings depend
 
 ## Companion Packages (packages/)
 
+**[▶ Portfolio hub](docs/portfolio/index.html)** · [PORTFOLIO.md](PORTFOLIO.md): every package in one view, verified by `npm run test:all`.
+
 | Package | Description | Demo / Docs |
 |---|---|---|
 | [packages/llm-app-hardening-kit](packages/llm-app-hardening-kit/README.md) | Cost circuit breaker (5h/7d rolling windows), streaming/batch output guard, and llm-harden static scanner CLI (12 rules, 25 broken/hardened fixture pairs) | [docs/demo-report.html](packages/llm-app-hardening-kit/docs/demo-report.html) |

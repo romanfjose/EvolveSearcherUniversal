@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engineering Portfolio Hub</title>
+<meta name="description" content="Ten zero-dependency engineering packages in one place: verified test counts, measured benchmarks, architecture and live demos.">
+<style>
+:root{
+  --bg:#0b0e13; --panel:#11161e; --panel-2:#161c26; --line:#232b38; --line-2:#2f3a4b;
+  --text:#e6ebf2; --muted:#8d99ab; --faint:#5f6b7d;
+  --accent:#5eead4; --accent-ink:#04201c; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --c-orch:#7dd3fc; --c-hard:#f9a8d4; --c-fin:#fcd34d; --c-browser:#a5b4fc; --c-apps:#86efac;
+  --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --r:10px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 500px at 85% -10%,rgba(94,234,212,.07),transparent 60%),
+  linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:auto,48px 48px,48px 48px;background-attachment:fixed}
+body::before{content:"";position:fixed;inset:0;background:linear-gradient(180deg,rgba(11,14,19,.55),var(--bg) 70%);pointer-events:none;z-index:-1}
+a{color:inherit}
+.wrap{max-width:1280px;margin:0 auto;padding:0 16px}
+header.top{padding:40px 0 24px;border-bottom:1px solid var(--line)}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px}
+.eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(94,234,212,.15)}
+h1{font-size:clamp(26px,4vw,40px);line-height:1.1;margin:14px 0 10px;letter-spacing:-.02em;font-weight:650}
+.lede{color:var(--muted);max-width:760px;margin:0;font-size:15px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:28px}
+.kpi{background:var(--panel);padding:14px 16px}
+.kpi b{display:block;font:600 24px/1.1 var(--mono);letter-spacing:-.02em}
+.kpi span{color:var(--muted);font-size:12px}
+.kpi b.ok{color:var(--ok)} .kpi b.bad{color:var(--bad)}
+.provenance{margin-top:10px;color:var(--faint);font:12px/1.4 var(--mono)}
+.provenance code{color:var(--muted)}
+
+.controls{position:sticky;top:0;z-index:5;background:rgba(11,14,19,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:12px 0}
+.controls .wrap{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.chip{appearance:none;border:1px solid var(--line-2);background:var(--panel);color:var(--muted);border-radius:999px;padding:6px 12px;font:500 12.5px/1 var(--sans);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .15s,color .15s,background .15s}
+.chip:hover{color:var(--text);border-color:var(--faint)}
+.chip[aria-pressed="true"]{color:var(--text);background:var(--panel-2);border-color:var(--chip,var(--accent))}
+.chip .dot{width:8px;height:8px;border-radius:2px;background:var(--chip,var(--accent))}
+.chip .n{font-family:var(--mono);color:var(--faint);font-size:11px}
+.search{flex:0 1 240px;min-width:160px;background:var(--panel);border:1px solid var(--line-2);border-radius:8px;color:var(--text);padding:7px 10px;font:13px var(--sans)}
+.search:focus,.chip:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+main{padding:24px 0 64px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;position:relative;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--line-2)}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cat)}
+.card[hidden]{display:none}
+.c-head{padding:16px 18px 0 20px}
+.c-tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag{font:600 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--tc);border:1px solid color-mix(in srgb,var(--tc) 40%,transparent);background:color-mix(in srgb,var(--tc) 9%,transparent);padding:4px 7px;border-radius:5px}
+.status{margin-left:auto;font:600 11px/1 var(--mono);display:inline-flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.status.pass{color:var(--ok)} .status.pass i{background:var(--ok)}
+.status.fail{color:var(--bad)} .status.fail i{background:var(--bad)}
+.status.warn{color:var(--warn)} .status.warn i{background:var(--warn)}
+.card h2{font-size:17px;margin:12px 0 2px;letter-spacing:-.01em;font-weight:620}
+.card h2 small{display:block;font:12px var(--mono);color:var(--faint);font-weight:400;margin-top:3px}
+.blurb{color:var(--muted);margin:8px 0 0;font-size:13.5px}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:14px}
+.metric{background:var(--panel);padding:10px 12px 10px 20px;min-width:0}
+.metric+.metric{padding-left:12px}
+.metric b{display:block;font:600 16px/1.2 var(--mono);letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric span{display:block;color:var(--faint);font-size:11px;line-height:1.3;margin-top:3px}
+.arch{padding:12px 18px 4px 20px}
+.label{font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.arch svg{width:100%;height:auto;display:block}
+.arch .node rect{fill:var(--panel-2);stroke:var(--line-2)}
+.arch .node text{fill:var(--text);font:10.5px var(--mono)}
+.arch .edge{stroke:var(--cat);stroke-opacity:.55;fill:none}
+.arch .arrow{fill:var(--cat);fill-opacity:.8}
+details.hire{margin:8px 18px 0 20px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+details.hire summary{cursor:pointer;list-style:none;padding:9px 12px;font:600 12.5px var(--sans);display:flex;align-items:center;gap:8px}
+details.hire summary::-webkit-details-marker{display:none}
+details.hire summary::before{content:"▸";color:var(--cat);transition:transform .15s}
+details.hire[open] summary::before{transform:rotate(90deg)}
+details.hire .body{padding:0 12px 12px;color:var(--muted);font-size:13px}
+details.hire .body p{margin:0 0 8px}
+details.hire .body ul{margin:0;padding-left:18px}
+details.hire .body li{margin:2px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;padding:14px 18px 16px 20px;margin-top:auto}
+.btn{appearance:none;border:1px solid var(--line-2);background:var(--panel-2);color:var(--text);padding:7px 12px;border-radius:7px;font:500 12.5px/1 var(--sans);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--faint)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:650}
+.btn.primary:hover{filter:brightness(1.08)}
+.run{font:12px var(--mono);color:var(--muted);background:var(--bg);border:1px dashed var(--line-2);border-radius:7px;padding:6px 10px;display:inline-flex;align-items:center;gap:8px;max-width:100%;overflow:auto;white-space:nowrap}
+.run::before{content:"$";color:var(--faint)}
+.absent{padding:16px 18px 18px 20px;color:var(--muted);font-size:13px}
+.absent code{font-family:var(--mono);color:var(--text)}
+.empty{text-align:center;color:var(--muted);padding:40px 0}
+
+dialog{border:1px solid var(--line-2);background:var(--panel);color:var(--text);border-radius:12px;padding:0;width:min(1100px,calc(100vw - 32px));height:min(780px,calc(100vh - 48px));overflow:hidden}
+dialog::backdrop{background:rgba(3,5,8,.72);backdrop-filter:blur(3px)}
+.d-bar{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--line);font:13px var(--sans)}
+.d-bar b{font-weight:620}
+.d-bar code{font:12px var(--mono);color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.d-body{height:calc(100% - 49px);background:#fff}
+.d-body.img{background:var(--bg);overflow:auto;display:grid;place-items:center;padding:16px}
+.d-body iframe{width:100%;height:100%;border:0;display:block}
+.d-body img{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
+.d-note{padding:8px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);background:var(--panel-2)}
+
+footer{border-top:1px solid var(--line);color:var(--faint);font-size:12px;padding:20px 0 40px}
+footer code{font-family:var(--mono);color:var(--muted)}
+@media (max-width:520px){.metrics{grid-template-columns:1fr 1fr}.metric:nth-child(3){display:none}.status{margin-left:0}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script src="verification.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow"><i></i>Engineering Portfolio · EvolveSearcherUniversal monorepo</div>
+    <h1>Agent infrastructure, hardened for production.</h1>
+    <p class="lede">Ten packages, zero runtime dependencies in the libraries, one test runner. Each card shows the test count from the last verified run, the number its own benchmark printed, how it is built, and the problem it was written to solve.</p>
+    <div class="kpis" id="kpis"></div>
+    <div class="provenance" id="provenance"></div>
+  </div>
+</header>
+
+<nav class="controls" aria-label="Filter projects">
+  <div class="wrap">
+    <div class="chips" id="chips" role="group" aria-label="Category"></div>
+    <input class="search" id="q" type="search" placeholder="Search projects, tech, problems…" aria-label="Search projects">
+  </div>
+</nav>
+
+<main class="wrap">
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden>No project matches that filter.</p>
+</main>
+
+<footer>
+  <div class="wrap">Test counts are read from <code>docs/portfolio/verification.js</code>, written by <code>node scripts/test-all-packages.mjs --write</code>. Benchmark figures are copied from each package's own bench output and README, measured on one machine; rerun them to compare on yours. Demos open relative to this repo: serve its root with <code>python3 -m http.server</code> and visit <code>/docs/portfolio/</code>.</div>
+</footer>
+
+<dialog id="preview" aria-labelledby="pv-title">
+  <div class="d-bar"><b id="pv-title"></b><code id="pv-path"></code><a class="btn" id="pv-open" target="_blank" rel="noopener">Open in tab ↗</a><button class="btn" id="pv-close" aria-label="Close preview">✕</button></div>
+  <div class="d-note" id="pv-note" hidden></div>
+  <div class="d-body" id="pv-body"></div>
+</dialog>
+
+<script>
+"use strict";
+const REPO = "../../";
+const CATS = {
+  orch:    { label: "AI Orchestration & MCP",          color: "var(--c-orch)" },
+  hard:    { label: "Production Hardening & Security", color: "var(--c-hard)" },
+  fin:     { label: "FinTech & Order-Book Routing",    color: "var(--c-fin)" },
+  browser: { label: "Browser Automation & Extensions", color: "var(--c-browser)" },
+  apps:    { label: "Interactive Apps & Games",        color: "var(--c-apps)" },
+};
+
+// Figures below come from each package's bench script or README; test counts come from verification.js.
+const PROJECTS = [
+  {
+    id: "EvolveSearcherUniversal", path: "", name: "EvolveSearcherUniversal", sub: "root · framework + dashboard",
+    cats: ["orch"],
+    blurb: "Self-evolving search and discovery framework. Three independent engine lanes (Claude, Gemini, GPT) file dossiers that pass only when every gate carries a verified URL and quote, under a per-iteration compute budget with full-tree rollback.",
+    metrics: [["100,919/s", "lintRow dossiers, browser port"], ["5,516/s", "full Assayer diagnostics"]],
+    arch: [["Claude lane", "Gemini lane", "GPT lane"], ["leads/*.md"], ["lead-lint", "ui/data.mjs"], ["Dashboard", "Static demo"]],
+    hire: {
+      problem: "Your autonomous research agents produce confident output that nobody can audit, and their compute bill grows every iteration.",
+      bullets: ["Citation-gated verification: a claim passes only with a source URL and quote", "Compute-budget routing (≤ 55 CU target, 70 CU ceiling per iteration)", "Parity-tested browser port of the canonical linter"],
+    },
+    demo: "docs/demo/index.html", needsServer: true, run: "npm start", readme: "README.md",
+  },
+  {
+    id: "multi-model-routing-bench", name: "multi-model-routing-bench", sub: "CU calculator · studio simulator",
+    cats: ["orch"],
+    blurb: "Prices requests down to cache writes and long-context tier jumps, meters Cost Units against rolling and weekly quotas, and simulates 24-hour multi-agent studios to compare a single-model loop with tri-cameral role routing.",
+    metrics: [["73.5%", "defect catch, routed roster (sim.)"], ["28.9%", "catch, single Opus loop (sim.)"], ["$208 vs $507", "24 h pure-API cost (sim.)"]],
+    arch: [["Pricing", "CU menu", "Priors"], ["priceCall", "agentCU"], ["simulateStudio"], ["Calculator", "bench tables"]],
+    hire: {
+      problem: "You're choosing between one flagship model and a routed roster and need reproducible numbers on cost, quota exhaustion and defect escape, not opinions.",
+      bullets: ["Rate-card pricing with cached input and tier jumps", "Quota-exhaustion hour per plan", "Failure-mode evaluation of recorded agent runs"],
+    },
+    demo: "packages/multi-model-routing-bench/docs/index.html", needsServer: true, run: "npm start  # :4490", readme: "packages/multi-model-routing-bench/README.md",
+  },
+  {
+    id: "webchat-batch-packer", name: "webchat-batch-packer", sub: "wbp CLI · library · browser console",
+    cats: ["orch"],
+    blurb: "Runs research tasks through web-chat LLMs without an API. Compiles sources into checksummed, token-budgeted packets, then unpacks every reply in one paste: repairs markdown mangling, guards paths, checks citations and diffs before writing.",
+    metrics: [["96.8%", "token saving, 40 pages → 2 packets"], ["22.7 MB/s", "unpack + lint throughput"], ["11 / 11", "mangling cases recovered"]],
+    arch: [["task.json"], ["wbp pack"], ["chat 1", "chat 2"], ["wbp unpack"], ["diff→disk"]],
+    hire: {
+      problem: "Your team runs serious work through ChatGPT, Claude.ai or Gemini by copy-paste, and output gets lost, mangled or silently invented.",
+      bullets: ["Zero model tokens spent on formatting", "Byte-identical recovery from fenced or escaped replies", "Nothing reaches disk without a reviewed diff"],
+    },
+    demo: "packages/webchat-batch-packer/docs/index.html", run: "npm start", readme: "packages/webchat-batch-packer/README.md",
+  },
+  {
+    id: "agent-orchestration-mcp-eval", name: "agent-orchestration-mcp-eval", sub: "MCP evaluation harness",
+    cats: ["orch"], absent: true,
+  },
+  {
+    id: "llm-app-hardening-kit", name: "llm-app-hardening-kit", sub: "budget-breaker · output-guard · llm-harden",
+    cats: ["hard"],
+    blurb: "Guards and a static scanner for the failure modes that take LLM apps down in week one: runaway agent loops, leaked keys, forged webhooks, tool-call injection, malformed model JSON and double-charging retries.",
+    metrics: [["26 / 26", "seeded defects detected"], ["0", "false positives on 25 hardened trees"], ["12", "structure-aware scanner rules"]],
+    arch: [["request"], ["budget-breaker"], ["LLM"], ["output-guard"], ["response"]],
+    hire: {
+      problem: "Your LLM feature launches next week, or it already shipped and the first surprise bill or prompt-injection report just arrived.",
+      bullets: ["Rolling 5 h / 7 d cost caps with tiered model fallback", "JSON repair, schema contracts, key and system-prompt redaction", "CI-gating audit with an HTML before/after report"],
+    },
+    demo: "packages/llm-app-hardening-kit/docs/demo-report.html", run: "npx llm-harden .", readme: "packages/llm-app-hardening-kit/README.md",
+  },
+  {
+    id: "form-schema-autofill-engine", name: "form-schema-autofill-engine", sub: "classifier · ATS adapters · replay",
+    cats: ["browser", "hard"],
+    blurb: "Pure-JS form-field classifier with Greenhouse, Lever, Ashby and Workday adapters. It has no submit API: every click is checked by clickSafe(), and consent, signatures, credentials and national IDs are left for a human.",
+    metrics: [["54", "oracle fixtures, every field annotated"], ["0", "submits or guarded clicks across fixtures"], ["100%", "byte-deterministic replay"]],
+    arch: [["DOM+shadow"], ["collect"], ["channels"], ["score"], ["planFill", "overlay"]],
+    hire: {
+      problem: "You need browser automation over forms you don't control that is provably safe: it never submits, never touches sensitive fields and replays deterministically.",
+      bullets: ["Shadow DOM, React-Select, Workday dropdowns, multi-step wizards", "Dry-run overlay showing why each field was or wasn't filled", "Fixture-first workflow when ATS markup drifts"],
+    },
+    demo: "packages/form-schema-autofill-engine/docs/index.html", needsServer: true, run: "npm run playground  # :8137/docs/", readme: "packages/form-schema-autofill-engine/README.md",
+  },
+  {
+    id: "ai-chat-exporter-mv3", name: "Chat Replay", sub: "ai-chat-exporter-mv3 · Chrome MV3 extension",
+    cats: ["browser"],
+    blurb: "Captures your prompts in one AI chat and replays them in a fresh chat on another model, waiting for each reply. Exports conversations as clean role-split Markdown and lifts Mercado Libre listings and search pages into one pasteable table.",
+    metrics: [["9", "chat sites wired + generic fallback"], ["2 tabs", "concurrent replays, isolated ranges"], ["v0.8", "search-page reader"]],
+    arch: [["Chat page"], ["adapters.js"], ["content.js"], ["popup"], ["Markdown", "replay"]],
+    hire: {
+      problem: "You need an extension that keeps working on sites you don't control, where class names change weekly and nothing exposes an API.",
+      bullets: ["Layout-based role inference that survives scrambled class names", "'Teach this site' recovery without a code change", "jsdom harness that drives the real popup and content scripts"],
+    },
+    run: "chrome://extensions → Load unpacked", readme: "packages/ai-chat-exporter-mv3/README.md",
+  },
+  {
+    id: "latam-fx-offramp-router", name: "CashoutRails", sub: "latam-fx-offramp-router · USD → ARS",
+    cats: ["fin"],
+    blurb: "Ranks USD-to-ARS withdrawal routes by net payout. Walks the live Bitso usdt_ars bid book to a VWAP for your exact amount, stacks each corridor's published fees and compares against MEP, with a primary source for every number.",
+    metrics: [["5", "Payoneer → ARS corridors ranked"], ["1.0361×", "Bitso break-even vs MEP"], ["VWAP", "depth-aware, sized to your amount"]],
+    arch: [["Bitso book", "dolarapi", "CriptoYa"], ["walkOrderBook"], ["fee stack"], ["ranked net ARS"]],
+    hire: {
+      problem: "You move money across a volatile corridor and the rate you're quoted isn't the rate you get once fees stack and the order book thins out.",
+      bullets: ["Order-book depth walk instead of top-of-book quotes", "Closed-form break-even thresholds per route", "Every fee cited to the provider's own page"],
+    },
+    run: "node check-routes.mjs 1000", readme: "packages/latam-fx-offramp-router/README.md",
+  },
+  {
+    id: "epistemic-experiment-coach", name: "Clash with Reality", sub: "epistemic-experiment-coach · React + Express",
+    cats: ["apps"],
+    blurb: "A low-friction coach that turns a vague problem into one small real-world experiment, then debriefs it. Works offline with a built-in coach; with OpenRouter, the key stays in the server process and never reaches the browser.",
+    metrics: [["10", "step flow, captured with Playwright"], ["0", "API keys sent to the browser"], ["offline", "built-in coach, no key needed"]],
+    arch: [["React 19 UI"], ["/api/coach"], ["OpenRouter", "built-in coach"], ["journeys"]],
+    hire: {
+      problem: "You want an AI product with a guided, opinionated flow rather than an empty chat box, and it must degrade gracefully when the model is unavailable.",
+      bullets: ["Server-side key custody", "Deterministic offline path for demos and outages", "Screenshot-verified end-to-end flow"],
+    },
+    image: "packages/epistemic-experiment-coach/docs/cooking-flow/01-welcome.png", run: "npm install && npm run dev", readme: "packages/epistemic-experiment-coach/README.md",
+  },
+  {
+    id: "ai-squad-group-chat", name: "AI Group Chat", sub: "ai-squad-group-chat · zero-build web app",
+    cats: ["apps"],
+    blurb: "A messenger-style group chat where several AI personas talk with you and with each other. Runs entirely in the browser on OpenRouter free models, with request pacing, cooldowns and a fallback chain when a model rate-limits.",
+    metrics: [["3 s", "request pacing gap"], ["18 s", "per-request timeout"], ["EN / ES", "full i18n"]],
+    arch: [["Group UI"], ["personas"], ["pace queue"], ["OpenRouter", "fallbacks"]],
+    hire: {
+      problem: "You want a multi-agent conversational product on free or cheap models that stays responsive while providers rate-limit and drop out.",
+      bullets: ["Paced, serialized calls with cooldown handling", "Automatic free-model fallback", "Key kept in the user's own browser"],
+    },
+    demo: "packages/ai-squad-group-chat/index.html", image: "packages/ai-squad-group-chat/1.png", run: "open index.html", readme: "packages/ai-squad-group-chat/index.html",
+  },
+  {
+    id: "dont-sink-dont-die-coop", name: "Dream River Racing Survival", sub: "dont-sink-dont-die-coop · multiplayer 3D",
+    cats: ["apps"],
+    blurb: "Co-op raft survival in the browser. Three.js renders the river; an Express and Socket.IO server runs enemy spawns that scale with the party, health, checkpoint revives and a coin-validated upgrade shop, broadcasting state to every client.",
+    metrics: [["3", "enemy types, server-spawned"], ["3", "upgrades, coin-checked server-side"], ["0", "build steps: import-map client"]],
+    arch: [["Three.js"], ["Socket.IO"], ["game server"], ["enemies", "economy"]],
+    hire: {
+      problem: "You need real-time multiplayer in the browser, from first prototype to something friends can actually play together tonight.",
+      bullets: ["Server-owned enemies, health and economy", "Spawn pacing that scales with player count", "One-command local hosting"],
+    },
+    run: "npm install && npm start  # :3000", readme: "packages/dont-sink-dont-die-coop/server.js",
+  },
+];
+
+const V = window.VERIFICATION || null;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtMs = (ms) => (ms >= 1000 ? (ms / 1000).toFixed(1) + " s" : Math.round(ms) + " ms");
+
+function verdict(p) {
+  if (p.absent) return { cls: "warn", text: "not in repo", metric: null };
+  const v = V && V.packages[p.id];
+  if (!v) return { cls: "", text: "unverified", metric: null };
+  if (v.status === "pass") return { cls: "pass", text: `${v.passed}/${v.tests} pass`, metric: [v.tests.toLocaleString("en-US"), `tests passing · ${fmtMs(v.ms)}`] };
+  if (v.status === "fail") return { cls: "fail", text: `${v.failed} failing`, metric: [`${v.passed}/${v.tests}`, "tests passing"] };
+  if (v.status === "needs npm install") return { cls: "warn", text: "needs install", metric: null };
+  return { cls: "", text: "no test suite", metric: null };
+}
+
+function archSvg(stages) {
+  // Columns are sized to their longest label so nothing is truncated; the SVG scales to the card.
+  const CH = 6.3, PAD = 12, GAP = 16, nodeH = 24, gapY = 8;
+  const widths = stages.map((st) => Math.max(...st.map((l) => l.length)) * CH + PAD);
+  const maxRows = Math.max(...stages.map((st) => st.length));
+  const H = maxRows * nodeH + (maxRows - 1) * gapY + 4;
+  const used = widths.reduce((a, b) => a + b, 0) + GAP * (stages.length - 1);
+  const W = Math.max(360, used);
+  let x = (W - used) / 2;
+  const pos = stages.map((stage, i) => {
+    const total = stage.length * nodeH + (stage.length - 1) * gapY, y0 = (H - total) / 2, w = widths[i];
+    const col = stage.map((label, j) => ({ label, x, y: y0 + j * (nodeH + gapY), w }));
+    x += w + GAP;
+    return col;
+  });
+  let edges = "", nodes = "";
+  for (let i = 0; i < pos.length - 1; i++) for (const a of pos[i]) for (const b of pos[i + 1]) {
+    const x1 = a.x + a.w, y1 = a.y + nodeH / 2, x2 = b.x - 4, y2 = b.y + nodeH / 2, mx = (x1 + x2) / 2;
+    edges += `<path class="edge" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/><path class="arrow" d="M${x2} ${y2 - 3} L${x2 + 4} ${y2} L${x2} ${y2 + 3}Z"/>`;
+  }
+  for (const col of pos) for (const n of col) {
+    nodes += `<g class="node"><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${nodeH}" rx="5"/><text x="${n.x + n.w / 2}" y="${n.y + nodeH / 2 + 3.5}" text-anchor="middle">${esc(n.label)}</text></g>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Architecture: ${esc(stages.map((st) => st.join(" + ")).join(" → "))}">${edges}${nodes}</svg>`;
+}
+
+function card(p) {
+  const cat = CATS[p.cats[0]], v = verdict(p);
+  const tags = p.cats.map((c) => `<span class="tag" style="--tc:${CATS[c].color}">${esc(CATS[c].label)}</span>`).join("");
+  const head = `<div class="c-head"><div class="c-tags">${tags}<span class="status ${v.cls}"><i></i>${esc(v.text)}</span></div>
+    <h2>${esc(p.name)}<small>${esc(p.sub)}</small></h2>${p.blurb ? `<p class="blurb">${esc(p.blurb)}</p>` : ""}</div>`;
+  if (p.absent) {
+    return `<article class="card" style="--cat:${cat.color}" data-cats="${p.cats}" data-text="${esc((p.name + " " + p.sub).toLowerCase())}">${head}
+      <div class="absent"><code>${esc(p.id)}</code> is not in this repository yet, so there are no tests, benchmarks or demo to show. It is listed so the roster is complete; it appears here with real numbers once it lands under <code>packages/</code> and has a test script.</div></article>`;
+  }
+  const metrics = [v.metric, ...p.metrics].filter(Boolean).slice(0, 3)
+    .map(([b, s]) => `<div class="metric"><b title="${esc(b)}">${esc(b)}</b><span>${esc(s)}</span></div>`).join("");
+  const actions = [
+    p.demo && `<a class="btn primary" href="${REPO + p.demo}" target="_blank" rel="noopener">Launch demo ↗</a>`,
+    (p.demo || p.image) && `<button class="btn" data-preview="${esc(p.id)}">Preview</button>`,
+    `<a class="btn" href="${REPO + p.readme}" target="_blank" rel="noopener">${p.readme.endsWith(".md") ? "README" : "Source"}</a>`,
+    p.run && `<span class="run" title="Run from ${esc(p.path ?? "packages/" + p.id)}">${esc(p.run)}</span>`,
+  ].filter(Boolean).join("");
+  const text = [p.name, p.sub, p.blurb, p.hire.problem, ...p.hire.bullets, ...p.arch.flat()].join(" ").toLowerCase();
+  return `<article class="card" style="--cat:${cat.color}" data-cats="${p.cats}" data-text="${esc(text)}">${head}
+    <div class="metrics">${metrics}</div>
+    <div class="arch"><p class="label">Architecture</p>${archSvg(p.arch)}</div>
+    <details class="hire"><summary>When to hire me for this</summary><div class="body"><p>${esc(p.hire.problem)}</p><ul>${p.hire.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div></details>
+    <div class="actions">${actions}</div></article>`;
+}
+
+function renderKpis() {
+  const real = PROJECTS.filter((p) => !p.absent).length;
+  if (!V) {
+    $("#kpis").innerHTML = `<div class="kpi"><b>${real}</b><span>packages in repo</span></div><div class="kpi"><b>—</b><span>run the verifier to show test counts</span></div>`;
+    $("#provenance").innerHTML = `No <code>verification.js</code> found. Run <code>node scripts/test-all-packages.mjs --write</code>.`;
+    return;
+  }
+  const t = V.totals, rate = t.tests ? ((100 * t.passed) / t.tests).toFixed(1) + "%" : "—";
+  const suites = Object.values(V.packages).filter((x) => x.tests != null).length;
+  $("#kpis").innerHTML = [
+    [t.tests.toLocaleString("en-US"), "tests in the last verified run"],
+    [rate, "pass rate", t.failed ? "bad" : "ok"],
+    [`${suites} / ${real}`, "packages with a test suite"],
+    [fmtMs(t.ms), "total suite time"],
+    [Object.keys(CATS).length, "practice areas"],
+  ].map(([b, s, c]) => `<div class="kpi"><b class="${c || ""}">${esc(b)}</b><span>${esc(s)}</span></div>`).join("");
+  $("#provenance").innerHTML = `Verified ${esc(V.generated.slice(0, 16).replace("T", " "))} UTC · Node ${esc(V.node)} · ${esc(V.platform)} · <code>node scripts/test-all-packages.mjs</code>`;
+}
+
+let active = "all";
+function renderChips() {
+  const count = (k) => PROJECTS.filter((p) => k === "all" || p.cats.includes(k)).length;
+  $("#chips").innerHTML = [["all", "All projects", "var(--accent)"], ...Object.entries(CATS).map(([k, c]) => [k, c.label, c.color])]
+    .map(([k, l, c]) => `<button class="chip" style="--chip:${c}" data-cat="${k}" aria-pressed="${k === active}"><span class="dot"></span>${esc(l)}<span class="n">${count(k)}</span></button>`).join("");
+}
+function applyFilter() {
+  const q = $("#q").value.trim().toLowerCase();
+  let shown = 0;
+  for (const el of document.querySelectorAll(".card")) {
+    const ok = (active === "all" || el.dataset.cats.split(",").includes(active)) && (!q || el.dataset.text.includes(q));
+    el.hidden = !ok; shown += ok;
+  }
+  $("#empty").hidden = shown > 0;
+  try { history.replaceState(null, "", active === "all" ? location.pathname : "#" + active); } catch {}
+}
+
+const dlg = $("#preview");
+function openPreview(id) {
+  const p = PROJECTS.find((x) => x.id === id), body = $("#pv-body"), note = $("#pv-note");
+  const src = REPO + (p.demo || p.image);
+  $("#pv-title").textContent = p.name;
+  $("#pv-path").textContent = p.demo || p.image;
+  $("#pv-open").href = src;
+  const notes = [];
+  if (p.demo && location.protocol === "file:" && p.needsServer) notes.push("This demo loads modules or data with fetch(), which browsers block on file://. Serve the repo root (python3 -m http.server) for it to run.");
+  if (p.demo && p.image) notes.push("Live app below; chatting needs your own OpenRouter key, stored only in this browser.");
+  note.hidden = !notes.length; note.textContent = notes.join(" ");
+  body.className = "d-body" + (p.demo ? "" : " img");
+  body.style.height = notes.length ? "calc(100% - 49px - 34px)" : "";
+  body.innerHTML = p.demo
+    ? `<iframe src="${src}" title="${esc(p.name)} live demo" loading="lazy" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"></iframe>`
+    : `<img src="${src}" alt="${esc(p.name)} screenshot">`;
+  dlg.showModal();
+}
+dlg.addEventListener("close", () => { $("#pv-body").innerHTML = ""; });
+dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+$("#pv-close").addEventListener("click", () => dlg.close());
+
+$("#grid").innerHTML = PROJECTS.map(card).join("");
+$("#grid").addEventListener("click", (e) => { const b = e.target.closest("[data-preview]"); if (b) openPreview(b.dataset.preview); });
+$("#chips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cat]"); if (!b) return;
+  active = b.dataset.cat; renderChips(); applyFilter();
+});
+$("#q").addEventListener("input", applyFilter);
+const fromHash = location.hash.slice(1);
+if (CATS[fromHash]) active = fromHash;
+renderKpis(); renderChips(); applyFilter();
+</script>
+</body>
+</html>

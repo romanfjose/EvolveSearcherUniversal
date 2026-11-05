@@ -13,9 +13,9 @@ export function upgradeRendererAndAtmosphere(renderer, scene) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Warm golden-hour sky fog that blends seamlessly with distant canyon horizon
+    // Warm golden-hour sky fog tuned for high-angle tactical co-op diorama visibility
     scene.background = new THREE.Color(0x1b2940);
-    scene.fog = new THREE.FogExp2(0x283c54, 0.0042);
+    scene.fog = new THREE.FogExp2(0x283c54, 0.0021);
 
     // Sky Dome Shader (Sunset Horizon -> Deep Zenith + Sun Disc)
     const skyGeo = new THREE.SphereGeometry(900, 32, 24);
@@ -249,65 +249,96 @@ export function createAAACanyonAndCity(scene, riverWidth, riverLength) {
     spireInst.receiveShadow = true;
     bankGroup.add(spireInst);
 
-    // ─── Harbor City District (Right Bank: x = 15..52, z = -150..-250) ───
+    // ─── Act II: Walled Harbor City & Calm Marina Basin (Both Banks, z = -135..-275) ───
     const cityGroup = new THREE.Group();
     const concreteMat = new THREE.MeshStandardMaterial({ color: 0x3b424c, roughness: 0.75 });
     const pierWoodMat = new THREE.MeshStandardMaterial({ color: 0x5c3d24, roughness: 0.85 });
+    const roofTileMat = new THREE.MeshStandardMaterial({ color: 0x8c3b2b, roughness: 0.7, flatShading: true });
     const windowGlowMat = new THREE.MeshBasicMaterial({ color: 0xffd27d });
     const neonCyanMat = new THREE.MeshBasicMaterial({ color: 0x38f2ff });
     const neonGoldMat = new THREE.MeshBasicMaterial({ color: 0xffb732 });
+    const emeraldWardMat = new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    const halfW = riverWidth * 0.5;
 
-    // Harbor promenade deck + wooden merchant pier jutting to the river edge
-    const promenade = new THREE.Mesh(new THREE.BoxGeometry(36, 1.4, 108), concreteMat);
-    promenade.position.set(33, 0.5, -200);
+    // Harbor promenade deck + broad wooden merchant pier jutting into the calm basin
+    const promenade = new THREE.Mesh(new THREE.BoxGeometry(38, 1.6, 128), concreteMat);
+    promenade.position.set(halfW + 17, 0.5, -200);
     promenade.receiveShadow = true;
     cityGroup.add(promenade);
 
-    const pierDeck = new THREE.Mesh(new THREE.BoxGeometry(6, 0.45, 76), pierWoodMat);
-    pierDeck.position.set(16.5, 0.85, -200);
+    const leftPromenade = new THREE.Mesh(new THREE.BoxGeometry(32, 1.6, 118), concreteMat);
+    leftPromenade.position.set(-(halfW + 15), 0.5, -200);
+    leftPromenade.receiveShadow = true;
+    cityGroup.add(leftPromenade);
+
+    // Wide Sanctuary Harbor Pier (extends from x = 13.5 out to halfW + 4 so rafts can dock anywhere on the right side!)
+    const pierSpanW = Math.max(12, halfW - 10);
+    const pierDeck = new THREE.Mesh(new THREE.BoxGeometry(pierSpanW, 0.55, 96), pierWoodMat);
+    pierDeck.position.set(13.5 + pierSpanW * 0.5 - 1.5, 0.85, -200);
     pierDeck.castShadow = true;
     pierDeck.receiveShadow = true;
     cityGroup.add(pierDeck);
 
-    // Pier pilings & glowing mooring bollards
-    for (let z = -165; z >= -235; z -= 10) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 3.2, 8), pierWoodMat);
-        post.position.set(14.0, 0.6, z);
+    // Calm Harbor Truce Boundary Buoys & Lantern Bollards
+    for (let z = -155; z >= -245; z -= 10) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 3.6, 8), pierWoodMat);
+        post.position.set(13.2, 0.7, z);
         cityGroup.add(post);
 
-        const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), neonGoldMat);
-        lantern.position.set(14.0, 2.35, z);
+        const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), neonGoldMat);
+        lantern.position.set(13.2, 2.65, z);
         cityGroup.add(lantern);
+    }
+
+    // Twin Harbor Entrance Lighthouses at z = -142 and z = -262
+    for (const side of [-1, 1]) {
+        for (const lz of [-142, -262]) {
+            const lhGroup = new THREE.Group();
+            lhGroup.position.set(side * (halfW - 2), 0, lz);
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.2, 4.5, 10), concreteMat);
+            base.position.y = 2.25;
+            const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.3, 14, 10), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.6 }));
+            tower.position.y = 11.2;
+            const beacon = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.2, 10), neonGoldMat);
+            beacon.position.y = 19.2;
+            const cap = new THREE.Mesh(new THREE.ConeGeometry(1.9, 2.8, 10), roofTileMat);
+            cap.position.y = 21.6;
+            lhGroup.add(base, tower, beacon, cap);
+            cityGroup.add(lhGroup);
+        }
     }
 
     // Harbor Shop Archway & Neon Beacon at z = -200
     const shopArch = new THREE.Group();
-    shopArch.position.set(19, 1.2, -200);
-    const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 5.5, 0.8), pierWoodMat);
-    leftPillar.position.set(0, 2.75, -6);
-    const rightPillar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 5.5, 0.8), pierWoodMat);
-    rightPillar.position.set(0, 2.75, 6);
-    const signBoard = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 13.5), new THREE.MeshStandardMaterial({ color: 0x16202e }));
-    signBoard.position.set(0, 5.6, 0);
-    const neonTrimTop = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.16, 13.7), neonCyanMat);
-    neonTrimTop.position.set(0, 6.45, 0);
-    const neonTrimBot = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.16, 13.7), neonGoldMat);
-    neonTrimBot.position.set(0, 4.75, 0);
+    shopArch.position.set(18, 1.2, -200);
+    const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 6.5, 0.9), pierWoodMat);
+    leftPillar.position.set(0, 3.25, -7);
+    const rightPillar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 6.5, 0.9), pierWoodMat);
+    rightPillar.position.set(0, 3.25, 7);
+    const signBoard = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.0, 15.5), new THREE.MeshStandardMaterial({ color: 0x16202e }));
+    signBoard.position.set(0, 6.6, 0);
+    const neonTrimTop = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 15.8), neonCyanMat);
+    neonTrimTop.position.set(0, 7.65, 0);
+    const neonTrimBot = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 15.8), neonGoldMat);
+    neonTrimBot.position.set(0, 5.55, 0);
     shopArch.add(leftPillar, rightPillar, signBoard, neonTrimTop, neonTrimBot);
     cityGroup.add(shopArch);
 
     // Warm harbor point light so the shop dock glows across the water
-    const shopLight = new THREE.PointLight(0xffb84d, 2.5, 48, 1.5);
-    shopLight.position.set(16, 6.5, -200);
+    const shopLight = new THREE.PointLight(0xffb84d, 3.0, 65, 1.4);
+    shopLight.position.set(16, 8.0, -200);
     cityGroup.add(shopLight);
 
-    // Skyline buildings behind the promenade
+    // Walled Canal Townhouses with Gabled Roofs on both Harbor Banks
     const bldgConfigs = [
-        { x: 34, z: -162, w: 9, h: 16, d: 12, col: 0x283342 },
-        { x: 36, z: -180, w: 10, h: 24, d: 14, col: 0x1f2937 },
-        { x: 33, z: -200, w: 11, h: 19, d: 16, col: 0x2d3748 },
-        { x: 37, z: -220, w: 10, h: 27, d: 14, col: 0x1e2633 },
-        { x: 34, z: -238, w: 9, h: 15, d: 12, col: 0x2b3648 },
+        { x: halfW + 16, z: -158, w: 10, h: 16, d: 13, col: 0x283342 },
+        { x: halfW + 18, z: -178, w: 11, h: 24, d: 14, col: 0x1f2937 },
+        { x: halfW + 15, z: -200, w: 12, h: 20, d: 16, col: 0x2d3748 },
+        { x: halfW + 19, z: -222, w: 11, h: 27, d: 14, col: 0x1e2633 },
+        { x: halfW + 16, z: -242, w: 10, h: 16, d: 13, col: 0x2b3648 },
+        { x: -(halfW + 15), z: -168, w: 10, h: 18, d: 14, col: 0x263244 },
+        { x: -(halfW + 17), z: -195, w: 12, h: 22, d: 15, col: 0x1f2937 },
+        { x: -(halfW + 15), z: -225, w: 10, h: 17, d: 13, col: 0x2d3748 },
     ];
     for (const b of bldgConfigs) {
         const bMat = new THREE.MeshStandardMaterial({ color: b.col, roughness: 0.65, metalness: 0.2 });
@@ -317,41 +348,139 @@ export function createAAACanyonAndCity(scene, riverWidth, riverLength) {
         bMesh.receiveShadow = true;
         cityGroup.add(bMesh);
 
-        // Glowing window strips facing the river (-X face)
+        // Pitched gable roof
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(b.w * 0.78, 4.5, 4), roofTileMat);
+        roof.rotation.y = Math.PI / 4;
+        roof.position.set(b.x, 1.2 + b.h + 2.2, b.z);
+        cityGroup.add(roof);
+
+        // Glowing window strips facing the river
+        const faceSign = b.x > 0 ? -1 : 1;
         for (let wy = 4; wy < b.h - 1.5; wy += 3.2) {
-            const winStrip = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.1, b.d * 0.75), windowGlowMat);
-            winStrip.position.set(b.x - b.w / 2 - 0.05, 1.2 + wy, b.z);
+            const winStrip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.1, b.d * 0.75), windowGlowMat);
+            winStrip.position.set(b.x + faceSign * (b.w / 2 + 0.06), 1.2 + wy, b.z);
             cityGroup.add(winStrip);
         }
     }
 
+    // ─── Act I Biome Architecture: Redwood Waterwheel Mills & Flume Bridges (z = -35..-125 & -290..-460) ───
+    const act1Group = new THREE.Group();
+    for (const wz of [-55, -110, -310, -390, -445]) {
+        const side = wz % 2 === 0 ? 1 : -1;
+        const millHouse = new THREE.Mesh(new THREE.BoxGeometry(9, 7, 11), pierWoodMat);
+        millHouse.position.set(side * (halfW + 5), 3.8, wz);
+        const millRoof = new THREE.Mesh(new THREE.ConeGeometry(7.5, 4, 4), roofTileMat);
+        millRoof.rotation.y = Math.PI / 4;
+        millRoof.position.set(side * (halfW + 5), 9.2, wz);
+        const wheel = new THREE.Mesh(new THREE.TorusGeometry(3.8, 0.45, 8, 16), pierWoodMat);
+        wheel.rotation.y = Math.PI / 2;
+        wheel.position.set(side * (halfW - 0.2), 3.6, wz);
+        act1Group.add(millHouse, millRoof, wheel);
+    }
+    // Overhead wooden log-flume aqueduct bridges spanning the wide river
+    for (const bz of [-85, -350]) {
+        const bridgeSpan = new THREE.Mesh(new THREE.BoxGeometry(riverWidth + 16, 1.4, 3.6), pierWoodMat);
+        bridgeSpan.position.set(0, 13.5, bz);
+        act1Group.add(bridgeSpan);
+        for (const sx of [-halfW * 0.55, halfW * 0.55]) {
+            const trestle = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.1, 14, 8), pierWoodMat);
+            trestle.position.set(sx, 6.8, bz);
+            act1Group.add(trestle);
+        }
+    }
+    bankGroup.add(act1Group);
+
+    // ─── Act III Biome Architecture: Sunken Crystal Temple Ziggurats & Floating Obelisks (z = -480..-1020) ───
+    const act3Group = new THREE.Group();
+    const templeStoneMat = new THREE.MeshStandardMaterial({ color: 0x384b5c, roughness: 0.7, flatShading: true });
+    const crystalMat = new THREE.MeshStandardMaterial({
+        color: 0x22d3ee,
+        emissive: 0x0891b2,
+        emissiveIntensity: 0.85,
+        roughness: 0.2,
+        metalness: 0.3,
+        flatShading: true,
+    });
+    for (let z = -510; z >= -990; z -= 65) {
+        for (const side of [-1, 1]) {
+            // Stepped stone ziggurat on the bank
+            const tier1 = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 14), templeStoneMat);
+            tier1.position.set(side * (halfW + 8), 2, z);
+            const tier2 = new THREE.Mesh(new THREE.BoxGeometry(10, 4, 10), templeStoneMat);
+            tier2.position.set(side * (halfW + 8), 6, z);
+            const tier3 = new THREE.Mesh(new THREE.BoxGeometry(6, 3.5, 6), templeStoneMat);
+            tier3.position.set(side * (halfW + 8), 9.75, z);
+            const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(2.4, 0), crystalMat);
+            crystal.position.set(side * (halfW + 8), 14.5, z);
+            act3Group.add(tier1, tier2, tier3, crystal);
+        }
+    }
+    bankGroup.add(act3Group);
+
+    // ─── Act IV Biome Architecture: Volcanic Shipwreck Caldera & Galleon Ribs (z = -1030..-1500) ───
+    const act4Group = new THREE.Group();
+    const basaltMat = new THREE.MeshStandardMaterial({ color: 0x1e1b24, roughness: 0.9, flatShading: true });
+    const magmaMat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+    for (let z = -1050; z >= -1460; z -= 55) {
+        for (const side of [-1, 1]) {
+            // Giant curved shipwreck hull rib & basalt magma spire
+            const spire = new THREE.Mesh(new THREE.ConeGeometry(5.5, 22, 6), basaltMat);
+            spire.position.set(side * (halfW + 6), 10, z);
+            const magmaVein = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 8), magmaMat);
+            magmaVein.position.set(side * (halfW + 2), 2.2, z);
+            const rib = new THREE.Mesh(new THREE.BoxGeometry(1.2, 16, 1.4), pierWoodMat);
+            rib.position.set(side * (halfW - 3), 7.5, z + 15);
+            rib.rotation.z = -side * 0.42;
+            act4Group.add(spire, magmaVein, rib);
+        }
+    }
+    bankGroup.add(act4Group);
+
     bankGroup.add(cityGroup);
     scene.add(bankGroup);
-    return { bankGroup, cityGroup };
+    return { bankGroup, cityGroup, act1Group, act3Group, act4Group, emeraldWardMat };
 }
 
-// ─── 4. Sculpted Obstacles: Beveled Log Docks & Multi-Tier Pine/Willow Trees
+// ─── 4. Sculpted Obstacles: Safe Sanctuary Docks & Multi-Tier Pine/Willow Trees
 export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodMaterial, vegetationMaterial) {
     if (isPlank) {
         const group = new THREE.Group();
-        const plankCount = 4;
+        const plankCount = 5;
         const pDepth = depth / plankCount;
         const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.4 });
+        const beaconGoldMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+        const sanctuaryRingMat = new THREE.MeshBasicMaterial({
+            color: 0x34d399,
+            transparent: true,
+            opacity: 0.42,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+        });
 
         for (let i = 0; i < plankCount; i++) {
-            const board = new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.75, pDepth * 0.88), woodMaterial);
+            const board = new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.8, pDepth * 0.9), woodMaterial);
             board.position.z = (i - (plankCount - 1) / 2) * pDepth;
             board.castShadow = true;
             board.receiveShadow = true;
             group.add(board);
         }
-        // Support pontoons underneath
-        for (const sx of [-width * 0.36, width * 0.36]) {
-            const pontoon = new THREE.Mesh(new THREE.CylinderGeometry(height * 0.55, height * 0.55, depth * 0.96, 8), darkIronMat);
-            pontoon.rotation.x = Math.PI / 2;
-            pontoon.position.set(sx, -height * 0.45, 0);
-            group.add(pontoon);
+        // Heavy timber pilings & corner mooring bollards with glowing safe-haven lanterns
+        for (const sx of [-width * 0.44, width * 0.44]) {
+            for (const sz of [-depth * 0.42, depth * 0.42]) {
+                const piling = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 2.8, 8), woodMaterial);
+                piling.position.set(sx, -0.4, sz);
+                group.add(piling);
+                const bollardCap = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), beaconGoldMat);
+                bollardCap.position.set(sx, 1.05, sz);
+                group.add(bollardCap);
+            }
         }
+        // Glowing emerald Sanctuary Ward Ring around the dock perimeter
+        const radius = Math.max(width, depth) * 0.58;
+        const wardRing = new THREE.Mesh(new THREE.RingGeometry(radius - 0.25, radius, 32), sanctuaryRingMat);
+        wardRing.rotation.x = -Math.PI / 2;
+        wardRing.position.y = height * 0.45;
+        group.add(wardRing);
         return group;
     }
 

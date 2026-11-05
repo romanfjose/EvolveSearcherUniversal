@@ -259,9 +259,20 @@ export function createRockslideMesh(THREE, rockslideConfig) {
         opacity: 0.35,
     });
 
+    const boulderList = Array.isArray(rockslideConfig.boulders)
+        ? rockslideConfig.boulders
+        : Array.from({ length: rockslideConfig.numBoulders || 8 }, (_, idx) => ({
+            x: (rockslideConfig.x || 0) + (idx - 3.5) * 1.1,
+            y: 1.2 + (idx % 3) * 0.6,
+            z: (rockslideConfig.z || 0) + (idx % 2) * 1.2,
+            radius: 1.1,
+            rotSpeed: 2.0,
+            state: 'idle',
+        }));
+
     const boulderMeshes = [];
-    for (let i = 0; i < (rockslideConfig.boulders || []).length; i++) {
-        const bData = rockslideConfig.boulders[i];
+    for (let i = 0; i < boulderList.length; i++) {
+        const bData = boulderList[i];
         const r = bData.radius || 1.1;
 
         // Composite faceted boulder
@@ -376,11 +387,27 @@ export function createDebrisMeshSystem(THREE) {
         activeMeshes.clear();
     }
 
+    function spawnExplosionDebris(pos = { x: 0, y: 1, z: 0 }, count = 12) {
+        const synthetic = Array.from({ length: count }, (_, idx) => ({
+            id: `debris_${idx}_${Date.now()}`,
+            type: idx % 2 === 0 ? 'wood_chunk' : 'bridge_plank',
+            scale: 1.0,
+            x: (pos.x || 0) + (idx - count * 0.5) * 0.3,
+            y: (pos.y || 0.5) + (idx % 3) * 0.2,
+            z: (pos.z || 0) + (idx % 4) * 0.3,
+            rotation: { x: idx * 0.2, y: idx * 0.3, z: idx * 0.1 },
+        }));
+        updateDebris(synthetic, 0);
+    }
+
     return {
         group,
+        rootGroup: group,
         activeMeshes,
         updateDebris,
+        spawnExplosionDebris,
         clear,
+        dispose: clear,
     };
 }
 
@@ -400,7 +427,7 @@ export function buildDestructiblesGroup(THREE, layout) {
     }
 
     const bridgeMeshes = [];
-    for (const br of (layout.bridges || [])) {
+    for (const br of (layout.bridges || layout.suspensionBridges || [])) {
         const m = createSuspensionBridgeMesh(THREE, br);
         rootGroup.add(m);
         bridgeMeshes.push(m);

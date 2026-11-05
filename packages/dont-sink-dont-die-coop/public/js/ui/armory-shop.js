@@ -57,6 +57,7 @@ export function createArmoryShopUI({
             .armory-overlay.open {
                 opacity: 1;
                 pointer-events: auto;
+                cursor: default;
             }
             .armory-modal {
                 width: min(980px, 94vw);
@@ -506,8 +507,14 @@ export function createArmoryShopUI({
         const item = ALL_UPGRADES[upgradeId];
         if (!item) return;
 
+        localPlayer.coins = Number.isFinite(Number(localPlayer.coins)) ? Math.max(0, Math.round(Number(localPlayer.coins))) : 50;
         const check = canPurchaseArmoryUpgrade(localPlayer, item);
         if (!check.ok) return;
+
+        // Optimistically apply upgrade locally first so callbacks see updated state
+        localPlayer.coins = Math.max(0, localPlayer.coins - item.cost);
+        if (!localPlayer.upgrades.includes(item.slot)) localPlayer.upgrades.push(item.slot);
+        if (!localPlayer.upgrades.includes(item.id)) localPlayer.upgrades.push(item.id);
 
         if (socket && typeof socket.emit === 'function') {
             // Emits standard socket buyUpgrade with legacyType / id
@@ -517,14 +524,12 @@ export function createArmoryShopUI({
             onPurchase(item);
         }
 
-        // Optimistically apply upgrade locally for instant snappy feedback
-        localPlayer.coins -= item.cost;
-        localPlayer.upgrades.push(item.id);
         render();
     }
 
     function render() {
         if (!rootEl) return;
+        localPlayer.coins = Number.isFinite(Number(localPlayer.coins)) ? Math.max(0, Math.round(Number(localPlayer.coins))) : 50;
 
         const comparison = calculateStatComparison(localPlayer.upgrades, hoveredUpgrade);
         const botsSummary = getCrewBotsAutoEquipSummary(crewPlayers);
@@ -633,10 +638,10 @@ export function createArmoryShopUI({
         // Crew bot auto-equip summary list
         const botsHtml = botsSummary.length ? botsSummary.map((b) => `
             <div class="armory-bot-item">
-                <span class="armory-bot-name">🤖 ${b.name} (${b.coins}c)</span>
+                <span class="armory-bot-name">🤖 ${b.name || 'Crew'} (${Number.isFinite(Number(b.coins)) ? b.coins : 50}c)</span>
                 <span class="armory-bot-status ${b.readyToUpgrade ? 'ready' : ''}">${b.statusLabel}</span>
             </div>
-        `).join('') : '<div style="font-size:12px;color:#8d99ab;">No AI companion bots active</div>';
+        `).join('') : '<div style="font-size:12px;color:#8d99ab;">Crew sailing in formation</div>';
 
         rootEl.innerHTML = `
             <div class="armory-modal">
@@ -757,6 +762,15 @@ export function createArmoryShopUI({
 
         rootEl.querySelectorAll('[data-upgrade-id]').forEach((card) => {
             const uId = card.dataset.upgradeId;
+            card.addEventListener('click', () => {
+                executePurchase(uId);
+            });
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    executePurchase(uId);
+                }
+            });
             card.addEventListener('mouseenter', () => {
                 if (hoveredUpgrade?.id === uId) return;
                 hoveredUpgrade = ALL_UPGRADES[uId];
@@ -775,7 +789,14 @@ export function createArmoryShopUI({
     }
 
     function openShop(playerData = null, allPlayers = null) {
-        if (playerData) localPlayer = { ...playerData };
+        if (typeof document !== 'undefined') {
+            try { document.exitPointerLock?.(); } catch (_e) { /* ignore */ }
+            if (document.body) document.body.style.cursor = 'default';
+        }
+        if (playerData) {
+            const safeCoins = Number.isFinite(Number(playerData.coins)) ? Math.max(0, Math.round(Number(playerData.coins))) : 50;
+            localPlayer = { ...playerData, coins: safeCoins, upgrades: [...(playerData.upgrades || [])] };
+        }
         if (allPlayers) crewPlayers = { ...allPlayers };
         isOpen = true;
         if (rootEl) {

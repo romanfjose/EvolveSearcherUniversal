@@ -109,9 +109,15 @@ const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, map: wood
 const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x9b5a28, map: woodTex, roughness: 0.65 });
 const hammerMaterial = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.35, metalness: 0.25 });
 
-// --- Environment ---
-const riverWidth = RIVER.width;
+// --- Environment (Wide 80m Tactical Co-Op River Basin & Sanctuary Archipelago) ---
+const riverWidth = 80;
+const playableHalfWidth = riverWidth / 2;
 const riverLength = RIVER.length;
+
+directionalLight.shadow.camera.left = -75;
+directionalLight.shadow.camera.right = 85;
+directionalLight.shadow.camera.top = 80;
+directionalLight.shadow.camera.bottom = -80;
 
 const { mesh: riverMesh, mat: riverShaderMat } = createAAARiverMesh(riverWidth, riverLength, waterTex);
 scene.add(riverMesh);
@@ -132,24 +138,54 @@ const finishMesh = createAAAFinishArch(riverWidth, finishLineZ);
 scene.add(finishMesh);
 let gameWon = false;
 
-// --- Obstacles (Sculpted Pontoons & Multi-Tier Pine Trees) ---
+// --- Sanctuary Platforms, Mid-River Islands & Canyon Pine Obstacles ---
 const obstacles = [];
-for (let i = 0; i < 300; i++) {
+
+// 1. Deterministic Tactical Sanctuary Havens (Left, Right & Mid-River Docks every ~45m so crews can always stop, think & regroup)
+for (let zPos = -32; zPos > -(riverLength - 120); zPos -= 42) {
+    // Skip placing mid-river clutter inside the calm Harbor City Marina (z = -145..-260)
+    const inHarborBasin = zPos < -145 && zPos > -260;
+    const laneChoices = inHarborBasin ? [-playableHalfWidth + 9, playableHalfWidth - 9] : [-playableHalfWidth + 10, 0, playableHalfWidth - 10];
+    const laneIdx = Math.abs(Math.round(zPos / 42)) % laneChoices.length;
+    const xPos = laneChoices[laneIdx] + (Math.random() - 0.5) * 4;
+    const width = 9.5 + Math.random() * 4.5;
+    const depth = 8.5 + Math.random() * 4.0;
+    const height = 0.55;
+    const yPos = 1.05;
+    const mesh = createAAAObstacleMesh(true, width, height, depth, 0, woodMaterial, vegetationMaterial);
+    mesh.position.set(xPos, yPos, zPos);
+    scene.add(mesh);
+    obstacles.push({
+        type: 'plank',
+        isSanctuary: true,
+        easyRamp: true,
+        mesh,
+        x: xPos,
+        z: zPos,
+        halfW: width / 2,
+        halfD: depth / 2,
+        topY: yPos + height / 2 + PLAYER.restY,
+    });
+}
+
+// 2. Additional Side Docks & Scenic River Trees across the 80m basin
+for (let i = 0; i < 240; i++) {
     const isLeft = Math.random() > 0.5;
-    const xPos = isLeft ? -riverWidth / 2 - Math.random() * 2 + Math.random() * 3.5 : riverWidth / 2 + Math.random() * 2 - Math.random() * 3.5;
-    const zPos = -Math.random() * (riverLength - 100) - 20;
-    const isPlank = Math.random() > 0.7;
+    const zPos = -Math.random() * (riverLength - 100) - 25;
+    const isPlank = Math.random() > 0.55;
 
     if (isPlank) {
-        const width = 4 + Math.random() * 3;
-        const depth = 2 + Math.random() * 2;
+        const xPos = (Math.random() - 0.5) * (riverWidth - 16);
+        const width = 7 + Math.random() * 4;
+        const depth = 6 + Math.random() * 3.5;
         const height = 0.5;
-        const yPos = 0.9 + Math.random() * 0.6;
+        const yPos = 1.0 + Math.random() * 0.35;
         const mesh = createAAAObstacleMesh(true, width, height, depth, 0, woodMaterial, vegetationMaterial);
         mesh.position.set(xPos, yPos, zPos);
         scene.add(mesh);
         obstacles.push({
             type: 'plank',
+            isSanctuary: true,
             mesh,
             x: xPos,
             z: zPos,
@@ -158,14 +194,17 @@ for (let i = 0; i < 300; i++) {
             topY: yPos + height / 2 + PLAYER.restY,
         });
     } else {
-        const size = 2 + Math.random() * 3;
+        const bankSpread = Math.random() < 0.72
+            ? (isLeft ? -playableHalfWidth + Math.random() * 6 : playableHalfWidth - Math.random() * 6)
+            : (Math.random() - 0.5) * (riverWidth - 22);
+        const size = 2.2 + Math.random() * 3.2;
         const mesh = createAAAObstacleMesh(false, 0, 0, 0, size, woodMaterial, vegetationMaterial);
-        mesh.position.set(xPos, 0, zPos);
+        mesh.position.set(bankSpread, 0, zPos);
         scene.add(mesh);
         obstacles.push({
             type: 'tree',
             mesh,
-            x: xPos,
+            x: bankSpread,
             z: zPos,
             radius: 0.85,
         });
@@ -410,15 +449,32 @@ const feverDirector = createAAAFeverDirector({
     getOtherPlayers: () => otherPlayers,
     getEnemiesData: () => enemiesData,
     enemyMeshes,
-    getMyStats: () => myStats,
+    getMyStats: () => ({ ...myStats, health: myHealth, maxHealth: myMaxHealth }),
     getIsDead: () => isDead,
+    riverWidth,
     onGrantCoins: (delta) => {
-        myStats.coins = Math.max(0, myStats.coins + delta);
+        const d = Number(delta);
+        if (!Number.isFinite(d)) return;
+        const cur = Number.isFinite(Number(myStats.coins)) ? Number(myStats.coins) : PLAYER.startCoins;
+        myStats.coins = Math.max(0, Math.round(cur + d));
         hud.setStats(myStats);
     },
     onHealPlayer: (amount) => {
-        myHealth = Math.min(myMaxHealth, myHealth + amount);
+        const a = Number(amount);
+        if (!Number.isFinite(a) || a <= 0) return;
+        myHealth = Math.min(myMaxHealth, Math.round(myHealth + a));
         hud.setHealth(myHealth, myMaxHealth);
+    },
+    onUpgradePurchased: (item) => {
+        if (item?.slot === 'armor' && myMaxHealth < 150) {
+            myMaxHealth += 50;
+            myHealth = Math.min(myMaxHealth, myHealth + 50);
+            hud.setHealth(myHealth, myMaxHealth);
+        }
+        hud.setStats(myStats);
+        if (myRaft?.craft) {
+            reRenderMyRaft({ color: myColor, upgrades: myStats.upgrades, position: myRaft.craft.position, quaternion: myRaft.craft.quaternion });
+        }
     },
 });
 
@@ -614,8 +670,14 @@ socket.on('playerHealthUpdate', (data) => {
 });
 
 socket.on('playerStatsUpdate', (p) => {
-    myStats.coins = p.coins;
-    myStats.upgrades = p.upgrades;
+    if (Number.isFinite(Number(p?.coins))) {
+        myStats.coins = Math.max(0, Math.round(Number(p.coins)));
+    }
+    if (Array.isArray(p?.upgrades)) {
+        for (const u of p.upgrades) {
+            if (!myStats.upgrades.includes(u)) myStats.upgrades.push(u);
+        }
+    }
     hud.setStats(myStats);
 });
 
@@ -683,20 +745,20 @@ socket.on('gameWon', () => {
     feverDirector.onGameWon();
 });
 
-// --- Intro Sequence (short 1.2s swoop, immediately skippable on any movement input) ---
+// --- Intro Sequence (short 1.2s swoop into High-Angle Co-Op Diorama View, immediately skippable on any movement input) ---
 let inIntroSequence = true;
 let introTime = 0;
 const introDuration = 1200;
-const introCameraStartOffset = new THREE.Vector3(8, 12, 16);
-const introCameraEndOffset = new THREE.Vector3(0, 5, 10);
+const introCameraStartOffset = new THREE.Vector3(12, 26, 28);
+const introCameraEndOffset = new THREE.Vector3(0, 18, 22);
 
 // --- Controls & Combat ---
 const keys = { w: false, a: false, s: false, d: false, space: false };
 let isAttacking = false;
 let isBlocking = false;
 
-// Spring-damped chase camera: trails the raft's heading; mouse drag / arrow keys orbit, then eases back behind.
-const CAM = { pitch: 0.3, minPitch: -0.15, maxPitch: 1.2, distance: 11, stiffness: 9, follow: 3.5, recenterDelayMs: 1200, recenter: 2.5 };
+// High-Angle Tactical Co-Op Diorama Camera (~45° overhead angle, wide river visibility, scroll-wheel zoom & dynamic crew framing)
+const CAM = { pitch: 0.78, minPitch: 0.25, maxPitch: 1.32, distance: 26, minDistance: 14, maxDistance: 48, stiffness: 9, follow: 3.5, recenterDelayMs: 1400, recenter: 2.2 };
 const cam = {
     yaw: 0, orbit: 0, pitch: CAM.pitch, lastInput: -Infinity, live: false,
     vel: new THREE.Vector3(), look: new THREE.Vector3(), fov: camera.fov,
@@ -709,10 +771,11 @@ const unlockAudio = () => sfx.unlock();
 window.addEventListener('pointerdown', unlockAudio);
 window.addEventListener('keydown', unlockAudio);
 
-// Double-click canvas if the player explicitly wants pointer lock; single-click attacks immediately without trapping cursor.
-renderer.domElement.addEventListener('dblclick', () => {
-    if (!shopOpen) document.body.requestPointerLock?.();
-});
+// Keep the mouse cursor ALWAYS visible (never requestPointerLock on double-click) and support scroll-wheel tactical zoom
+window.addEventListener('wheel', (e) => {
+    if (feverDirector.armoryShop.isOpen()) return;
+    CAM.distance = THREE.MathUtils.clamp(CAM.distance + Math.sign(e.deltaY) * 2.5, CAM.minDistance, CAM.maxDistance);
+}, { passive: true });
 
 document.addEventListener('mousemove', (e) => {
     const dragging = (e.buttons & 2) || (e.buttons & 4) || document.pointerLockElement === document.body;
@@ -765,7 +828,8 @@ window.addEventListener('keydown', (e) => {
         if (feverDirector.armoryShop.isOpen()) {
             feverDirector.armoryShop.close();
             shopOpen = false;
-        } else if (myRaft?.craft && isInShopZone(myRaft.craft.position)) {
+        } else if (myRaft?.craft) {
+            try { document.exitPointerLock?.(); } catch (_err) { /* ignore */ }
             hud.setStats(myStats);
             feverDirector.armoryShop.updatePlayerData({ coins: myStats.coins, upgrades: myStats.upgrades, isDead });
             feverDirector.armoryShop.open();
@@ -813,19 +877,50 @@ let lastEnemyHit = 0;
 let lastHud = 0;
 let wasAirborne = false;
 
+let sanctuaryHealAccum = 0;
+
 function fixedStep() {
     if (!myRaft?.craft || feverDirector.isPaused()) return;
     const craft = myRaft.craft;
+    shopOpen = feverDirector.armoryShop.isOpen();
     if (inIntroSequence) {
         craft.velocity.set(0, 0, 0);
         craft.angularVelocity.y = 0;
     }
     const live = !isDead && !inIntroSequence;
-    const input = live ? { ...keys, upgrades: myStats.upgrades, attacking: isAttacking, onSolid } : { onSolid };
+    // Deliberate Expedition Pacing:
+    // - Harbor City Calm Basin (z = -135..-275) & Sanctuary Platforms (onSolid) have 0 m/s passive drift so you can chill, shop, and think!
+    // - Holding [S] drops anchor (0 drift); open river has gentle 0.28x current so co-op positioning matters more than frantic reflexes.
+    const inCalmHarbor = craft.position.z < -135 && craft.position.z > -275;
+    const currentScale = inCalmHarbor || onSolid || keys.s || shopOpen ? 0 : 0.28;
+    const input = live
+        ? { ...keys, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
+        : { onSolid, currentScale: 0 };
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
-    const col = resolveWorldBoundsAndObstacles(craft, obstacles);
+    const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
     onSolid = col.onSolid;
     craft.quaternion.setFromAxisAngle(yAxis, craft.yaw);
+
+    // Sanctuary Platform & Harbor Haven passive hull repair (+3 HP/sec while resting on a platform or in the Harbor City)
+    if (live && (onSolid || inCalmHarbor) && myHealth < myMaxHealth) {
+        sanctuaryHealAccum += FIXED_DT * 3.0;
+        if (sanctuaryHealAccum >= 1) {
+            const healPts = Math.floor(sanctuaryHealAccum);
+            sanctuaryHealAccum -= healPts;
+            myHealth = Math.min(myMaxHealth, myHealth + healPts);
+            hud.setHealth(myHealth, myMaxHealth);
+        }
+    }
+
+    // Keep AI companion bots from abandoning the player when the human stops at a Sanctuary Platform or the Harbor City
+    if (live && (onSolid || inCalmHarbor || !keys.w)) {
+        for (const vis of Object.values(otherPlayers)) {
+            if (vis?.target && vis.target.z < craft.position.z - 10) {
+                vis.target.z = THREE.MathUtils.lerp(vis.target.z, craft.position.z - 4, FIXED_DT * 3.5);
+                vis.target.x = THREE.MathUtils.lerp(vis.target.x, craft.position.x + (vis === Object.values(otherPlayers)[0] ? -6 : 6), FIXED_DT * 2.5);
+            }
+        }
+    }
 
     if (live) {
         feverDirector.fixedStep(FIXED_DT, performance.now());
@@ -932,14 +1027,37 @@ function updateCamera(dt) {
             cam.pitch = CAM.pitch + (cam.pitch - CAM.pitch) * k;
         }
         const yaw = cam.yaw + cam.orbit;
-        const dist = CAM.distance + speed * 0.22;
+        // Dynamic Co-Op Crew Framing: expand camera height/distance and shift look centroid toward visible teammates
+        // so you can see the wide river, side Sanctuary Platforms, and feel your crew sailing together!
+        let crewCentroidX = target.x;
+        let crewCentroidZ = target.z;
+        let maxCrewSpread = 0;
+        let visibleCrewCount = 0;
+        for (const vis of Object.values(otherPlayers)) {
+            if (!vis?.group?.visible) continue;
+            const d = Math.hypot(vis.group.position.x - target.x, vis.group.position.z - target.z);
+            if (d < 65) {
+                crewCentroidX += vis.group.position.x;
+                crewCentroidZ += vis.group.position.z;
+                visibleCrewCount++;
+                if (d > maxCrewSpread) maxCrewSpread = d;
+            }
+        }
+        if (visibleCrewCount > 0) {
+            crewCentroidX /= (visibleCrewCount + 1);
+            crewCentroidZ /= (visibleCrewCount + 1);
+        }
+        const focusX = THREE.MathUtils.lerp(target.x, crewCentroidX, 0.32);
+        const focusZ = THREE.MathUtils.lerp(target.z, crewCentroidZ, 0.28);
+        const coopZoomBonus = Math.min(16, maxCrewSpread * 0.35);
+        const dist = CAM.distance + coopZoomBonus + speed * 0.18;
         desired.set(
-            target.x + dist * Math.cos(cam.pitch) * Math.sin(yaw),
-            target.y + 1.5 + dist * Math.sin(cam.pitch),
-            target.z + dist * Math.cos(cam.pitch) * Math.cos(yaw),
+            focusX + dist * Math.cos(cam.pitch) * Math.sin(yaw),
+            target.y + 3.0 + dist * Math.sin(cam.pitch),
+            focusZ + dist * Math.cos(cam.pitch) * Math.cos(yaw),
         );
         const f = headingOf(myRaft.vis.anim.yaw);
-        look.set(target.x + f.x * 3, target.y + 1.2, target.z + f.z * 3);
+        look.set(focusX + f.x * 5, target.y + 0.8, focusZ + f.z * 5);
     }
 
     if (!cam.live) { camera.position.copy(desired); cam.vel.set(0, 0, 0); cam.look.copy(look); cam.live = true; }

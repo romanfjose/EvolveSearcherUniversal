@@ -86,6 +86,13 @@ import { createBossTelegraphVFX } from './vfx/boss-telegraphs.js';
 import { createCinemaLetterboxDirector } from './ui/cinema-letterbox.js';
 import { createQuickBuyHotbar } from './ui/quickbuy-hotbar.js';
 import { createDiegeticRaftArcs } from './ui/diegetic-raft-arcs.js';
+import { buildRedwoodFlumesBiome, stepRedwoodFlumesBiome } from './world/biome-act1-redwood-flumes.js';
+import { buildWalledHarborCityBiome, stepWalledHarborCityBiome } from './world/biome-act2-walled-harbor-city.js';
+import { buildSunkenCrystalTemplesBiome, stepSunkenCrystalTemplesBiome } from './world/biome-act3-sunken-crystal-temples.js';
+import { buildVolcanicShipwreckCalderaBiome, stepVolcanicShipwreckCalderaBiome } from './world/biome-act4-volcanic-shipwreck-caldera.js';
+import { createCoopTetherVfx, updateCoopTetherVfx } from './vfx/coop-tether-vfx.js';
+import { buildNauticalBuoyLanes, stepNauticalBuoys } from './world/nautical-buoy-lanes.js';
+import { createRaftAnchorVfx, updateRaftAnchorVfx } from './vfx/raft-anchor-vfx.js';
 
 export function createAAAFeverDirector({
     THREE,
@@ -109,37 +116,71 @@ export function createAAAFeverDirector({
     getIsDead,
     onGrantCoins,
     onHealPlayer,
+    onUpgradePurchased,
+    riverWidth = 80,
 }) {
     const seed = 20261105;
 
-    // 1. 4-Act Biome Scenery Props along the river (Acts 1..4)
+    // 1. 4-Act Biome Scenery Props + Wave 5A True 3D Architectural Biomes along the 80m river (Acts 1..4)
     const biomeGroup = new THREE.Group();
     biomeGroup.name = 'AAA_Biome_Props';
     for (let actIdx = 1; actIdx <= 4; actIdx++) {
         try {
-            const actProps = createBiomePropsGroup(THREE, actIdx, 30);
+            const actProps = createBiomePropsGroup(THREE, actIdx, riverWidth);
             biomeGroup.add(actProps);
         } catch (err) {
             console.warn('Biome prop generation error:', err);
         }
     }
+    let act1ArchGroup = null;
+    let act2ArchGroup = null;
+    let act3ArchGroup = null;
+    let act4ArchGroup = null;
+    let coopTetherGroup = null;
+    let nauticalBuoysGroup = null;
+    let raftAnchorVfxGroup = null;
+    try {
+        act1ArchGroup = buildRedwoodFlumesBiome(THREE, { riverWidth, zStart: 0, zEnd: -350 });
+        if (act1ArchGroup) biomeGroup.add(act1ArchGroup);
+    } catch (_e) { /* ignore mock fallback */ }
+    try {
+        act2ArchGroup = buildWalledHarborCityBiome(THREE, { riverWidth, zStart: -140, zEnd: -700 });
+        if (act2ArchGroup) biomeGroup.add(act2ArchGroup);
+    } catch (_e) { /* ignore mock fallback */ }
+    try {
+        act3ArchGroup = buildSunkenCrystalTemplesBiome(THREE, { riverWidth, zStart: -700, zEnd: -1150 });
+        if (act3ArchGroup) biomeGroup.add(act3ArchGroup);
+    } catch (_e) { /* ignore mock fallback */ }
+    try {
+        act4ArchGroup = buildVolcanicShipwreckCalderaBiome(THREE, { riverWidth, zStart: -1150, zEnd: -1600 });
+        if (act4ArchGroup) biomeGroup.add(act4ArchGroup);
+    } catch (_e) { /* ignore mock fallback */ }
+    try {
+        nauticalBuoysGroup = buildNauticalBuoyLanes(THREE, { riverWidth, zStart: 0, zEnd: -1500, platforms: obstacles });
+        if (nauticalBuoysGroup && typeof nauticalBuoysGroup.add === 'function') biomeGroup.add(nauticalBuoysGroup);
+    } catch (_e) { /* ignore mock fallback */ }
+    try {
+        coopTetherGroup = createCoopTetherVfx(THREE);
+        const tetherNode = coopTetherGroup?.group || coopTetherGroup;
+        if (tetherNode && typeof tetherNode.add === 'function') scene.add(tetherNode);
+    } catch (_e) { /* ignore mock fallback */ }
     scene.add(biomeGroup);
 
     // 2. Dynamic Weather & Lightning System
     const weatherSystem = createWeatherSystem(THREE, scene);
 
     // 3. Seeded 3D River Hazards (Rapids, Whirlpools, Launch Ramps, Coin Rings, Naval Mines)
-    const hazardsLayout = generateRiverHazardsLayout(seed, -1500, 30);
+    const hazardsLayout = generateRiverHazardsLayout(seed, -1500, riverWidth);
     const hazardsHandle = buildRiverHazardsGroup(THREE, hazardsLayout);
     scene.add(hazardsHandle.rootGroup || hazardsHandle.group);
 
     // 4. Destructible Wooden Barricades, Suspension Bridges & Cliff Rockslides
-    const destructiblesState = generateDestructiblesLayout(seed + 7, -1500, 30);
+    const destructiblesState = generateDestructiblesLayout(seed + 7, -1500, riverWidth);
     const destructiblesHandle = buildDestructiblesGroup(THREE, destructiblesState);
     scene.add(destructiblesHandle.rootGroup || destructiblesHandle.group);
 
     // 5. Bizarre Fever-Dream Mid-River Encounters (Capybara Hot-Tub Barge, Tax Swan, Rubber Ducky Stampede, Ghost Cart, Crab Rave)
-    const dreamEncounters = generateDreamEncounters(seed + 13, -1500, 30);
+    const dreamEncounters = generateDreamEncounters(seed + 13, -1500, riverWidth);
     const dreamEventsHandle = buildDreamEventsGroup(THREE, dreamEncounters);
     scene.add(dreamEventsHandle.root || dreamEventsHandle.rootGroup || dreamEventsHandle.group);
 
@@ -216,25 +257,36 @@ export function createAAAFeverDirector({
     });
 
     // 14. Interactive 3-Tier Harbor Armory Shop UI
+    function applyLocalUpgradePurchase(slot, upgradeId, cost, name) {
+        const stats = getMyStats();
+        const isTier2OrHigher = Boolean(upgradeId && !['motor_1', 'weapon_1', 'armor_1', 'motor', 'weapon', 'armor'].includes(upgradeId));
+        if (!stats.upgrades.includes(slot)) {
+            stats.upgrades.push(slot);
+        }
+        if (upgradeId && !stats.upgrades.includes(upgradeId)) {
+            stats.upgrades.push(upgradeId);
+        }
+        // Only deduct manually for Tier 2/3 upgrades (since Tier 1 socket.emit('buyUpgrade', slot) deducts on loopback server)
+        if (isTier2OrHigher && Number.isFinite(cost) && cost > 0) {
+            onGrantCoins(-cost);
+        } else {
+            hud.setStats(stats);
+        }
+        if (slot === 'weapon') installGadget({ coins: 999 }, gadgetState, 'harpoon');
+        if (slot === 'armor') installGadget({ coins: 999 }, gadgetState, 'shield_dome');
+        if (slot === 'motor') installGadget({ coins: 999 }, gadgetState, 'nitro_keg');
+        onUpgradePurchased?.({ slot, id: upgradeId, cost, name });
+        ensureGadgetMeshes();
+        sfx.upgrade?.();
+        hud.toast(`⚓ EQUIPPED ${(name || slot).toUpperCase()}!`, 2000);
+    }
+
     const armoryShop = createArmoryShopUI({
         socket,
         THREE,
         onPurchase: (item) => {
-            const stats = getMyStats();
-            if (stats.coins >= item.cost) {
-                onGrantCoins(-item.cost);
-                if (!stats.upgrades.includes(item.slot)) {
-                    stats.upgrades.push(item.slot);
-                }
-                socket.emit('buyUpgrade', item.slot);
-                // Also unlock matching raft gadget when buying Tier 2+ upgrades
-                if (item.slot === 'weapon') installGadget({ coins: 999 }, gadgetState, 'harpoon');
-                if (item.slot === 'armor') installGadget({ coins: 999 }, gadgetState, 'shield_dome');
-                if (item.slot === 'motor') installGadget({ coins: 999 }, gadgetState, 'nitro_keg');
-                ensureGadgetMeshes();
-                sfx.upgrade?.();
-                hud.toast(`⚓ EQUIPPED ${item.name.toUpperCase()}!`, 2000);
-            }
+            applyLocalUpgradePurchase(item.slot, item.id, item.cost, item.name);
+            quickBuyHotbar?.render?.();
         },
     });
 
@@ -275,7 +327,7 @@ export function createAAAFeverDirector({
 
     // 18b. Sovereign Helmet 01-04 Live Subsystems (Circuit Breakers, Shoreline Landmarks, Wake, Arcs, QuickBuy, Letterbox)
     const breakerRegistry = createSubsystemBreakerRegistry();
-    const shorelineHandle = buildShorelineLandmarks(THREE, seed);
+    const shorelineHandle = buildShorelineLandmarks(THREE, seed, { riverWidth });
     if (shorelineHandle?.group) scene.add(shorelineHandle.group);
     const waterWakeSystem = createWaterWakeSystem(THREE, scene);
     const bossTelegraphs = createBossTelegraphVFX(THREE, scene);
@@ -287,8 +339,9 @@ export function createAAAFeverDirector({
             socket,
             getPlayerData: () => {
                 const st = getMyStats() || {};
+                const safeCoins = Number.isFinite(Number(st.coins)) ? Math.max(0, Math.round(Number(st.coins))) : 50;
                 return {
-                    coins: st.coins ?? 50,
+                    coins: safeCoins,
                     health: st.health ?? 100,
                     maxHealth: st.maxHealth ?? 100,
                     upgrades: st.upgrades || [],
@@ -296,11 +349,19 @@ export function createAAAFeverDirector({
                 };
             },
             onPurchase: (res) => {
-                sfx.upgrade?.();
-                hud.toast(`⚡ QUICK-BUY: ${(res.actionName || 'UPGRADE').toUpperCase()}!`, 1800);
+                if (res.type === 'repair') {
+                    onGrantCoins(-(res.coinsDeducted || 15));
+                    onHealPlayer?.(res.healAmount || 35);
+                    sfx.upgrade?.();
+                    hud.toast(`🩹 HULL PATCHED +${res.healAmount || 35} HP!`, 1800);
+                } else if (res.type === 'upgrade') {
+                    applyLocalUpgradePurchase(res.upgradeSlot, res.upgradeId, res.coinsDeducted, res.actionName);
+                }
+                const st = getMyStats() || {};
+                armoryShop.updatePlayerData({ coins: st.coins, upgrades: st.upgrades, isDead: getIsDead() });
             },
         })
-        : { updatePlayerData() {} };
+        : { updatePlayerData() {}, render() {} };
 
     // 19. 3D Dockside Title Screen & [Esc] Settings Drawer
     let crewCosmeticGroup = null;
@@ -355,12 +416,13 @@ export function createAAAFeverDirector({
 
     function ensureGadgetMeshes() {
         const raft = getMyRaft();
-        if (!raft?.vis?.raft) return;
-        if (gadgetMeshesHandle?.group && gadgetMeshesHandle.group.parent) {
-            gadgetMeshesHandle.group.parent.remove(gadgetMeshesHandle.group);
-        }
-        gadgetMeshesHandle = buildRaftGadgetMeshes(THREE, gadgetState);
-        raft.vis.raft.add(gadgetMeshesHandle.group);
+        if (!raft?.vis?.raft || typeof raft.vis.raft.add !== 'function') return;
+        try {
+            if (!gadgetMeshesHandle || gadgetMeshesHandle.parentRaft !== raft.vis.raft) {
+                gadgetMeshesHandle = buildRaftGadgetMeshes(THREE, raft.vis.raft);
+                gadgetMeshesHandle.parentRaft = raft.vis.raft;
+            }
+        } catch (_e) { /* ignore */ }
     }
 
     // Keyboard shortcuts for Tactical Bot Orders, Photo Mode, Armory, and Settings
@@ -545,10 +607,11 @@ export function createAAAFeverDirector({
 
             // 1. River Hazards (Rapids boost, Whirlpool pull, Launch Ramp, Mine Barrels)
             stepCraftWithRiverHazards(craft, hazardsLayout, fixedDt, nowMs);
-            const ringRes = collectCoinRings(craft.position, hazardsLayout.coinRings, 2.6);
+            const ringRes = collectCoinRings(craft.position, hazardsLayout.coinRings, 3.2);
             if (ringRes.collectedCount > 0) {
-                onGrantCoins(ringRes.coinsEarned);
-                popAt(craft.position, `+${ringRes.coinsEarned} 🪙 RING!`, '#fde047', 2.4);
+                const earned = Number(ringRes.earnedCoins ?? ringRes.coinsEarned ?? ringRes.collectedCount * 10) || 10;
+                onGrantCoins(earned);
+                popAt(craft.position, `+${earned} 🪙 RING!`, '#fde047', 2.4);
             }
 
             // 2. Pocket-Raft Mid-Air Stunt Tricks (360 Kickflip, Bellyflop Shockwave, Wizard Head-Bounce)
@@ -795,6 +858,42 @@ export function createAAAFeverDirector({
             }
 
             // 10. Sovereign Helmet 01-04 Live Updates (Protected by Helmet 02 Circuit Breakers)
+            breakerRegistry.step('biomes_3d_arch', () => {
+                if (act1ArchGroup) stepRedwoodFlumesBiome(act1ArchGroup, dt, elapsedSec);
+                if (act2ArchGroup) stepWalledHarborCityBiome(act2ArchGroup, dt, elapsedSec);
+                if (act3ArchGroup) stepSunkenCrystalTemplesBiome(act3ArchGroup, dt, elapsedSec);
+                if (act4ArchGroup) stepVolcanicShipwreckCalderaBiome(act4ArchGroup, dt, elapsedSec);
+                if (nauticalBuoysGroup) stepNauticalBuoys(nauticalBuoysGroup, elapsedSec);
+            });
+            breakerRegistry.step('raft_anchor_vfx', () => {
+                if (raft?.vis?.raft && !raftAnchorVfxGroup && typeof raft.vis.raft.add === 'function') {
+                    raftAnchorVfxGroup = createRaftAnchorVfx(THREE);
+                    if (raftAnchorVfxGroup) raft.vis.raft.add(raftAnchorVfxGroup);
+                }
+                if (raftAnchorVfxGroup && raft?.craft) {
+                    const vel = raft.craft.velocity || { x: 0, z: 0 };
+                    const spd = Math.hypot(vel.x || 0, vel.z || 0);
+                    const onSolid = raft.craft.position.y > 0.35;
+                    updateRaftAnchorVfx(raftAnchorVfxGroup, {
+                        anchored: spd < 1.2 && !onSolid,
+                        onSolid,
+                        velocity: vel,
+                        time: elapsedSec,
+                    });
+                }
+            });
+            breakerRegistry.step('coop_tether_vfx', () => {
+                if (coopTetherGroup && raft?.craft) {
+                    const crewList = Object.entries(getOtherPlayers() || {})
+                        .filter(([, v]) => v?.group?.visible)
+                        .map(([id, v]) => ({ id, position: v.group.position, isDead: false }));
+                    updateCoopTetherVfx(coopTetherGroup, {
+                        localPlayer: { id: socket.id || 'local', position: raft.craft.position, isDead: getIsDead() },
+                        crewPlayers: crewList,
+                        time: elapsedSec,
+                    });
+                }
+            });
             breakerRegistry.step('shoreline', () => {
                 animateShorelineLandmarks(shorelineHandle, raft?.craft?.position, elapsedSec);
             });

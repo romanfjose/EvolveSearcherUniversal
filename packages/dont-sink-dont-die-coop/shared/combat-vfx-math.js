@@ -247,8 +247,14 @@ export function generateSlashRibbonMesh(origin, yaw, startAngle, endAngle, segme
  */
 export function checkMeleeArcHit(attackerPos, attackerYaw, targetPos, targetRadius = 1.5, arcSpread = Math.PI * 0.75, maxReach = 4.2, minReach = 0.5) {
     const dx = targetPos.x - attackerPos.x;
+    const dy = (targetPos.y ?? 0) - (attackerPos.y ?? 0);
     const dz = targetPos.z - attackerPos.z;
     const distXZ = Math.hypot(dx, dz);
+
+    // Check vertical reach limit
+    if (Math.abs(dy) > maxReach) {
+        return { hit: false, distance: Math.hypot(distXZ, dy), angleDiff: Math.PI };
+    }
 
     // Check reach distance (taking target radius into account)
     if (distXZ + targetRadius < minReach || distXZ - targetRadius > maxReach) {

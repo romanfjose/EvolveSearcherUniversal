@@ -547,31 +547,36 @@ export function buildDreamEventsGroup(THREE, encounters) {
 
     for (const enc of encounters) {
         switch (enc.type) {
-            case 'capybara-hottub-barge': {
+            case 'capybara-hottub-barge':
+            case 'capybara_tub': {
                 const m = createCapybaraBargeMesh(THREE, enc);
                 root.add(m);
                 capybaraMeshes.push(m);
                 break;
             }
-            case 'bureaucratic-swan-boat': {
+            case 'bureaucratic-swan-boat':
+            case 'bureaucratic_swan': {
                 const m = createBureaucraticSwanMesh(THREE, enc);
                 root.add(m);
                 swanMeshes.push(m);
                 break;
             }
-            case 'rubber-ducky-stampede': {
+            case 'rubber-ducky-stampede':
+            case 'rubber_ducky_stampede': {
                 const m = createStampedeGroup(THREE, enc);
                 root.add(m);
                 stampedeMeshes.push(m);
                 break;
             }
-            case 'ghost-shopping-cart': {
+            case 'ghost-shopping-cart':
+            case 'ghost_cart': {
                 const m = createGhostShoppingCartMesh(THREE, enc);
                 root.add(m);
                 cartMeshes.push(m);
                 break;
             }
-            case 'disco-crab-rave-island': {
+            case 'disco-crab-rave-island':
+            case 'disco_crab_rave': {
                 const m = createDiscoCrabRaveMesh(THREE, enc);
                 root.add(m);
                 crabMeshes.push(m);
@@ -624,8 +629,8 @@ export function animateDreamEvents(handle, timeSec = 0, dt = 0.016) {
         for (const dMesh of stGroup.userData.duckMeshes || []) {
             const d = dMesh.userData.duckData;
             if (d) {
-                dMesh.position.z = d.z;
-                dMesh.position.y = d.y;
+                dMesh.position.z = d.z ?? 0;
+                dMesh.position.y = d.y ?? 0.3;
                 dMesh.rotation.x = Math.sin(timeSec * (d.bobSpeed || 3.0)) * 0.12;
             }
         }

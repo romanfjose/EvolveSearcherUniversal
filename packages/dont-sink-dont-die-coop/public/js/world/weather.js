@@ -573,6 +573,7 @@ export function createWeatherSystem(THREE, scene, options = {}) {
         getFlashIntensity: () => flashIntensity,
         isFlashing: () => isFlashing,
         setWeatherState,
+        transitionTo: (stateName) => setWeatherState(stateName),
         triggerLightning,
         setOnThunder: (cb) => { onThunderCallback = cb; },
         update,

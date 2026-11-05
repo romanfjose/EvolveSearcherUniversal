@@ -153,15 +153,21 @@ export function driveWatercraft(craft, input, dt) {
     if (grounded) {
         const f = headingOf(craft.yaw);
         const r = { x: -f.z, z: f.x };
-        const current = onWater ? riverCurrentForce(p.x, p.z) / PLAYER.mass : 0; // world −z
+        const currentScale = Number.isFinite(input.currentScale) ? input.currentScale : 1;
+        const current = onWater && !input.onSolid ? (riverCurrentForce(p.x, p.z) * currentScale) / PLAYER.mass : 0; // world −z
         const aFwd = watercraftThrust(input, input.upgrades, input.attacking) / PLAYER.mass + current * f.z;
         const aLat = current * r.z;
-        const kF = PHYSICS.forwardDrag;
-        const kL = kF * PHYSICS.keelGrip;
+        const mooringBrake = input.onSolid && !input.w && !input.s ? 4.5 : 1;
+        const kF = PHYSICS.forwardDrag * mooringBrake;
+        const kL = PHYSICS.forwardDrag * PHYSICS.keelGrip * mooringBrake;
         const vF = relax(v.x * f.x + v.z * f.z, aFwd / kF, kF, dt);
         const vL = relax(v.x * r.x + v.z * r.z, aLat / kL, kL, dt);
         v.x = vF * f.x + vL * r.x;
         v.z = vF * f.z + vL * r.z;
+        if (input.onSolid && !input.w && !input.s && Math.hypot(v.x, v.z) < 0.35) {
+            v.x = 0;
+            v.z = 0;
+        }
     } else {
         const k = Math.exp(-PHYSICS.airDrag * dt);
         v.x *= k;
@@ -204,16 +210,19 @@ export function stepWatercraftKinematics(craft, input, dt) {
  * - Supports landing on elevated planks (above PLAYER.safeHeight) and the City Shop dock.
  * - Clamps lateral x to the river channel (widened along the City Shop dock band).
  */
-export function resolveWorldBoundsAndObstacles(craft, obstacles = []) {
+export function resolveWorldBoundsAndObstacles(craft, obstacles = [], options = {}) {
     const { position: p, velocity: v } = craft;
     let onSolid = false;
 
     for (let i = 0; i < obstacles.length; i++) {
         const obs = obstacles[i];
-        if (Math.abs(p.z - obs.z) > 8) continue;
+        if (Math.abs(p.z - obs.z) > Math.max(12, (obs.halfD || 2) + 4)) continue;
         if (obs.type === 'plank') {
-            if (Math.abs(p.x - obs.x) <= obs.halfW + 0.75 && Math.abs(p.z - obs.z) <= obs.halfD + 0.95) {
-                if (p.y >= obs.topY - 0.5 && p.y <= obs.topY + PHYSICS.surfaceSnap + 0.15 && v.y <= 0) {
+            if (Math.abs(p.x - obs.x) <= obs.halfW + 0.9 && Math.abs(p.z - obs.z) <= obs.halfD + 1.1) {
+                if (
+                    (p.y >= obs.topY - 0.65 && p.y <= obs.topY + PHYSICS.surfaceSnap + 0.25 && v.y <= 0) ||
+                    (obs.easyRamp && p.y >= WATER_SURFACE_Y && v.y <= 0)
+                ) {
                     p.y = obs.topY;
                     v.y = 0;
                     onSolid = true;
@@ -239,15 +248,18 @@ export function resolveWorldBoundsAndObstacles(craft, obstacles = []) {
         }
     }
 
+    const halfWidth = Number.isFinite(options.channelHalfWidth) ? options.channelHalfWidth : RIVER.channelHalfWidth;
     const inShopBand = p.z > SHOP_ZONE.minZ && p.z < SHOP_ZONE.maxZ;
-    if (inShopBand && p.x >= 13.5 && p.y <= 0.75 + PHYSICS.surfaceSnap + 0.15 && v.y <= 0) {
-        p.y = 0.75;
+    const shopPierX = halfWidth > 20 ? halfWidth - 8 : 13.5;
+    if (inShopBand && (p.x >= 13.5 || p.x >= shopPierX) && p.y <= 1.25 + PHYSICS.surfaceSnap + 0.15 && v.y <= 0) {
+        p.y = Math.max(0.75, p.y);
+        if (p.y < 0.75) p.y = 0.75;
         v.y = 0;
         onSolid = true;
     }
 
-    const minX = -RIVER.channelHalfWidth + 1.1;
-    const maxX = inShopBand ? 32 : RIVER.channelHalfWidth - 1.1;
+    const minX = -halfWidth + 1.1;
+    const maxX = inShopBand ? Math.max(32, halfWidth + 14) : halfWidth - 1.1;
     if (p.x < minX) {
         p.x = minX;
         if (v.x < 0) v.x = 0;
@@ -366,9 +378,10 @@ export function stepWhiteGuy(e, target, dt) {
     return moveToward(e.position, target.position, e.speed * dt, 2) ? 'chasing' : 'adjacent';
 }
 
-/** Mud alien: slow chaser with a leash; ignores rafts further than chaseMax. */
+/** Mud alien: slow chaser with a leash; ignores rafts further than chaseMax or perched on safe platforms. */
 export function stepMudAlien(e, target, dt) {
     e.position.y = 0.5;
+    if (target.position.y > PLAYER.safeHeight) return 'idle';
     const { chaseMin, chaseMax } = ENEMY_TYPES.mudAlien;
     const d = distXZ(e.position, target.position);
     if (d <= chaseMin || d >= chaseMax) return 'idle';
@@ -384,6 +397,7 @@ export function stepLongWorm(e, target, dt, now) {
         if (now >= e.cooldownUntil) e.state = 'idle';
         return e.state;
     }
+    if (target.position.y > PLAYER.safeHeight && e.state === 'idle') return e.state;
     if (Math.abs(target.position.z - e.position.z) >= T.aggroRange) return e.state;
     if (e.state === 'idle') {
         e.targetPos = { x: target.position.x, z: target.position.z };
@@ -522,7 +536,7 @@ export function resolveEnemyHit(state, playerId, enemyType, isBlocking = false) 
     const p = state.players[playerId];
     const e = Object.hasOwn(state.enemies, enemyType) ? state.enemies[enemyType] : null;
     if (!p || p.isDead || !e || e.health <= 0) return [];
-    if (enemyType === 'whiteGuy' && p.position.y > PLAYER.safeHeight) return [];
+    if (p.position.y > PLAYER.safeHeight) return [];
     const dmg = blockedDamage(e.damage, !!isBlocking);
     p.health -= dmg;
     p.damageTaken += dmg;
@@ -634,11 +648,13 @@ export function botDecide(state, bot) {
         return { mode: 'evade', target: { x: worm.targetPos.x + dir * BOT.evadeRadius, z: bot.position.z } };
     }
     let best = null;
+    const leaderOnSanctuary = leader && leader.position.y > PLAYER.safeHeight;
+    const effectiveLeash = leaderOnSanctuary ? 14 : BOT.leashRange;
     for (const e of Object.values(state.enemies)) {
         if (e.health <= 0 || (e === worm && wormCharging)) continue;
         const d = distXZ(bot.position, e.position);
         if (d > BOT.engageRange) continue;
-        if (leader && distXZ(leader.position, e.position) > BOT.leashRange) continue;
+        if (leader && distXZ(leader.position, e.position) > effectiveLeash) continue;
         if (!best || d < best.d) best = { e, d };
     }
     if (best) return { mode: 'engage', target: best.e.position, enemyId: best.e.id, distance: best.d };

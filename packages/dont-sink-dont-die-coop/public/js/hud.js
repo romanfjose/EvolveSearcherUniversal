@@ -36,11 +36,17 @@ export function createHud() {
             $('status').style.color = color ?? '';
         },
         setStats(p) {
-            $('coins').textContent = p.coins;
-            $('my-upgrades').innerHTML = p.upgrades.length ? p.upgrades.map((u) => `<span class="chip">${esc(UPGRADES[u].name)}</span>`).join('') : '<span class="faint">no upgrades yet</span>';
+            const safeCoins = Number.isFinite(Number(p?.coins)) ? Math.max(0, Math.round(Number(p.coins))) : 50;
+            if (p) p.coins = safeCoins;
+            $('coins').textContent = safeCoins;
+            const labelOf = (u) => UPGRADES[u]?.name || String(u).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            const displayUpgrades = (p?.upgrades || []).filter((u) => UPGRADES[u] || /_(1|2|3)$/.test(String(u)));
+            $('my-upgrades').innerHTML = displayUpgrades.length
+                ? displayUpgrades.map((u) => `<span class="chip">${esc(labelOf(u))}</span>`).join('')
+                : '<span class="faint">no upgrades yet</span>';
             for (const btn of document.querySelectorAll('[data-upgrade]')) {
                 const type = btn.dataset.upgrade;
-                const { ok, reason } = canPurchase(p, type);
+                const { ok, reason } = canPurchase({ coins: safeCoins, upgrades: p?.upgrades || [] }, type);
                 btn.disabled = !ok;
                 btn.textContent = reason === 'owned' ? 'Owned' : 'Buy';
             }

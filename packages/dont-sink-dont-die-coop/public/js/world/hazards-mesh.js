@@ -128,19 +128,20 @@ export function createWhirlpoolMesh(THREE, whirlpoolConfig) {
     const vortexGeo = new THREE.CylinderGeometry(radius, 0.4, depth, radialSegments, heightSegments, true);
     
     // Deform cylinder into parabolic whirlpool funnel
-    const pos = vortexGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i);
-        const vy = pos.getY(i); // ranges from -depth/2 to depth/2
-        const vz = pos.getZ(i);
+    const pos = vortexGeo.attributes?.position;
+    if (pos && typeof pos.count === 'number') {
+        for (let i = 0; i < pos.count; i++) {
+            const vx = pos.getX(i);
+            const vz = pos.getZ(i);
 
-        const r = Math.hypot(vx, vz);
-        const normR = Math.min(1.0, Math.max(0.0, r / radius));
-        // Parabolic dip: deepest at core, flat at outer rim
-        const funnelY = -depth * Math.pow(Math.max(0.0, 1.0 - normR), 2.2);
-        pos.setY(i, funnelY);
+            const r = Math.hypot(vx, vz);
+            const normR = Math.min(1.0, Math.max(0.0, r / radius));
+            // Parabolic dip: deepest at core, flat at outer rim
+            const funnelY = -depth * Math.pow(Math.max(0.0, 1.0 - normR), 2.2);
+            pos.setY(i, funnelY);
+        }
     }
-    vortexGeo.computeVertexNormals();
+    vortexGeo.computeVertexNormals?.();
 
     const vortexMat = new THREE.ShaderMaterial({
         side: THREE.DoubleSide,
@@ -320,7 +321,7 @@ export function createRampMesh(THREE, rampConfig) {
  */
 export function createCoinRingMesh(THREE, coinData) {
     const group = new THREE.Group();
-    group.position.set(coinData.x, coinData.y, coinData.z);
+    group.position.set(coinData.x ?? 0, coinData.y ?? 1.2, coinData.z ?? 0);
 
     const radius = coinData.radius || 1.5;
     const goldMat = new THREE.MeshStandardMaterial({

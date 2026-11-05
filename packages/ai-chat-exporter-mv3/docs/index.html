@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat Replay Playground</title>
+<meta name="description" content="Paste a chat page's HTML or pick a platform fixture and watch Chat Replay's real adapters split the turns, export Markdown and build the prompt-replay queue.">
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --ink: #1c1d1f; --muted: #62666d; --line: #e3e3df; --accent: #2f5fd0;
+  --ok: #16a34a; --warn: #b45309; --bad: #dc2626; --user: #7c3aed; --asst: #0284c7;
+  --code-bg: #f1f1ee; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141517; --panel: #1c1d20; --ink: #e8e8e6; --muted: #9a9ea6; --line: #2e3035; --accent: #7aa2ff;
+    --user: #a78bfa; --asst: #38bdf8; --code-bg: #232428; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] { --bg: #141517; --panel: #1c1d20; --ink: #e8e8e6; --muted: #9a9ea6; --line: #2e3035; --accent: #7aa2ff; --user: #a78bfa; --asst: #38bdf8; --code-bg: #232428; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header, .bar, main, footer { max-width: 1440px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+header { padding-top: 20px; padding-bottom: 6px; }
+h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 78ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 10px; padding-bottom: 12px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+select, button, textarea { font: inherit; color: inherit; }
+select, button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
+button { cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); white-space: nowrap; }
+.spacer { flex: 1; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.8fr); gap: 12px; padding-bottom: 20px; }
+@media (max-width: 1100px) { main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } #queuePanel { grid-column: 1 / -1; } }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; display: flex; flex-direction: column; }
+.panel > h2 { margin: 0; padding: 9px 12px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+.panel > h2 .sub { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.panel > h2 button { padding: 2px 8px; font-size: 12px; font-weight: 500; }
+iframe { display: block; width: 100%; height: 68vh; border: 0; background: #fff; }
+.pasting iframe { height: 40vh; }
+textarea#paste { width: 100%; height: 28vh; border-bottom: 1px solid var(--line) !important; border: 0; padding: 10px 12px; background: var(--code-bg); font: 12px/1.5 var(--mono); resize: vertical; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.chip b { font-variant-numeric: tabular-nums; }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.roles { display: flex; gap: 3px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.roles span { width: 18px; height: 8px; border-radius: 3px; }
+.roles .user { background: var(--user); } .roles .assistant { background: var(--asst); }
+pre#md { margin: 0; padding: 10px 12px; font: 12px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; overflow: auto; height: calc(68vh - 78px); }
+ol#queue { margin: 0; padding: 8px 12px 12px 36px; overflow: auto; height: calc(68vh - 78px); }
+ol#queue li { padding: 6px 0; border-bottom: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; }
+ol#queue li.out { opacity: 0.4; }
+ol#queue li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+.range { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+.range input { width: 56px; font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.empty { padding: 16px 12px; color: var(--muted); }
+footer { color: var(--muted); font-size: 12px; padding-bottom: 24px; }
+footer code { font-family: var(--mono); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Chat Replay — adapter playground</h1>
+  <p>The extension's own <code>adapters.js</code> and <code>md.js</code>, running on the regression fixtures (or HTML you paste). Pick a platform and see how the page is split into turns, the Markdown it exports, and the prompts a replay would send.</p>
+</header>
+
+<div class="bar">
+  <div class="seg" id="sources" role="group" aria-label="Source"></div>
+  <span class="spacer"></span>
+  <label class="toggle">Reasoning
+    <select id="thinking"><option value="fold">fold</option><option value="inline">quote</option><option value="drop">drop</option></select>
+  </label>
+  <label class="toggle"><input type="checkbox" id="dedupe" checked> dedupe</label>
+  <label class="toggle"><input type="checkbox" id="redact"> redact PII</label>
+</div>
+
+<main>
+  <section class="panel" id="pagePanel">
+    <h2>Page <span class="sub" id="pageSub"></span>
+      <select id="hostPick" class="hidden" aria-label="Adapter to apply"></select>
+    </h2>
+    <textarea id="paste" class="hidden" spellcheck="false" placeholder="Paste a chat page's HTML here — in DevTools, right-click the conversation container → Copy → Copy outerHTML. Scripts and event handlers are stripped before it is rendered."></textarea>
+    <iframe id="frame" title="Fixture page"></iframe>
+  </section>
+
+  <section class="panel">
+    <h2>Markdown export <span class="sub" id="mdSub"></span><label class="toggle" style="font-weight:400;font-size:12px"><input type="checkbox" id="full"> header</label><button id="copy" type="button" title="Copies the full file">Copy</button><button id="save" type="button">.md</button></h2>
+    <div class="chips" id="stats"></div>
+    <div class="roles" id="roles" aria-label="Turn roles in order"></div>
+    <pre id="md"></pre>
+  </section>
+
+  <section class="panel" id="queuePanel">
+    <h2>Replay queue <span class="sub" id="qSub"></span></h2>
+    <div class="range">Send prompts <input id="from" type="number" min="1" value="1" aria-label="From"> to <input id="to" type="number" min="0" value="0" aria-label="To"> <span>(0 = to the end)</span></div>
+    <ol id="queue"></ol>
+  </section>
+</main>
+
+<footer>
+  Fixtures: <code>test/fixtures/fixtures.js</code> · the same file the <code>node --test</code> suite asserts against. Nothing here leaves the browser.
+</footer>
+
+<script src="../test/fixtures/fixtures.js"></script>
+<script>
+(() => {
+  const F = window.ChatReplayFixtures;
+  const $ = (s) => document.querySelector(s);
+  const HOSTS = F.all.filter((f) => !f.ecommerce).map((f) => ({ id: f.id, label: f.label, host: new URL(f.url).hostname }))
+    .concat([{ id: "generic", label: "Generic (any site)", host: "example.com" }]);
+  const state = { source: (location.hash.slice(1) || "chatgpt"), pasteHost: "example.com", result: null };
+  try { const s = JSON.parse(localStorage.getItem("crp.opts") || "{}"); for (const k of ["thinking", "dedupe", "redact"]) if (k in s) { const el = $("#" + k); el.type === "checkbox" ? (el.checked = s[k]) : (el.value = s[k]); } } catch { /* storage blocked */ }
+
+  /* ---------- sources ---------- */
+  const seg = $("#sources");
+  for (const f of [...F.all, { id: "paste", label: "Paste HTML" }]) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = f.label.replace(" (search)", ""); b.dataset.id = f.id;
+    b.addEventListener("click", () => { state.source = f.id; history.replaceState(null, "", "#" + f.id); load(); });
+    seg.appendChild(b);
+  }
+  for (const h of HOSTS) { const o = document.createElement("option"); o.value = h.host; o.textContent = h.label; $("#hostPick").appendChild(o); }
+  $("#hostPick").value = state.pasteHost;
+
+  /* ---------- the page runs in a same-origin iframe, with the
+     extension's scripts loaded into it exactly as a content script would
+     see them (md.js → adapters.js, or the search pair) ---------- */
+
+  const SCRIPTS = { chat: ["md.js", "adapters.js"], shop: ["product-format.js", "search.js"] };
+  const base = new URL("../", location.href).href;
+
+  // Pasted HTML is rendered, never executed.
+  function sanitize(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("script,iframe,object,embed,base,meta[http-equiv],link[rel=import]").forEach((n) => n.remove());
+    for (const el of doc.querySelectorAll("*")) {
+      for (const a of [...el.attributes]) {
+        if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
+      }
+    }
+    return doc.body.innerHTML;
+  }
+
+  function frameDoc(bodyHtml, kind) {
+    const tags = SCRIPTS[kind].map((f) => `<script src="${base}${f}"><\/script>`).join("");
+    // const bindings aren't window properties; hand them up explicitly.
+    const expose = kind === "chat"
+      ? "window.__cr = { md: ChatReplayMd, ad: ChatReplayAdapters };"
+      : "window.__cr = { product: window.ChatReplayProduct, search: window.ChatReplaySearch };";
+    return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{font:14px/1.45 system-ui,sans-serif;margin:12px;color:#1c1d1f;background:#fff}pre{background:#f4f4f2;padding:8px;overflow:auto}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:2px 6px}.sr-only,.cdk-visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.katex-mathml{display:none}textarea,[contenteditable]{display:block;width:90%;min-height:2.2em;border:1px solid #ccc;border-radius:6px;margin:6px 0;padding:4px}img{max-width:120px}</style></head><body>${bodyHtml}${tags}<script>${expose}<\/script></body></html>`;
+  }
+
+  let pending = 0;
+  function load() {
+    for (const b of seg.children) b.setAttribute("aria-pressed", String(b.dataset.id === state.source));
+    const paste = state.source === "paste";
+    $("#pagePanel").classList.toggle("pasting", paste);
+    $("#paste").classList.toggle("hidden", !paste);
+    $("#hostPick").classList.toggle("hidden", !paste);
+    const f = F.byId[state.source];
+    $("#pageSub").textContent = paste ? "apply adapter:" : (f ? new URL(f.url).hostname : "");
+    const html = paste ? sanitize($("#paste").value) : f ? f.html : "";
+    const kind = f && f.ecommerce ? "shop" : "chat";
+    const ticket = ++pending;
+    const frame = $("#frame");
+    frame.onload = () => { if (ticket === pending) run(frame.contentWindow, kind, paste ? state.pasteHost : new URL(f.url).hostname, f); };
+    frame.srcdoc = frameDoc(html || '<p style="color:#888">Paste a chat page\'s HTML above, or pick a platform.</p>', kind);
+  }
+
+  /* ---------- extraction: the same steps content.js takes ---------- */
+
+  function run(win, kind, host, fixture) {
+    const cr = win.__cr;
+    if (!cr) { show({ error: "Couldn't load the extension scripts. Serve this folder over http(s) or open it from a checkout." }); return; }
+    if (kind === "shop") {
+      const d = cr.search.scrape();
+      const md = cr.product.one(d, {});
+      show({ md, stats: [["results", d.results.length], ["sponsored", d.results.filter((r) => r.sponsored).length], ["via", d.via]], roles: [], prompts: null, sub: "search.js → product-format.js" });
+      return;
+    }
+    const opts = { thinking: $("#thinking").value, dedupe: $("#dedupe").checked, redact: $("#redact").checked };
+    try { localStorage.setItem("crp.opts", JSON.stringify(opts)); } catch { /* fine */ }
+    const adapter = cr.ad.forHost(host);
+    let raw = [];
+    try { raw = adapter.turns() || []; } catch (e) { show({ error: "adapter.turns() threw: " + e.message }); return; }
+    const turns = raw.map((t) => {
+      const body = t.body || t.el;
+      const text = cr.md.htmlToPlain(body, { preWrap: t.role === "user" });
+      return { role: t.role, text, md: cr.md.turnToMd(t, { thinking: opts.thinking }) || text, think: !!t.think || /<details>/.test(cr.md.turnToMd(t, {})) };
+    }).filter((t) => t.text);
+    const { turns: ready, report } = cr.md.prepare(turns, opts);
+    let pair = 0, last = null;
+    const numbered = ready.map((t) => { if (t.role === "user" && last !== "user") pair++; else if (t.role === "assistant" && last === null) pair++; last = t.role; return { ...t, pair: Math.max(1, pair) }; });
+    const meta = { site: host, label: adapter.label, title: fixture ? fixture.title : "Pasted page", url: fixture ? fixture.url : "", exportedAt: new Date().toISOString(), version: "playground", prep: report };
+    const md = cr.md.buildMarkdown(numbered, meta);
+    const prompts = (() => { try { return adapter.userMessages(); } catch { return []; } })();
+    const body = numbered.map((t) => t.md).join("\n");
+    show({
+      md,
+      sub: `adapter: ${adapter.id}`,
+      roles: numbered.map((t) => t.role),
+      prompts,
+      stats: [
+        ["turns", numbered.length],
+        ["yours", numbered.filter((t) => t.role === "user").length],
+        ["code blocks", fences(body)],
+        ["math", (body.match(/\$\$\n[\s\S]*?\n\$\$|\$[^$\n]+\$/g) || []).length],
+        ["tables", (body.match(/^\| [-:]+ \|/gm) || []).length],
+        ["reasoning", numbered.filter((t) => t.think).length],
+        ["deduped", report.deduped, report.deduped > 0],
+        ["redacted", report.redactedTotal, report.redactedTotal > 0],
+      ],
+    });
+  }
+
+  // Top-level fenced blocks only: a sample that itself contains ```bash
+  // is one block.
+  function fences(md) {
+    let n = 0, open = 0;
+    for (const l of md.split("\n")) {
+      const m = /^ *(`{3,})/.exec(l);
+      if (!m) continue;
+      if (!open) { open = m[1].length; n++; } else if (m[1].length >= open && !l.trim().slice(m[1].length)) open = 0;
+    }
+    return n;
+  }
+
+  function paintMd() {
+    const r = state.result || {};
+    const all = r.error || r.md || "(nothing extracted)";
+    const cut = all.indexOf("\n## ▸ ");
+    $("#md").textContent = $("#full").checked || cut < 0 ? all : all.slice(cut + 1);
+  }
+
+  function show(r) {
+    state.result = r;
+    $("#mdSub").textContent = r.sub || "";
+    paintMd();
+    $("#stats").innerHTML = "";
+    for (const [k, v, warn] of r.stats || []) {
+      const c = document.createElement("span");
+      c.className = "chip" + (warn ? " warn" : "");
+      c.innerHTML = `${k} <b></b>`; c.querySelector("b").textContent = v;
+      $("#stats").appendChild(c);
+    }
+    $("#roles").innerHTML = "";
+    for (const role of r.roles || []) { const s = document.createElement("span"); s.className = role; s.title = role; $("#roles").appendChild(s); }
+    $("#roles").classList.toggle("hidden", !(r.roles || []).length);
+    renderQueue();
+  }
+
+  function renderQueue() {
+    const q = $("#queue");
+    q.innerHTML = "";
+    const prompts = state.result && state.result.prompts;
+    $("#queuePanel").classList.toggle("hidden", prompts === null);
+    if (!prompts || !prompts.length) { $("#qSub").textContent = ""; const li = document.createElement("div"); li.className = "empty"; li.textContent = "No prompts captured."; q.appendChild(li); return; }
+    const n = prompts.length;
+    let from = Math.max(1, Math.min(Number($("#from").value) || 1, n));
+    let to = Number($("#to").value) || 0;
+    if (!to || to > n) to = n;
+    if (to < from) to = from;
+    $("#qSub").textContent = `${to - from + 1} of ${n} will be sent`;
+    prompts.forEach((p, i) => {
+      const li = document.createElement("li");
+      li.textContent = p;
+      if (i + 1 < from || i + 1 > to) li.className = "out";
+      q.appendChild(li);
+    });
+  }
+
+  /* ---------- wiring ---------- */
+  let t = 0;
+  $("#paste").addEventListener("input", () => { clearTimeout(t); t = setTimeout(load, 250); });
+  $("#hostPick").addEventListener("change", (e) => { state.pasteHost = e.target.value; load(); });
+  for (const id of ["thinking", "dedupe", "redact"]) $("#" + id).addEventListener("change", load);
+  for (const id of ["from", "to"]) $("#" + id).addEventListener("input", renderQueue);
+  $("#full").addEventListener("change", paintMd);
+  $("#copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText((state.result && state.result.md) || ""); $("#copy").textContent = "Copied"; } catch { $("#copy").textContent = "Blocked"; }
+    setTimeout(() => { $("#copy").textContent = "Copy"; }, 1200);
+  });
+  $("#save").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([(state.result && state.result.md) || ""], { type: "text/markdown" }));
+    a.download = `chat-replay-${state.source}.md`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  if (!F.byId[state.source] && state.source !== "paste") state.source = "chatgpt";
+  load();
+})();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@
    the page-kind labels, the search-only controls, and — the part that
    can silently destroy data — copy-then-clear.
 
-   So this boots popup.html in jsdom with a stubbed `chrome`, points it
+   So this boots popup.html in the test DOM with a stubbed `chrome`, points it
    at a Mercado Libre results tab, and clicks the buttons. The two
    assertions that matter most:
 
@@ -21,7 +21,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { JSDOM } = require("jsdom");
+const { createWindow } = require("./dom");
 
 const ROOT = path.join(__dirname, "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -53,12 +53,7 @@ const SEARCH_DATA = {
 /* ---------------- boot ---------------- */
 
 async function boot({ tabUrl, clipboardWorks = true, seed = null } = {}) {
-  const dom = new JSDOM(read("popup.html"), {
-    url: "chrome-extension://abc/popup.html",
-    runScripts: "outside-only",
-    pretendToBeVisual: true,
-  });
-  const { window } = dom;
+  const window = createWindow(read("popup.html"), { url: "chrome-extension://abc/popup.html" });
   const store = seed ? { ...seed } : {};
   const calls = [];       // every crp:* message the popup sends
   const badge = { text: "" };
@@ -124,7 +119,7 @@ async function boot({ tabUrl, clipboardWorks = true, seed = null } = {}) {
   window.eval(read("adapters.js"));
   window.eval(read("product-format.js"));
 
-  // jsdom may or may not have fired DOMContentLoaded by the time the
+  // the DOM may or may not have fired DOMContentLoaded by the time the
   // scripts are evaluated. Firing our own unconditionally booted the
   // popup TWICE, which doubled every listener — worth catching here,
   // since a double-wired copy button would clear the list twice.

@@ -20,7 +20,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { JSDOM } = require("jsdom");
+const { createWindow } = require("./dom");
 
 const ROOT = path.join(__dirname, "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -34,15 +34,7 @@ function ok(label, cond, extra) {
 const has = (hay, needle) => String(hay).includes(needle);
 
 function boot(bodyHtml, url) {
-  const dom = new JSDOM(`<!doctype html><html><body>${bodyHtml}</body></html>`, {
-    url, runScripts: "outside-only", pretendToBeVisual: true,
-  });
-  const { window } = dom;
-  // innerText doesn't exist in jsdom; the extractor falls back to
-  // textContent on its own, but block() reads innerText first.
-  Object.defineProperty(window.HTMLElement.prototype, "innerText", {
-    get() { return this.textContent; },
-  });
+  const window = createWindow(bodyHtml, { url });
   window.eval(read("product-format.js"));
   window.eval(read("search.js"));
   return window;

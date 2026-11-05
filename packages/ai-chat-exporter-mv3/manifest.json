@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chat Replay",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Capture your prompts from one AI chat, replay them in others, export any conversation as clean Markdown — and collect Mercado Libre listings and whole pages of search results into one pasteable list for models that can't browse.",
   "icons": {
     "16": "icons/icon16.png",

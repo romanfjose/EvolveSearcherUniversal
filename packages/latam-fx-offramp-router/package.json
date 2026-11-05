@@ -15,7 +15,7 @@
   "scripts": {
     "routes": "node check-routes.mjs",
     "offline": "node check-routes.mjs --offline",
-    "test": "node --test \"test/*.test.mjs\"",
+    "test": "node --test \"test/*.test.mjs\" \"test/*.test.js\"",
     "viz": "python3 -m http.server 8138"
   },
   "engines": { "node": ">=20" }

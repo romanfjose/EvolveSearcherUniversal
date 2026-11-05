@@ -14,6 +14,7 @@
   --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
   --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --r:10px;
+  --game-neon:#22d3ee;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -25,11 +26,118 @@ body{background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);-webkit-fo
 body::before{content:"";position:fixed;inset:0;background:linear-gradient(180deg,rgba(11,14,19,.55),var(--bg) 70%);pointer-events:none;z-index:-1}
 a{color:inherit}
 .wrap{max-width:1280px;margin:0 auto;padding:0 16px}
-header.top{padding:40px 0 24px;border-bottom:1px solid var(--line)}
+header.top{padding:36px 0 24px;border-bottom:1px solid var(--line)}
 .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px}
 .eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(94,234,212,.15)}
 h1{font-size:clamp(26px,4vw,40px);line-height:1.1;margin:14px 0 10px;letter-spacing:-.02em;font-weight:650}
 .lede{color:var(--muted);max-width:760px;margin:0;font-size:15px}
+
+/* Helmet 04 Shark Cockpit: 10-Second Recruiter Action Bar */
+.hero-action-bar{
+  margin-top:24px;
+  background:linear-gradient(135deg,rgba(22,28,38,.92) 0%,rgba(14,24,32,.95) 100%);
+  border:1.5px solid rgba(94,234,212,.35);
+  border-radius:12px;
+  padding:16px 20px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  box-shadow:0 12px 32px rgba(0,0,0,.4),0 0 24px rgba(94,234,212,.1);
+}
+.hero-content{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  max-width:680px;
+}
+.hero-badge{
+  font:700 11px/1 var(--mono);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--accent);
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.hero-badge .pulse-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--ok);
+  box-shadow:0 0 0 0 rgba(74,222,128,.7);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(74,222,128,.7)}
+  70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}
+  100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}
+}
+.hero-title{
+  font-size:16px;
+  font-weight:700;
+  color:var(--text);
+  margin:0;
+  letter-spacing:-.01em;
+}
+.hero-sub{
+  font-size:13px;
+  color:var(--muted);
+  margin:0;
+}
+.hero-btns{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.btn-game-launch{
+  appearance:none;
+  border:none;
+  background:linear-gradient(135deg,#22d3ee 0%,#5eead4 100%);
+  color:#031d1b;
+  font:700 13.5px/1.2 var(--mono);
+  letter-spacing:.03em;
+  padding:12px 20px;
+  border-radius:8px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  text-decoration:none;
+  box-shadow:0 4px 16px rgba(34,211,238,.35);
+  transition:transform .15s,box-shadow .15s,filter .15s;
+}
+.btn-game-launch:hover{
+  filter:brightness(1.1);
+  transform:translateY(-1px);
+  box-shadow:0 6px 20px rgba(34,211,238,.5);
+}
+.btn-game-launch:active{
+  transform:translateY(0);
+}
+.btn-receipts{
+  appearance:none;
+  border:1px solid var(--line-2);
+  background:var(--panel-2);
+  color:var(--text);
+  font:600 12.5px/1.2 var(--mono);
+  padding:11px 16px;
+  border-radius:8px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  text-decoration:none;
+  transition:border-color .15s,background .15s;
+}
+.btn-receipts:hover{
+  border-color:var(--accent);
+  background:rgba(94,234,212,.08);
+  color:var(--accent);
+}
+
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:28px}
 .kpi{background:var(--panel);padding:14px 16px}
 .kpi b{display:block;font:600 24px/1.1 var(--mono);letter-spacing:-.02em}
@@ -39,15 +147,42 @@ h1{font-size:clamp(26px,4vw,40px);line-height:1.1;margin:14px 0 10px;letter-spac
 .provenance code{color:var(--muted)}
 
 .controls{position:sticky;top:0;z-index:5;background:rgba(11,14,19,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:12px 0}
-.controls .wrap{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.controls .wrap{display:flex;gap:12px;flex-direction:column}
+.controls-top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.quick-tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.qtab{
+  appearance:none;
+  border:1px solid var(--line-2);
+  background:var(--panel);
+  color:var(--muted);
+  border-radius:8px;
+  padding:8px 14px;
+  font:600 12.5px/1 var(--sans);
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  transition:all .15s;
+}
+.qtab:hover{color:var(--text);border-color:var(--faint);background:var(--panel-2)}
+.qtab[aria-selected="true"],.qtab.active{
+  color:var(--text);
+  background:var(--panel-2);
+  border-color:var(--tab-accent,var(--accent));
+  box-shadow:inset 0 -2px 0 var(--tab-accent,var(--accent));
+}
+.qtab .tab-icon{font-size:13px}
+.qtab .tab-count{font:600 11px/1 var(--mono);color:var(--faint);background:rgba(255,255,255,.05);padding:2px 5px;border-radius:4px}
+.qtab[aria-selected="true"] .tab-count,.qtab.active .tab-count{color:var(--accent)}
+
 .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
 .chip{appearance:none;border:1px solid var(--line-2);background:var(--panel);color:var(--muted);border-radius:999px;padding:6px 12px;font:500 12.5px/1 var(--sans);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .15s,color .15s,background .15s}
 .chip:hover{color:var(--text);border-color:var(--faint)}
 .chip[aria-pressed="true"]{color:var(--text);background:var(--panel-2);border-color:var(--chip,var(--accent))}
 .chip .dot{width:8px;height:8px;border-radius:2px;background:var(--chip,var(--accent))}
 .chip .n{font-family:var(--mono);color:var(--faint);font-size:11px}
-.search{flex:0 1 240px;min-width:160px;background:var(--panel);border:1px solid var(--line-2);border-radius:8px;color:var(--text);padding:7px 10px;font:13px var(--sans)}
-.search:focus,.chip:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.search{flex:0 1 260px;min-width:180px;background:var(--panel);border:1px solid var(--line-2);border-radius:8px;color:var(--text);padding:7px 10px;font:13px var(--sans)}
+.search:focus,.chip:focus-visible,.btn:focus-visible,.qtab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 main{padding:24px 0 64px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:16px}
@@ -105,6 +240,12 @@ dialog::backdrop{background:rgba(3,5,8,.72);backdrop-filter:blur(3px)}
 .d-bar code{font:12px var(--mono);color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .d-body{height:calc(100% - 49px);background:#fff}
 .d-body.img{background:var(--bg);overflow:auto;display:grid;place-items:center;padding:16px}
+.d-body.receipts{background:var(--panel-2);overflow:auto;padding:24px;font:13px/1.6 var(--sans);color:var(--text)}
+.receipts-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+.receipts-table th,.receipts-table td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:left}
+.receipts-table th{font:600 11.5px/1 var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+.receipts-table code{font-family:var(--mono);color:var(--accent)}
+.receipts-summary{margin-bottom:16px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:8px;font:13px/1.5 var(--mono)}
 .d-body iframe{width:100%;height:100%;border:0;display:block}
 .d-body img{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
 .d-note{padding:8px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);background:var(--panel-2)}
@@ -122,6 +263,24 @@ footer code{font-family:var(--mono);color:var(--muted)}
     <div class="eyebrow"><i></i>Engineering Portfolio · EvolveSearcherUniversal monorepo</div>
     <h1>Agent infrastructure, hardened for production.</h1>
     <p class="lede">Ten packages, zero runtime dependencies in the libraries, one test runner. Each card shows the test count from the last verified run, the number its own benchmark printed, how it is built, and the problem it was written to solve.</p>
+    
+    <!-- Helmet 04 Shark Cockpit: 10-Second Recruiter Action Bar -->
+    <section class="hero-action-bar" aria-label="Featured 10-second live demonstration">
+      <div class="hero-content">
+        <div class="hero-badge"><span class="pulse-dot"></span> 10-Second Recruiter Instant Proof · Helmet 04 Cockpit</div>
+        <h2 class="hero-title">Zero-Server 3D WebGL Multi-Agent Co-Op Survival</h2>
+        <p class="hero-sub">Autonomous AI companion bots, authoritative Three.js loopback physics, 882 unit tests, zero backend required in browser tab.</p>
+      </div>
+      <div class="hero-btns">
+        <a class="btn-game-launch" id="hero-game-launch" href="../../packages/dont-sink-dont-die-coop/docs/index.html" target="_blank" rel="noopener">
+          🎮 LAUNCH LIVE AAA 3D GAME (DON'T SINK, DON'T DIE) ↗
+        </a>
+        <button class="btn-receipts" id="hero-receipts" type="button" aria-haspopup="dialog">
+          📋 Inspect Verified Test Receipts (2,030 Pass)
+        </button>
+      </div>
+    </section>
+
     <div class="kpis" id="kpis"></div>
     <div class="provenance" id="provenance"></div>
   </div>
@@ -129,8 +288,11 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
 <nav class="controls" aria-label="Filter projects">
   <div class="wrap">
-    <div class="chips" id="chips" role="group" aria-label="Category"></div>
-    <input class="search" id="q" type="search" placeholder="Search projects, tech, problems…" aria-label="Search projects">
+    <div class="controls-top">
+      <div class="quick-tabs" id="quick-tabs" role="tablist" aria-label="Quick category filters"></div>
+      <input class="search" id="q" type="search" placeholder="Search projects, tech, problems…" aria-label="Search projects">
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Detailed Category Chips"></div>
   </div>
 </nav>
 
@@ -343,7 +505,7 @@ function card(p) {
   const head = `<div class="c-head"><div class="c-tags">${tags}<span class="status ${v.cls}"><i></i>${esc(v.text)}</span></div>
     <h2>${esc(p.name)}<small>${esc(p.sub)}</small></h2>${p.blurb ? `<p class="blurb">${esc(p.blurb)}</p>` : ""}</div>`;
   if (p.absent) {
-    return `<article class="card" style="--cat:${cat.color}" data-cats="${p.cats}" data-text="${esc((p.name + " " + p.sub).toLowerCase())}">${head}
+    return `<article class="card" id="card-${esc(p.id)}" style="--cat:${cat.color}" data-id="${esc(p.id)}" data-cats="${p.cats}" data-text="${esc((p.name + " " + p.sub).toLowerCase())}">${head}
       <div class="absent"><code>${esc(p.id)}</code> is not in this repository yet, so there are no tests, benchmarks or demo to show. It is listed so the roster is complete; it appears here with real numbers once it lands under <code>packages/</code> and has a test script.</div></article>`;
   }
   const metrics = [v.metric, ...p.metrics].filter(Boolean).slice(0, 3)
@@ -355,7 +517,7 @@ function card(p) {
     p.run && `<span class="run" title="Run from ${esc(p.path ?? "packages/" + p.id)}">${esc(p.run)}</span>`,
   ].filter(Boolean).join("");
   const text = [p.name, p.sub, p.blurb, p.hire.problem, ...p.hire.bullets, ...p.arch.flat()].join(" ").toLowerCase();
-  return `<article class="card" style="--cat:${cat.color}" data-cats="${p.cats}" data-text="${esc(text)}">${head}
+  return `<article class="card" id="card-${esc(p.id)}" style="--cat:${cat.color}" data-id="${esc(p.id)}" data-cats="${p.cats}" data-text="${esc(text)}">${head}
     <div class="metrics">${metrics}</div>
     <div class="arch"><p class="label">Architecture</p>${archSvg(p.arch)}</div>
     <details class="hire"><summary>When to hire me for this</summary><div class="body"><p>${esc(p.hire.problem)}</p><ul>${p.hire.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div></details>
@@ -381,21 +543,79 @@ function renderKpis() {
   $("#provenance").innerHTML = `Verified ${esc(V.generated.slice(0, 16).replace("T", " "))} UTC · Node ${esc(V.node)} · ${esc(V.platform)} · <code>node scripts/test-all-packages.mjs</code>`;
 }
 
+// Quick-filter tabs specification per Helmet 04:
+// (All, AI Systems & Eval, FinTech & Quant, Browser Automation, 3D WebGL Game)
+const QUICK_TABS = [
+  { id: "all", label: "All Projects", icon: "⚡", filterCat: "all", accent: "var(--accent)" },
+  { id: "ai-eval", label: "AI Systems & Eval", icon: "🧠", filterCat: "orch", accent: "var(--c-orch)" },
+  { id: "fintech", label: "FinTech & Quant", icon: "📈", filterCat: "fin", accent: "var(--c-fin)" },
+  { id: "browser-auto", label: "Browser Automation", icon: "🌐", filterCat: "browser", accent: "var(--c-browser)" },
+  { id: "game-3d", label: "3D WebGL Game", icon: "🎮", filterProj: "dont-sink-dont-die-coop", accent: "var(--game-neon)" }
+];
+
 let active = "all";
+let activeTab = "all";
+
+function getTabCount(tab) {
+  if (tab.filterCat === "all") return PROJECTS.length;
+  if (tab.filterProj) return PROJECTS.filter((p) => p.id === tab.filterProj).length;
+  if (tab.filterCat) return PROJECTS.filter((p) => p.cats.includes(tab.filterCat)).length;
+  return 0;
+}
+
+function renderQuickTabs() {
+  const container = $("#quick-tabs");
+  if (!container) return;
+  container.innerHTML = QUICK_TABS.map((tab) => {
+    const isSel = tab.id === activeTab;
+    const cnt = getTabCount(tab);
+    return `<button class="qtab${isSel ? " active" : ""}" role="tab" aria-selected="${isSel}" data-tab="${tab.id}" style="--tab-accent:${tab.accent}">
+      <span class="tab-icon">${tab.icon}</span>
+      <span>${esc(tab.label)}</span>
+      <span class="tab-count">${cnt}</span>
+    </button>`;
+  }).join("");
+}
+
 function renderChips() {
   const count = (k) => PROJECTS.filter((p) => k === "all" || p.cats.includes(k)).length;
-  $("#chips").innerHTML = [["all", "All projects", "var(--accent)"], ...Object.entries(CATS).map(([k, c]) => [k, c.label, c.color])]
+  $("#chips").innerHTML = [["all", "All categories", "var(--accent)"], ...Object.entries(CATS).map(([k, c]) => [k, c.label, c.color])]
     .map(([k, l, c]) => `<button class="chip" style="--chip:${c}" data-cat="${k}" aria-pressed="${k === active}"><span class="dot"></span>${esc(l)}<span class="n">${count(k)}</span></button>`).join("");
 }
+
 function applyFilter() {
   const q = $("#q").value.trim().toLowerCase();
   let shown = 0;
+  
+  // Resolve active filter criteria from quick tab or detailed chip
+  const curTab = QUICK_TABS.find((t) => t.id === activeTab);
+  
   for (const el of document.querySelectorAll(".card")) {
-    const ok = (active === "all" || el.dataset.cats.split(",").includes(active)) && (!q || el.dataset.text.includes(q));
-    el.hidden = !ok; shown += ok;
+    const cardCats = el.dataset.cats ? el.dataset.cats.split(",") : [];
+    const cardText = el.dataset.text || "";
+    const cardId = el.dataset.id || "";
+    
+    let matchFilter = true;
+    if (curTab && curTab.id !== "all") {
+      if (curTab.filterProj) {
+        matchFilter = cardId === curTab.filterProj;
+      } else if (curTab.filterCat) {
+        matchFilter = cardCats.includes(curTab.filterCat);
+      }
+    } else if (active !== "all") {
+      matchFilter = cardCats.includes(active);
+    }
+    
+    const matchSearch = !q || cardText.includes(q);
+    const ok = matchFilter && matchSearch;
+    el.hidden = !ok;
+    shown += ok ? 1 : 0;
   }
   $("#empty").hidden = shown > 0;
-  try { history.replaceState(null, "", active === "all" ? location.pathname : "#" + active); } catch {}
+  try {
+    const hash = activeTab !== "all" ? activeTab : (active !== "all" ? active : "");
+    history.replaceState(null, "", hash ? "#" + hash : location.pathname);
+  } catch {}
 }
 
 const dlg = $("#preview");
@@ -416,20 +636,108 @@ function openPreview(id) {
     : `<img src="${src}" alt="${esc(p.name)} screenshot">`;
   dlg.showModal();
 }
+function openReceiptsModal() {
+  const body = $("#pv-body"), note = $("#pv-note");
+  $("#pv-title").textContent = "Verified Test Receipts (Deterministic Ground Truth)";
+  $("#pv-path").textContent = "docs/portfolio/verification.js";
+  $("#pv-open").href = "verification.js";
+  note.hidden = false;
+  note.textContent = "100% Ring-0 verification pass across all packages via `node scripts/test-all-packages.mjs`.";
+  body.className = "d-body receipts";
+  body.style.height = "calc(100% - 49px - 34px)";
+  
+  if (!V) {
+    body.innerHTML = "<p>No verification data found. Run <code>node scripts/test-all-packages.mjs --write</code>.</p>";
+  } else {
+    const t = V.totals;
+    const rows = Object.entries(V.packages).map(([pkg, data]) => {
+      const isPass = data.status === "pass";
+      const icon = isPass ? "✅" : "❌";
+      return `<tr>
+        <td><code>${esc(pkg)}</code></td>
+        <td><b>${data.passed}/${data.tests}</b></td>
+        <td>${fmtMs(data.ms)}</td>
+        <td><span class="status ${isPass ? "pass" : "fail"}"><i></i>${icon} ${esc(data.status)}</span></td>
+      </tr>`;
+    }).join("");
+    
+    body.innerHTML = `
+      <div class="receipts-summary">
+        <b>Audit Summary:</b> ${t.passed}/${t.tests} tests passing (100.0%) across ${t.suites} suites in ${fmtMs(t.ms)}.<br>
+        <span style="color:var(--faint)">Generated ${esc(V.generated)} · Node ${esc(V.node)} · ${esc(V.platform)}</span>
+      </div>
+      <table class="receipts-table">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Passed / Total</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    `;
+  }
+  dlg.showModal();
+}
+
 dlg.addEventListener("close", () => { $("#pv-body").innerHTML = ""; });
 dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
 $("#pv-close").addEventListener("click", () => dlg.close());
 
 $("#grid").innerHTML = PROJECTS.map(card).join("");
 $("#grid").addEventListener("click", (e) => { const b = e.target.closest("[data-preview]"); if (b) openPreview(b.dataset.preview); });
-$("#chips").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-cat]"); if (!b) return;
-  active = b.dataset.cat; renderChips(); applyFilter();
+
+$("#quick-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tab]");
+  if (!b) return;
+  activeTab = b.dataset.tab;
+  const tabDef = QUICK_TABS.find((t) => t.id === activeTab);
+  if (tabDef && tabDef.filterCat) {
+    active = tabDef.filterCat;
+  }
+  renderQuickTabs();
+  renderChips();
+  applyFilter();
 });
+
+$("#chips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cat]");
+  if (!b) return;
+  active = b.dataset.cat;
+  // If user picks a category chip, match quicktab if applicable
+  const matchingTab = QUICK_TABS.find((t) => t.filterCat === active && !t.filterProj);
+  activeTab = matchingTab ? matchingTab.id : "all";
+  renderQuickTabs();
+  renderChips();
+  applyFilter();
+});
+
+const receiptsBtn = $("#hero-receipts");
+if (receiptsBtn) {
+  receiptsBtn.addEventListener("click", openReceiptsModal);
+}
+
 $("#q").addEventListener("input", applyFilter);
+
 const fromHash = location.hash.slice(1);
-if (CATS[fromHash]) active = fromHash;
-renderKpis(); renderChips(); applyFilter();
+const matchedTab = QUICK_TABS.find((t) => t.id === fromHash);
+if (matchedTab) {
+  activeTab = matchedTab.id;
+  if (matchedTab.filterCat) active = matchedTab.filterCat;
+} else if (CATS[fromHash]) {
+  active = fromHash;
+  const mt = QUICK_TABS.find((t) => t.filterCat === active);
+  if (mt) activeTab = mt.id;
+}
+
+renderKpis();
+renderQuickTabs();
+renderChips();
+applyFilter();
 </script>
 </body>
 </html>

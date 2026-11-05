@@ -10,7 +10,7 @@
     "./mini-dom": "./src/mini-dom.mjs"
   },
   "scripts": {
-    "test": "node --test test/adapters.test.mjs",
+    "test": "node --test test/adapters.test.mjs test/qa-breaker.test.js",
     "playground": "python3 -m http.server 8137"
   },
   "engines": {

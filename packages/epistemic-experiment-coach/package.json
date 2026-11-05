@@ -8,7 +8,7 @@
     "build": "vite build && node scripts/build-standalone.mjs",
     "build:standalone": "node scripts/build-standalone.mjs",
     "start": "node server.mjs",
-    "test": "node --test test/calibration.test.mjs test/domains.test.mjs test/journey.test.mjs test/standalone.test.mjs",
+    "test": "node --test test/calibration.test.mjs test/domains.test.mjs test/journey.test.mjs test/standalone.test.mjs test/qa-breaker.test.js",
     "capture:cooking-flow": "node docs/cooking-flow/capture-flow.mjs"
   },
   "dependencies": {

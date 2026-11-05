@@ -77,6 +77,15 @@ import {
     getBotOrderBark,
     BOT_COMMAND_IDS,
 } from '../../shared/bot-orders.js';
+import { sanitizeObject3DTree, verifyRaftVisibilityInvariants } from '../../shared/scene-watchdog.js';
+import { createSubsystemBreakerRegistry } from '../../shared/subsystem-breaker.js';
+import { buildRaftEvolutionAttachments, updateRaftEvolutionVis } from './entities/raft-evolution-mesh.js';
+import { buildShorelineLandmarks, animateShorelineLandmarks } from './world/shoreline-landmarks.js';
+import { createWaterWakeSystem } from './vfx/water-wake-ribbons.js';
+import { createBossTelegraphVFX } from './vfx/boss-telegraphs.js';
+import { createCinemaLetterboxDirector } from './ui/cinema-letterbox.js';
+import { createQuickBuyHotbar } from './ui/quickbuy-hotbar.js';
+import { createDiegeticRaftArcs } from './ui/diegetic-raft-arcs.js';
 
 export function createAAAFeverDirector({
     THREE,
@@ -263,6 +272,35 @@ export function createAAAFeverDirector({
 
     // 18. AI Companion Bot Tactical Orders ([Z]/[X]/[C]/[V])
     const botOrderState = createBotOrderState();
+
+    // 18b. Sovereign Helmet 01-04 Live Subsystems (Circuit Breakers, Shoreline Landmarks, Wake, Arcs, QuickBuy, Letterbox)
+    const breakerRegistry = createSubsystemBreakerRegistry();
+    const shorelineHandle = buildShorelineLandmarks(THREE, seed);
+    if (shorelineHandle?.group) scene.add(shorelineHandle.group);
+    const waterWakeSystem = createWaterWakeSystem(THREE, scene);
+    const bossTelegraphs = createBossTelegraphVFX(THREE, scene);
+    const diegeticArcs = createDiegeticRaftArcs(THREE, scene);
+    let raftEvolutionHandle = null;
+    const cinemaLetterbox = hasDOM ? createCinemaLetterboxDirector() : { checkTriggers() {}, update() {} };
+    const quickBuyHotbar = hasDOM
+        ? createQuickBuyHotbar({
+            socket,
+            getPlayerData: () => {
+                const st = getMyStats() || {};
+                return {
+                    coins: st.coins ?? 50,
+                    health: st.health ?? 100,
+                    maxHealth: st.maxHealth ?? 100,
+                    upgrades: st.upgrades || [],
+                    isDead: getIsDead(),
+                };
+            },
+            onPurchase: (res) => {
+                sfx.upgrade?.();
+                hud.toast(`⚡ QUICK-BUY: ${(res.actionName || 'UPGRADE').toUpperCase()}!`, 1800);
+            },
+        })
+        : { updatePlayerData() {} };
 
     // 19. 3D Dockside Title Screen & [Esc] Settings Drawer
     let crewCosmeticGroup = null;
@@ -755,6 +793,68 @@ export function createAAAFeverDirector({
             if (photoAndAwards.isActive()) {
                 photoAndAwards.update(dt);
             }
+
+            // 10. Sovereign Helmet 01-04 Live Updates (Protected by Helmet 02 Circuit Breakers)
+            breakerRegistry.step('shoreline', () => {
+                animateShorelineLandmarks(shorelineHandle, raft?.craft?.position, elapsedSec);
+            });
+            breakerRegistry.step('water_wake', () => {
+                if (raft?.craft) {
+                    const vel = raft.craft.velocity || { x: 0, z: 0 };
+                    const airborne = Boolean(raft.vis?.anim?.airborne);
+                    waterWakeSystem.update(dt, raft.craft.position, vel, airborne, false);
+                }
+            });
+            breakerRegistry.step('raft_evolution', () => {
+                if (raft?.vis?.raftHull && !raftEvolutionHandle) {
+                    raftEvolutionHandle = buildRaftEvolutionAttachments(THREE);
+                    if (raftEvolutionHandle?.group) {
+                        raft.vis.raftHull.add(raftEvolutionHandle.group);
+                    }
+                }
+                if (raftEvolutionHandle) {
+                    updateRaftEvolutionVis(raftEvolutionHandle, getMyStats()?.upgrades || [], dt);
+                }
+            });
+            breakerRegistry.step('diegetic_arcs', () => {
+                if (raft?.craft) {
+                    const st = getMyStats() || {};
+                    diegeticArcs.update(dt, {
+                        position: raft.craft.position,
+                        yaw: raft.craft.yaw,
+                        health: st.health ?? 100,
+                        maxHealth: st.maxHealth ?? 100,
+                        stamina: raft.vis?.anim?.airborne ? 0.35 : 1.0,
+                        elapsedSec,
+                    });
+                }
+            });
+            breakerRegistry.step('boss_telegraphs', () => {
+                if (krakenState.isSpawned && !krakenState.isDefeated) {
+                    bossTelegraphs.update(dt, krakenState, elapsedSec);
+                }
+            });
+            breakerRegistry.step('cinema_letterbox', () => {
+                cinemaLetterbox.checkTriggers(z, krakenState.isSpawned && !krakenState.isDefeated);
+                cinemaLetterbox.update(dt);
+            });
+            breakerRegistry.step('quickbuy_hotbar', () => {
+                const st = getMyStats() || {};
+                quickBuyHotbar.updatePlayerData({
+                    coins: st.coins ?? 50,
+                    health: st.health ?? 100,
+                    maxHealth: st.maxHealth ?? 100,
+                    upgrades: st.upgrades || [],
+                    isDead: getIsDead(),
+                });
+            });
+            breakerRegistry.step('scene_watchdog', () => {
+                if (raft?.vis?.group) {
+                    sanitizeObject3DTree(raft.vis.group);
+                    verifyRaftVisibilityInvariants(raft.vis);
+                }
+            });
         },
+        getHealthReport: () => breakerRegistry.getHealthReport(),
     };
 }

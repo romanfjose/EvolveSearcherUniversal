@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node serve.mjs",
     "bench": "node bench.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs test/*.test.js"
   },
   "engines": {
     "node": ">=20"

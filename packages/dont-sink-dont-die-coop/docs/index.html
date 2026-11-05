@@ -5,32 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Don't Sink, Don't Die</title>
     <style>
-        :root { --bg: #0b1d2a; --card: #12293a; --ink: #eef5fa; --muted: #9fb4c4; --accent: #ffcf4a; --line: #24465e; }
+        :root { --bg: #0b0e13; --panel: #11161e; --panel-2: #161c26; --line: #232b38; --line-2: #2f3a4b;
+                --ink: #e6ebf2; --muted: #8d99ab; --faint: #5f6b7d; --accent: #5eead4; --accent-ink: #04201c;
+                --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+                --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color-scheme: dark; }
         * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
-               background: radial-gradient(circle at 50% 0%, #1b4e6e, var(--bg) 70%); color: var(--ink); font-family: system-ui, sans-serif; }
-        main { width: 100%; max-width: 560px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
-        h1 { margin: 0 0 4px; font-size: 28px; }
-        p { color: var(--muted); line-height: 1.5; margin: 0 0 18px; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; color: var(--ink); font: 14px/1.5 var(--sans);
+               background: var(--bg); background-image: radial-gradient(1200px 500px at 85% -10%, rgba(94, 234, 212, .07), transparent 60%),
+               linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+               background-size: auto, 48px 48px, 48px 48px; -webkit-font-smoothing: antialiased; }
+        main { width: 100%; max-width: 560px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 28px; box-shadow: 0 16px 48px rgba(0, 0, 0, .4); }
+        .eyebrow { font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+        .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(94, 234, 212, .15); }
+        h1 { margin: 14px 0 6px; font-size: clamp(24px, 5vw, 30px); line-height: 1.1; letter-spacing: -.02em; font-weight: 650; }
+        p { color: var(--muted); margin: 0 0 20px; }
         fieldset { border: 0; padding: 0; margin: 0 0 20px; }
-        legend { font-weight: 600; margin-bottom: 8px; }
+        legend { font: 600 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
         .bots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .bots label { border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; }
-        .bots input { display: none; }
-        .bots input:checked + span { color: var(--accent); font-weight: 700; }
-        .bots label:has(input:checked) { border-color: var(--accent); }
-        .bots small { display: block; color: var(--muted); margin-top: 4px; font-size: 12px; }
-        a.play { display: block; text-align: center; background: var(--accent); color: #1a1300; font-weight: 800; letter-spacing: 1px;
-                 text-decoration: none; padding: 14px; border-radius: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 14px; }
-        td { padding: 5px 0; border-top: 1px solid var(--line); }
-        td:first-child { color: var(--accent); font-family: ui-monospace, monospace; width: 40%; }
-        footer { margin-top: 16px; font-size: 12px; color: var(--muted); }
+        .bots label { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: 8px; padding: 12px 8px; text-align: center; cursor: pointer; transition: border-color .15s; }
+        .bots label:hover { border-color: var(--faint); }
+        .bots input { position: absolute; opacity: 0; }
+        .bots span { font: 600 15px/1 var(--mono); }
+        .bots input:checked + span { color: var(--accent); }
+        .bots label:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94, 234, 212, .12); }
+        .bots label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .bots small { display: block; color: var(--muted); margin-top: 6px; font-size: 12px; }
+        a.play { display: block; text-align: center; background: var(--accent); color: var(--accent-ink); font: 700 13px/1 var(--mono); letter-spacing: .12em;
+                 text-decoration: none; padding: 15px; border-radius: 8px; }
+        a.play:hover { filter: brightness(1.08); }
+        a.play:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 13.5px; }
+        td { padding: 7px 0; border-top: 1px solid var(--line); color: var(--muted); vertical-align: top; }
+        td:first-child { width: 36%; padding-right: 10px; }
+        kbd { font: 600 11px/1 var(--mono); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 3px 6px; }
+        footer { margin-top: 16px; font-size: 12px; color: var(--faint); }
         footer a { color: var(--muted); }
     </style>
 </head>
 <body>
 <main>
+    <div class="eyebrow"><i></i>Co-op raft survival</div>
     <h1>Don't Sink, Don't Die</h1>
     <p>Co-op 3D raft survival down a 1.5 km river. This build needs no server: the game runs its authoritative
        tick loop in your browser and fills the raft with AI companions who fight, shop and revive you at checkpoints.</p>
@@ -47,12 +61,14 @@
     <a class="play" id="play" href="../public/index.html?offline&bots=2">PLAY OFFLINE</a>
 
     <table>
-        <tr><td>W A S D</td><td>Paddle and steer</td></tr>
-        <tr><td>Space</td><td>Jump onto planks and trees (the wizard can't reach you there)</td></tr>
-        <tr><td>Left click</td><td>Attack (click the scene first to lock the mouse)</td></tr>
-        <tr><td>Right click</td><td>Block: 80% damage reduction, no throw</td></tr>
-        <tr><td>E</td><td>Shop at the city on the right bank (≈200 m)</td></tr>
-        <tr><td>M</td><td>Mute</td></tr>
+        <tr><td><kbd>W</kbd> <kbd>S</kbd></td><td>Paddle forward / back water</td></tr>
+        <tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Steer: the keel grips, so the raft carves where it points</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Jump onto planks and trees (the wizard can't reach you there)</td></tr>
+        <tr><td><kbd>LMB</kbd></td><td>Attack (click the scene first to lock the mouse)</td></tr>
+        <tr><td><kbd>RMB</kbd></td><td>Block: 80% damage reduction, no throw</td></tr>
+        <tr><td><kbd>Mouse</kbd></td><td>Orbit the camera; it eases back behind the raft</td></tr>
+        <tr><td><kbd>E</kbd></td><td>Shop at the city on the right bank (≈200 m)</td></tr>
+        <tr><td><kbd>M</kbd></td><td>Mute</td></tr>
     </table>
     <footer>Want real friends instead? Run the Socket.io server: see the <a href="../README.md">README</a>.</footer>
 </main>

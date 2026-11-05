@@ -28,22 +28,31 @@ export const PLAYER = {
     startSpacingZ: 8,
 };
 
+export const WATER_SURFACE_Y = PLAYER.restY; // raft body centre when floating (hull bottom on the waterline)
+
+// Arcade watercraft. Accelerations are force / PLAYER.mass; drags are exponential rates (1/s) solved
+// exactly per step, so handling is identical at any frame rate.
 export const PHYSICS = {
     baseCurrent: 100,
     currentRampZ: 500,
     basePaddle: 200,
+    reverseFactor: 0.5,
     motorBoost: 100,
     attackBoost: 50,
-    buoyancyGain: 60,
-    submergeDepth: -1,
-    waterDragPerFrame: 0.9,
-    motorAngularDrag: 0.95,
-    fps: 60,
-    jumpVelocity: 15,
+    forwardDrag: 20 / 3, // along the heading: 500 N (paddle + current) settles at 15 m/s
+    keelGrip: 8, // lateral drag = keelGrip × forwardDrag
+    airDrag: 0.3,
+    turnRate: 2.2, // rad/s while A/D is held
+    yawResponse: 16, // 1/s: how fast the yaw rate reaches its target (and dies on release)
+    yawStopRate: 0.01, // rad/s: below this, a released helm snaps to a dead stop
+    surfaceSnap: 0.05,
+    gravity: 30,
+    jumpVelocity: 18,
+    throwVelocityPerForce: 1 / 50,
 };
 
 export const UPGRADES = {
-    motor: { type: 'motor', cost: 10, name: 'Motor', speedBonus: 40, turnPenalty: 0.5 },
+    motor: { type: 'motor', cost: 10, name: 'Motor', turnPenalty: 0.3 },
     weapon: { type: 'weapon', cost: 15, name: 'Squeaky Hammer', damageBonus: 20 },
     armor: { type: 'armor', cost: 20, name: 'Raft Armor', maxHealthBonus: 50 },
 };
@@ -69,7 +78,6 @@ export const BOT = {
     soloAdvance: 30,
     evadeRadius: 8,
     xLimit: 13,
-    gravity: 30,
     throwDamping: 0.85,
     shopPriority: ['weapon', 'armor', 'motor'],
 };
@@ -101,33 +109,154 @@ export function riverCurrentForce(x, z) {
     return -PHYSICS.baseCurrent * riverCurrentMultiplier(z);
 }
 
-export function isSubmerged(y) {
-    return RIVER.waterLevel - y > PHYSICS.submergeDepth;
+/** Steady-state speed under constant force with exponential drag: dv/dt = F/m − k·v settles at F/(m·k). */
+export function steadyStateSpeed(force, mass = PLAYER.mass, drag = PHYSICS.forwardDrag) {
+    return force / (mass * drag);
 }
 
-/** Vertical spring toward y = 0.5 (positive below, negative above), active while y < 1. */
-export function buoyancyForce(y) {
-    const depth = RIVER.waterLevel - y;
-    return depth > PHYSICS.submergeDepth ? (depth + 0.5) * PHYSICS.buoyancyGain : 0;
+/** Thrust (N) along the heading: W paddles both sides (+ motor), S backs water at half power, attacking lunges. */
+export function watercraftThrust(keys, upgrades = [], isAttacking = false) {
+    const paddle = 2 * PHYSICS.basePaddle;
+    let thrust = 0;
+    if (keys.w) thrust += paddle + 2 * upgradeStats(upgrades).motorBoost;
+    if (keys.s) thrust -= paddle * PHYSICS.reverseFactor;
+    if (isAttacking) thrust += 2 * PHYSICS.attackBoost;
+    return thrust;
 }
 
-/** Steady-state speed under constant force with per-frame velocity damping v' = drag·(v + F/m·dt). */
-export function steadyStateSpeed(force, mass = PLAYER.mass, drag = PHYSICS.waterDragPerFrame, fps = PHYSICS.fps) {
-    return (drag * force) / (mass * fps * (1 - drag));
+/** Unit forward vector for a yaw angle; raft forward is local −z, positive yaw turns left. */
+export const headingOf = (yaw) => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) });
+export const yawOfQuaternion = (q) => 2 * Math.atan2(q.y, q.w);
+
+/** Exact solution of dv/dt = −rate·(v − target) over dt: frame-rate independent. */
+const relax = (v, target, rate, dt) => target + (v - target) * Math.exp(-rate * dt);
+
+/**
+ * Velocity-level arcade watercraft controller, shared by the cannon-es client and the tests.
+ * craft = { position, velocity, angularVelocity, yaw } (cannon Vec3s or plain {x,y,z});
+ * input = { w, a, s, d, space, upgrades, attacking, onSolid }.
+ * Sets velocity and angularVelocity.y only; integration belongs to the caller (world.step or
+ * stepWatercraftKinematics). Horizontal velocity is split along the heading (light drag) and across it
+ * (keel grip, PHYSICS.keelGrip × stronger), so the raft carves where it points instead of skating.
+ */
+export function driveWatercraft(craft, input, dt) {
+    const { position: p, velocity: v, angularVelocity: w } = craft;
+    const onWater = p.y <= WATER_SURFACE_Y + PHYSICS.surfaceSnap;
+    const grounded = onWater || !!input.onSolid;
+    const stats = upgradeStats(input.upgrades);
+
+    const steer = (input.a ? 1 : 0) - (input.d ? 1 : 0);
+    w.x = 0; w.z = 0;
+    w.y = relax(w.y, steer * stats.turnRate, PHYSICS.yawResponse, dt);
+    if (!steer && Math.abs(w.y) < PHYSICS.yawStopRate) w.y = 0;
+
+    if (grounded) {
+        const f = headingOf(craft.yaw);
+        const r = { x: -f.z, z: f.x };
+        const current = onWater ? riverCurrentForce(p.x, p.z) / PLAYER.mass : 0; // world −z
+        const aFwd = watercraftThrust(input, input.upgrades, input.attacking) / PLAYER.mass + current * f.z;
+        const aLat = current * r.z;
+        const kF = PHYSICS.forwardDrag;
+        const kL = kF * PHYSICS.keelGrip;
+        const vF = relax(v.x * f.x + v.z * f.z, aFwd / kF, kF, dt);
+        const vL = relax(v.x * r.x + v.z * r.z, aLat / kL, kL, dt);
+        v.x = vF * f.x + vL * r.x;
+        v.z = vF * f.z + vL * r.z;
+    } else {
+        const k = Math.exp(-PHYSICS.airDrag * dt);
+        v.x *= k;
+        v.z *= k;
+    }
+
+    const jumped = !!input.space && grounded && v.y <= 0;
+    if (jumped) v.y = PHYSICS.jumpVelocity;
+    return { jumped, onWater };
 }
 
-/** Left/right paddle thrust from WASD; A drives the right paddle (turn left), D the left one. */
-export function paddleForces(keys, upgrades = [], isAttacking = false) {
-    const f = PHYSICS.basePaddle;
-    let left = 0;
-    let right = 0;
-    if (keys.w) { left += f; right += f; }
-    if (keys.s) { left -= f; right -= f; }
-    if (keys.a) right += f;
-    if (keys.d) left += f;
-    if (keys.w && upgrades.includes('motor')) { left += PHYSICS.motorBoost; right += PHYSICS.motorBoost; }
-    if (isAttacking) { left += PHYSICS.attackBoost; right += PHYSICS.attackBoost; }
-    return { left, right };
+/**
+ * Hydrostatic floor: a body at or below the waterline that is not rising is held exactly on it.
+ * Returns the downward speed it was carrying (landing impact, m/s) when floored, else null.
+ */
+export function settleOnWater(craft) {
+    const { position: p, velocity: v } = craft;
+    if (p.y > WATER_SURFACE_Y + PHYSICS.surfaceSnap || v.y > 0) return null;
+    const impact = -v.y;
+    p.y = WATER_SURFACE_Y;
+    v.y = 0;
+    return impact;
+}
+
+/** One fixed step: controller, gravity, semi-implicit Euler, then the water floor. */
+export function stepWatercraftKinematics(craft, input, dt) {
+    const { jumped } = driveWatercraft(craft, input, dt);
+    const { position: p, velocity: v } = craft;
+    v.y -= PHYSICS.gravity * dt;
+    p.x += v.x * dt;
+    p.y += v.y * dt;
+    p.z += v.z * dt;
+    craft.yaw += craft.angularVelocity.y * dt;
+    return { jumped, impact: settleOnWater(craft) };
+}
+
+/**
+ * Pure kinematic world collision resolver (replaces cannon-es rigid bodies):
+ * - Smoothly slides off tree trunks in 2D without spinning or flipping the raft.
+ * - Supports landing on elevated planks (above PLAYER.safeHeight) and the City Shop dock.
+ * - Clamps lateral x to the river channel (widened along the City Shop dock band).
+ */
+export function resolveWorldBoundsAndObstacles(craft, obstacles = []) {
+    const { position: p, velocity: v } = craft;
+    let onSolid = false;
+
+    for (let i = 0; i < obstacles.length; i++) {
+        const obs = obstacles[i];
+        if (Math.abs(p.z - obs.z) > 8) continue;
+        if (obs.type === 'plank') {
+            if (Math.abs(p.x - obs.x) <= obs.halfW + 0.75 && Math.abs(p.z - obs.z) <= obs.halfD + 0.95) {
+                if (p.y >= obs.topY - 0.5 && p.y <= obs.topY + PHYSICS.surfaceSnap + 0.15 && v.y <= 0) {
+                    p.y = obs.topY;
+                    v.y = 0;
+                    onSolid = true;
+                }
+            }
+        } else if (obs.type === 'tree') {
+            const dx = p.x - obs.x;
+            const dz = p.z - obs.z;
+            const minDist = (obs.radius || 0.9) + 1.05;
+            const distSq = dx * dx + dz * dz;
+            if (distSq < minDist * minDist && distSq > 1e-8) {
+                const dist = Math.sqrt(distSq);
+                const nx = dx / dist;
+                const nz = dz / dist;
+                p.x = obs.x + nx * minDist;
+                p.z = obs.z + nz * minDist;
+                const vn = v.x * nx + v.z * nz;
+                if (vn < 0) {
+                    v.x -= vn * nx;
+                    v.z -= vn * nz;
+                }
+            }
+        }
+    }
+
+    const inShopBand = p.z > SHOP_ZONE.minZ && p.z < SHOP_ZONE.maxZ;
+    if (inShopBand && p.x >= 13.5 && p.y <= 0.75 + PHYSICS.surfaceSnap + 0.15 && v.y <= 0) {
+        p.y = 0.75;
+        v.y = 0;
+        onSolid = true;
+    }
+
+    const minX = -RIVER.channelHalfWidth + 1.1;
+    const maxX = inShopBand ? 32 : RIVER.channelHalfWidth - 1.1;
+    if (p.x < minX) {
+        p.x = minX;
+        if (v.x < 0) v.x = 0;
+    } else if (p.x > maxX) {
+        p.x = maxX;
+        if (v.x > 0) v.x = 0;
+    }
+
+    return { onSolid };
 }
 
 /** 0 at the muddy start, 1 at the clear finish. */
@@ -148,7 +277,7 @@ export function upgradeStats(upgrades = []) {
         attackDamage: PLAYER.baseDamage + (has('weapon') ? UPGRADES.weapon.damageBonus : 0),
         maxHealthBonus: has('armor') ? UPGRADES.armor.maxHealthBonus : 0,
         motorBoost: has('motor') ? PHYSICS.motorBoost : 0,
-        angularDrag: has('motor') ? PHYSICS.motorAngularDrag : 1,
+        turnRate: PHYSICS.turnRate * (has('motor') ? 1 - UPGRADES.motor.turnPenalty : 1),
     };
 }
 
@@ -158,6 +287,12 @@ export function canPurchase(player, type) {
     if (player.upgrades.includes(type)) return { ok: false, reason: 'owned' };
     if (player.coins < upg.cost) return { ok: false, reason: 'insufficient-coins' };
     return { ok: true, reason: null };
+}
+
+/** Launch velocity for a wizard throw (the same for the cannon client and the kinematic bots). */
+export function throwVelocity(force) {
+    const k = PHYSICS.throwVelocityPerForce;
+    return { x: force.x * k, y: force.y * k, z: force.z * k };
 }
 
 export function blockedDamage(damage, isBlocking) {
@@ -394,7 +529,7 @@ export function resolveEnemyHit(state, playerId, enemyType, isBlocking = false) 
     const events = [ev('playerHealthUpdate', { id: p.id, health: p.health, maxHealth: p.maxHealth, damage: dmg, by: enemyType, blocked: !!isBlocking })];
     if (enemyType === 'whiteGuy' && !isBlocking) {
         const force = { x: (state.rng() - 0.5) * 500, y: 500 + state.rng() * 500, z: (state.rng() - 0.5) * 500 };
-        if (p.isBot) p.velocity = { x: force.x / 50, y: force.y / 50, z: force.z / 50 };
+        if (p.isBot) p.velocity = throwVelocity(force);
         events.push(ev('playerThrown', { id: p.id, force }));
     }
     if (p.health <= 0) {
@@ -482,8 +617,7 @@ export function handleClientEvent(state, senderId, event, data) {
 // ---------- AI companion bots ----------
 
 export function botMaxSpeed(upgrades = []) {
-    const thrust = 2 * PHYSICS.basePaddle + PHYSICS.baseCurrent + 2 * upgradeStats(upgrades).motorBoost;
-    return steadyStateSpeed(thrust);
+    return steadyStateSpeed(watercraftThrust({ w: true }, upgrades) + PHYSICS.baseCurrent);
 }
 
 /** Pure decision: what a bot wants to do this tick and where it wants to be. */
@@ -531,11 +665,11 @@ export function stepBot(state, bot, dt) {
     }
     // ballistic recovery after being thrown
     const v = bot.velocity;
-    if (v.x || v.y || v.z || pos.y > PLAYER.restY) {
+    if (v.x || v.y || v.z || pos.y > WATER_SURFACE_Y) {
         pos.x += v.x * dt; pos.z += v.z * dt; pos.y += v.y * dt;
-        v.y -= BOT.gravity * dt;
+        v.y -= PHYSICS.gravity * dt;
         v.x *= BOT.throwDamping; v.z *= BOT.throwDamping;
-        if (pos.y <= PLAYER.restY) { pos.y = PLAYER.restY; bot.velocity = { x: 0, y: 0, z: 0 }; }
+        if (settleOnWater(bot) !== null) bot.velocity = { x: 0, y: 0, z: 0 };
     }
     pos.x = clamp(pos.x, -BOT.xLimit, BOT.xLimit);
     bot.bestZ = Math.min(bot.bestZ, pos.z);

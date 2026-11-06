@@ -31,6 +31,9 @@ import {
 } from '../../shared/ai-bots.js';
 import { createRiverParticleSystem, FOAM_Y } from './particles.js';
 import { stepBuoyantRebound } from './world/water-shader.js';
+import { computeRowingCameraImpulse, evaluateSideAwareOarTarget } from '../../shared/oar-stroke-physics.js';
+import { computeOarAttackWaterSlap } from '../../shared/water-wake-and-foam.js';
+import { computeCostadoEddyRelief } from '../../shared/river-pacing-and-eddies.js';
 
 
 // Real Socket.io server when reachable, otherwise the in-browser loopback with AI bots.
@@ -1137,32 +1140,23 @@ function triggerAttack(preferredSide = null) {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    let swingSide = preferredSide === 'left' || preferredSide === 'right' ? preferredSide : null;
-    if (!swingSide && enemiesData) {
-        let nearestDist = Infinity;
-        let nearestDot = 0;
-        for (const key in enemiesData) {
-            const eMesh = enemyMeshes[key];
-            if (enemiesData[key].health > 0 && eMesh) {
-                const d = myPos.distanceTo(eMesh.position);
-                if (d < nearestDist && d < PLAYER.attackRange + 9.0) {
-                    nearestDist = d;
-                    nearestDot = (eMesh.position.x - myPos.x) * rightX + (eMesh.position.z - myPos.z) * rightZ;
-                }
-            }
-        }
-        if (nearestDist < Infinity) {
-            swingSide = nearestDot < -0.05 ? 'left' : 'right';
-        }
-    }
-    if (!swingSide) {
-        if (keys.a && !keys.d) swingSide = 'left';
-        else if (keys.d && !keys.a) swingSide = 'right';
-        else swingSide = lastMouseScreenX < window.innerWidth * 0.5 ? 'left' : 'right';
-    }
+    const fallbackSide = keys.a && !keys.d
+        ? 'left'
+        : keys.d && !keys.a
+            ? 'right'
+            : (lastMouseScreenX < window.innerWidth * 0.5 ? 'left' : 'right');
+    const swingSide = preferredSide === 'left' || preferredSide === 'right'
+        ? preferredSide
+        : evaluateSideAwareOarTarget(myPos, yaw, enemiesData, fallbackSide);
 
     myRaft.vis.anim.swingSide = swingSide;
     myRaft.vis.anim.swing = SWING_S;
+    if (!onSolid) {
+        const slap = computeOarAttackWaterSlap({ raftPos: myPos, raftYaw: yaw, swingSide, swingProgress: 0.5 });
+        if (slap?.origin) {
+            emitFoam(slap.origin.x, FOAM_Y + 0.05, slap.origin.z, (slap.sprayVelocity?.x || 0) * 0.5, 1.1, (slap.sprayVelocity?.z || 0) * 0.5, 0.5, 0.24);
+        }
+    }
     feverDirector.onPlayerAttack();
     if (enemiesData) {
         for (const key in enemiesData) {
@@ -1356,7 +1350,9 @@ function fixedStep() {
             const stepVz = craft.velocity.z;
             const f = headingOf(craft.yaw);
             const r = { x: -f.z, z: f.x };
-            const driftVz = (dockedAtHarborPier || shopOpen) ? 0 : -0.95;
+            const eddyRelief = computeCostadoEddyRelief(craft.position.x, craft.position.z, playableHalfWidth);
+            const eddyScale = Number.isFinite(eddyRelief?.currentMultiplier) ? eddyRelief.currentMultiplier : 1.0;
+            const driftVz = (dockedAtHarborPier || shopOpen) ? 0 : -0.95 * eddyScale;
             const driftF = driftVz * f.z;
             const driftL = driftVz * r.z;
             let vF = prevVx * f.x + prevVz * f.z;
@@ -1736,15 +1732,17 @@ function updateCamera(dt) {
             cam.pitch = CAM.pitch + (cam.pitch - CAM.pitch) * k;
         }
         const yaw = cam.yaw + cam.orbit;
+        const rowImpulse = computeRowingCameraImpulse(oarStroke, speed);
         // Helmet 01 (Camera & Game-Feel Pilot):
         // 1. Low, Close, Over-the-Shoulder Chase Camera (pitch ~0.25 rad / 14°, distance ~10.5m, looking 15m ahead down the river)
         // 2. 100% Player-Centered Lock (0% bot centroid drift — never pull my eyes sideways because a bot moved!)
-        const dist = CAM.distance + Math.min(2.2, speed * 0.08);
+        const effPitch = THREE.MathUtils.clamp(cam.pitch + (rowImpulse.pitchOffset || 0), CAM.minPitch, CAM.maxPitch);
+        const dist = CAM.distance + Math.min(2.2, speed * 0.08) + (rowImpulse.distanceOffset || 0);
         const boostLift = myRaft.vis.anim.airborne ? 0.55 : 0;
         desired.set(
-            target.x + dist * Math.cos(cam.pitch) * Math.sin(yaw),
-            target.y + 1.85 + boostLift + dist * Math.sin(cam.pitch),
-            target.z + dist * Math.cos(cam.pitch) * Math.cos(yaw),
+            target.x + dist * Math.cos(effPitch) * Math.sin(yaw),
+            target.y + 1.85 + boostLift + dist * Math.sin(effPitch),
+            target.z + dist * Math.cos(effPitch) * Math.cos(yaw),
         );
         const f = headingOf(myRaft.vis.anim.yaw);
         look.set(target.x + f.x * 15, target.y + 1.15, target.z + f.z * 15);
@@ -1764,7 +1762,8 @@ function updateCamera(dt) {
     cam.look.lerp(look, 1 - Math.exp(-12 * dt));
     camera.lookAt(cam.look);
 
-    const fov = 72 + Math.min(12, speed * 0.5);
+    const rowFovBoost = computeRowingCameraImpulse(oarStroke, speed).fovBoost || 0;
+    const fov = 72 + Math.min(12, speed * 0.5) + rowFovBoost;
     if (Math.abs(fov - camera.fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
 
     if (cameraShake > 0) {

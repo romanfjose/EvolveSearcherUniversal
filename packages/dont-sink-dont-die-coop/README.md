@@ -1,144 +1,111 @@
-# Don't Sink, Don't Die — co-op raft survival
+# Don't Sink, Don't Die — Co-Op River Survival
 
-3D co-op raft survival down a 1.5 km river (Three.js + cannon-es). Paddle, jump onto planks, fight a wizard, a mud alien and a long worm, buy upgrades at the city, and reach the river mouth together.
+A deterministic 60Hz 3D co-op river survival game (`Three.js` + `Socket.io` + zero-dependency offline loopback server) built from a surreal dream draft. 1 to 4 players pilot rafts down a 1.5 km hostile river corridor across 4 biomes, fight dream entities, salvage scrap, upgrade gear at riverside docks, and break through to the river mouth.
 
-It runs in two modes from the same client and the same game rules:
+Runs either online over WebSockets or completely offline in-browser with autonomous AI bots using the exact same deterministic simulation loop.
 
-| Mode | How to start | Who simulates the world |
-|---|---|---|
-| **Online multiplayer** | `npm start`, open `http://localhost:3000` | `server.js` (Socket.io), up to 4 friends |
-| **Offline / zero-server** | [`docs/index.html`](docs/index.html) (GitHub Pages or any static server) | The browser itself, with 1–3 AI companion bots |
+---
 
-## Play the static demo
+## Quickstart
 
-- **GitHub Pages:** with Pages serving the repository root, open `/packages/dont-sink-dont-die-coop/docs/`. Choose a crew size and press *Play offline*.
-- **Locally:** run `npm run demo` (it uses `python3 -m http.server 8138`) and open `http://localhost:8138/docs/`. ES modules don't load over `file://`, so you need some static server.
-
-You don't need a flag. If the page can't reach a Socket.io server, it switches to offline mode by itself: either `socket.io/socket.io.js` returns 404, or the connection fails within 2.5 s. URL parameters:
-
-| Param | Effect |
-|---|---|
-| `offline` | Skip the server probe |
-| `bots=1..3` | Size of the AI crew (default 2) |
-| `seed=<int>` | Reproducible run (enemy positions, throws, bot blocks) |
-
-## Controls
-
-| Input | Action |
-|---|---|
-| `W` / `S` | Paddle forward / back water at half power |
-| `A` / `D` | Steer left / right. The turn rate is direct and dies within 0.4 s of letting go |
-| `Space` | Jump from the water or a plank. The raft goes into your inventory mid-air and you splash back down onto the surface. Standing on a plank or tree (y > 1) makes you immune to the wizard |
-| Mouse | Orbit the chase camera; it eases back behind the raft after about a second |
-| Left click | Attack (click the scene first to lock the mouse). The lunge adds a small forward thrust |
-| Right click (hold) | Block: 80 % less damage, and you can't be thrown |
-| `E` | Open the shop at the city on the right bank (x > 10, z −150…−250) |
-| `M` | Mute sound |
-
-## Game rules
-
-All the numbers live in [`shared/game-core.js`](shared/game-core.js). The test suite pins them down.
-
-- **Waves.** There is one wave per 150 m (one per checkpoint gate), 10 in total. When a wave starts, the HUD shows a banner and plays a horn. Enemies that spawn later get **+25 % health and +10 % damage per wave**. They also get **+20 % health for each crew member after the first**.
-- **Openers.** A crew of 1–2 starts against the wizard (`whiteGuy`), a crew of 3 against the mud alien, and a crew of 4 against the long worm. The other enemies unlock at 100 m, 150 m and 300 m. A killed enemy comes back after its respawn delay, positioned relative to the lead raft.
-- **Enemies.**
-  - The wizard chases the rearmost raft at water level.
-  - The mud alien chases on a 3–100 m leash. Its aura hurts city civilians, which brings out the police.
-  - The long worm locks a strike vector, charges, then rests for 2 s.
-- **Upgrades.**
-
-  | Upgrade | Cost | Effect |
-  |---|---|---|
-  | Motor | 10 | +200 N thrust while paddling forward; 30 % slower turn rate |
-  | Squeaky Hammer | 15 | 30 damage per hit instead of 10 |
-  | Raft Armor | 20 | +50 max HP |
-
-  You start with 50 coins. Kills pay 10, 20 or 30 coins depending on the enemy, plus 2 per wave.
-- **Death and revival.** Any raft that crosses a checkpoint revives every fallen crewmate just past that checkpoint. If the whole crew sinks, everyone regroups at the last checkpoint after 3 s. When any raft reaches the river mouth, the whole crew wins.
-- **Score** = 100 × kills + damage dealt + 1 per 10 m of best progress.
-
-### AI companions (offline mode)
-
-The bots follow a small state machine: `follow → engage → evade → advance`.
-
-- **Follow.** A bot holds a formation slot behind you. It moves at the speed the drag model gives a paddling raft: 15 m/s, or 21 m/s with the motor.
-- **Engage.** A bot attacks the nearest enemy within 30 m, as long as that enemy is within 45 m of you. It swings every 0.7 s and blocks 35 % of incoming hits.
-- **Evade.** A bot sidesteps a charging worm and hits it while it rests.
-- **Advance.** If you sink, the bots push downriver on their own, and reaching a checkpoint revives you.
-
-Bots buy upgrades in the city band in this order: hammer, armor, motor.
-
-## Raft handling
-
-`stepWatercraftKinematics` in [`shared/game-core.js`](shared/game-core.js) is the controller, and the tests run it directly. In the browser, `driveWatercraft` sets the velocity at a fixed 60 Hz step, cannon-es resolves collisions and integrates, and `settleOnWater` applies the floor.
-
-- **Water floor.** A raft at or below the waterline that is not rising is held on `WATER_SURFACE_Y` (0.25) with zero vertical speed. No input can push it underwater.
-- **Yaw only.** The physics body has `angularFactor (0, 1, 0)`. Banking into turns, the planing nose-up, the bob and the oar strokes exist only on the Three.js child group.
-- **Keel.** Horizontal velocity is split along the heading (drag 6.7 /s) and across it (8 × that). Both are solved exactly per step, so the raft carves where it points at any frame rate.
-- **Helm.** `A`/`D` set a target yaw rate. The rate reaches it, and drops back to zero on release, at 16 /s.
-- **Jump.** Jumping sets 18 m/s upward against 30 m/s² gravity. The raft rises 5.4 m and is in the air for 1.2 s.
-
-## Architecture
-
-```
-shared/game-core.js   pure, deterministic rules: tick, spawns, waves, enemy FSMs, combat,
-                      upgrades, bots, raft-physics math. No timers, no I/O, seeded RNG.
-shared/loopback.js    in-browser Socket.io stand-in: owns a game state, ticks it at 20 Hz,
-                      and delivers routed events to local handlers (structured-cloned like wire data)
-server.js             Express + Socket.io: the same core, with events routed to rooms
-public/js/net.js      transport picker: real server if reachable, otherwise loopback
-public/js/main.js     Three.js rendering, cannon-es collisions driven by the shared watercraft controller
-                      (client-authoritative movement), chase camera, wake/splash FX
-public/js/hud.js      HUD (hull, speed/heading telemetry, river progress, wave pips, enemy bars, scoreboard,
-                      toasts, damage numbers), WebAudio SFX
-docs/index.html       static landing page → ../public/index.html?offline&bots=N
-```
-
-Every core command returns events of the form `{ event, data, to?, except? }`, and each transport routes them the same way:
-
-| Route | `server.js` | `loopback.js` |
-|---|---|---|
-| `to` | `io.to(id)` | delivered only if it targets the local player |
-| `except` | `io.except(id)` | dropped if it excludes the local player |
-| neither | broadcast | delivered |
-
-Because both transports run the identical rules, the offline game behaves the same as the online one. It also lets the test suite play a full river run headlessly.
-
-### Notes on authority
-
-- The server now uses its own wave-scaled enemy damage. It ignores the number the client reports, and only applies damage to the sender.
-- Enemy respawns and the worm's cooldown are driven by the tick clock instead of `setTimeout`. This removed a bug where police kills respawned some enemies with 0 HP.
-- The client's upgrade re-render no longer crashes. It used to read `material` on a `THREE.Group`.
-
-## Multiplayer server
+Clone and run locally:
 
 ```bash
+# Install dependencies
 npm install
-```
 
-```bash
+# Start the multiplayer server (Express + Socket.io on port 3000)
 npm start
 ```
 
-The server listens on `PORT` (default `3000`) and serves `public/`, with `shared/` at `/shared`. To make a server run reproducible, set `SEED=<int>`.
+Open `http://localhost:3000` in your browser.
 
-## Tests
+### Headless Verification & Tests
 
 ```bash
+# Run unit & simulation test suite (60Hz mechanics, enemy FSMs, net contract)
 npm test
+
+# Run core game simulation tests specifically
+node --test test/game-core.test.js
+
+# Run headless 60Hz WebGL scene-graph NaN audit & Director QA sniper
+npm run qa:helmet
 ```
 
-The suite has 77 `node:test` cases, with no browser and no dependencies:
+---
 
-- raft physics math and the watercraft controller (never below the waterline, keel grip, helm stop, jump arc)
-- upgrade costs and stats
-- wave scaling
-- spawning
-- each enemy state machine
-- combat, blocking and raft damage
-- checkpoints and team wipe
-- the network routing contract
-- bot behaviour
-- loopback transport semantics
-- seeded determinism
-- a full scripted run in which a crew escapes the river through all 10 waves
+## Core Handling & Physical Mechanics
+
+The watercraft simulation solves exact hydrodynamic drag, keel grip, and momentum at a fixed 60Hz step.
+
+### Twin Articulated Oars (`remos`) & Hydrodynamics
+- **Articulated Remos:** The craft mounts twin independently articulated oars—port (`leftPaddle`) and starboard (`rightPaddle`).
+- **Timed Rhythmic Pulls (`[W]`):** Prior to buying an outboard motor, paddling forward is a manual stroke cycle (Catch $\rightarrow$ Power Pull $\rightarrow$ Glide Recovery). Hitting `[W]` dips the blades and accelerates the craft along its heading.
+- **Fast-Press Choke Penalty:** Spamming `[W]` before the active pull finishes yanks the blades out of the water prematurely. This chokes the stroke, induces a slip stall, cuts forward speed by 32%, and sheds water in an erratic spray.
+- **Outboard Motor:** Purchasing the motor replaces manual stroke timing with continuous throttle, converting forward propulsion to steady mechanical drive with reduced turning agility.
+
+### Side-Aware Melee Combat & Guard
+- **Directional Oar Strikes:** Left-click triggers an oar swing. The pilot dynamically lifts and swings the port oar (`leftPaddle`) or starboard oar (`rightPaddle`) depending on which side the enemy threatens.
+- **Dual-Oar Parry (`X-Guard`):** Holding Right-Click crosses both oars across the chest. Blocks absorb 80% incoming damage, eliminate knockback throws, and prevent capsizing.
+- **On-Foot Mobility:** Jumping onto solid docks or elevated vegetation prompts the player to hoist the raft overhead, swapping row mechanics for on-foot footwork.
+
+---
+
+## The 3 Dream Entities & The Dread Kraken
+
+The river spawns three distinct entities drawn from the dream draft, scaling across distance and party size, concluding in an apex encounter.
+
+1. **The White Entity in the Wizard Hat (`whiteGuy`):**
+   - Haunts the water surface, relentlessly targeting whichever raft trails behind the pack.
+   - Casts telekinetic vortexes that pick up and hurl rafts across the river.
+   - **Counterplay:** Players who jump onto the riverbank vegetation or wooden side-planks (`costado`) stand above the water line (`y > 1.0m`), granting total immunity to its grip. In the water, coordinated `2v1` dual-oar strikes stagger the entity and spin its wizard hat in real-time.
+
+2. **The 3-Legged Headless Mud Alien (`mudAlien`):**
+   - Stalks crafts along a 3m–100m pursuit leash.
+   - Emits a periodic toxic shockwave aura. If lured past the harbor sea wall into the Riverside City, its AoE damages dockside civilians, provoking local Police marksmen into opening suppressive fire that tears the alien apart.
+
+3. **The 26-Segment Nokia-Vector Long Worm (`longWorm`):**
+   - An undulating multi-segment predator with procedural inverse kinematics.
+   - Locks a ballistic strike vector from upriver, charges at high speed, and goes dormant for 2.0 seconds after lunging—leaving its vitals vulnerable to flanking hits.
+
+4. **The River Mouth Apex: The Dread Kraken (`z = -1350`):**
+   - Spawns at the river terminus where the channel expands into an open caldera.
+   - A 3-phase encounter with procedural tentacle sweeps, armored barnacle weak points, crushing whirlpool currents, and shockwave water plumes. Defeating the Kraken clears the passage to the open ocean.
+
+---
+
+## Controls
+
+| Key / Input | Action |
+|---|---|
+| `W` | Pull oars (timed rhythm pre-motor) / Continuous throttle (motorized) |
+| `S` | Backwater braking / reverse stroke |
+| `A` / `D` | Steer port / starboard (direct yaw torque with rapid release damping) |
+| `Space` | Jump from water or docks; hoists raft overhead mid-air |
+| Left Click | Side-aware oar melee strike (targets nearest threat flank) |
+| Right Click (Hold) | Dual-oar crossed parry (`X-Guard`, 80% damage reduction) |
+| `E` | Interact / Open Armory Shop at Riverside City docks (`z: -150 to -250`) |
+| `Z` / `X` / `C` / `V` | Tactical Crew Orders (Dock / Hold Anchor / Meet at Shop / Focus Boss) |
+| `M` | Toggle audio mute |
+| Mouse Move | Orbit chase camera |
+
+---
+
+## Architecture & Determinism
+
+The client and server share core gameplay code with zero state divergence:
+
+```
+shared/game-core.js            Deterministic state machine: ticks, entity FSMs, wave scaling,
+                               raft kinematics, combat math. Zero external dependencies.
+shared/boss-kraken.js          The Dread Kraken boss state machine: 3 phases, tentacles, shockwaves.
+shared/combat-system.js        2v1 double-team combat stagger, hat spin, and parry logic.
+shared/loopback.js             In-memory Socket.io drop-in for zero-server offline play.
+server.js                      Node.js Express + Socket.io server running authoritative core.
+public/js/main.js              Three.js client, 60Hz physics sub-stepping, twin-oar rig, VFX.
+tools/qa-helmet-sniper.mjs     Headless 60Hz scene-graph and NaN verification harness.
+```
+
+- **Transport Agnostic:** If the client fails to connect to a live Socket.io host within 2.5 seconds, it automatically falls back to `shared/loopback.js` without interrupting the session.
+- **Strict Invariants:** Position vectors, quaternions, health pools, and currency balances are defensively clamped every tick to prevent NaN leaks or state corruption.

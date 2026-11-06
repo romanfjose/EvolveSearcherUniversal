@@ -468,3 +468,169 @@ export function computeDioramaLightingState({
         },
     };
 }
+
+/**
+ * Sovereign Core & Helmet 04 Directive:
+ * Computes the 0.5-second squint-test contrast & silhouette readability profile across any river coordinate z.
+ *
+ * Requirements:
+ * 1. Warm sunlit wood contrast for safe `costado` planks:
+ *    - High-contrast warm amber/gold radiance against darker river water.
+ *    - Boosted when player is grounded/docked (`onSolid = true`).
+ * 2. High-visibility oar blade highlight intensity:
+ *    - Responsive to stroke active state (`strokeActive`) and swing orientation (`swingSide`).
+ *    - Distinct port ('left') vs starboard ('right') directional emphasis.
+ * 3. Stark silhouette rim values for the 3 Dream Entities across all river acts:
+ *    - White Guy: High-key stark white/cyan rim to pop against dark river water.
+ *    - 3-Legged Mud Alien: Bioluminescent swamp-green/olive edge glow & lumpy silhouette contrast.
+ *    - Nokia-Vector Worm: Vibrant high-contrast phosphorescent vector trail & segment silhouette.
+ * 4. Specular glare and bloom ceiling clamping:
+ *    - Caps water specular reflection intensity and bloom threshold so procedural waves
+ *      never produce checkerboard artifacts or wash out the raft silhouette.
+ *
+ * @param {number} z - River downriver coordinate (<= 0).
+ * @param {object} [options]
+ * @param {boolean} [options.onSolid=false] - True if raft is resting on solid costado plank or sanctuary dock.
+ * @param {boolean} [options.strokeActive=false] - True if player or bot is actively paddling/swinging.
+ * @param {'left'|'right'|null} [options.swingSide=null] - Directional swing bias ('left', 'right', or null).
+ * @returns {SquintTestContrastProfile}
+ */
+export function computeSquintTestContrastProfile(z = 0, {
+    onSolid = false,
+    strokeActive = false,
+    swingSide = null,
+} = {}) {
+    const lighting = computeDioramaLightingState({ zPos: z });
+    const isSolid = Boolean(onSolid);
+    const isStroking = Boolean(strokeActive);
+    const side = swingSide === 'left' || swingSide === 'right' ? swingSide : null;
+    const act = lighting.actIndex;
+
+    // ─── 1. Warm Sunlit Wood Contrast for Safe Costado Planks ────────────────
+    // Planks must pop immediately against dark water so the human eye registers refuge in < 0.5s.
+    // When onSolid: true, player is on the plank; we boost perceived luminance & warm ambient fill.
+    const basePlankLuminance = act === 1 ? 0.78
+        : act === 2 ? 0.72
+        : act === 3 ? 0.65
+        : 0.60;
+    const solidBoost = isSolid ? 0.22 : 0.0;
+    const woodContrastRatio = Number(clamp(basePlankLuminance + solidBoost, 0.40, 1.0).toFixed(3));
+
+    const woodPlankProfile = {
+        baseColor: { r: 0.82, g: 0.58, b: 0.32, hex: 0xd19452 }, // Warm cedar / weathered pine
+        sunlitHighlight: isSolid ? { r: 1.0, g: 0.85, b: 0.62, hex: 0xffd99e } : { r: 0.92, g: 0.72, b: 0.48, hex: 0xebb87a },
+        contrastRatio: woodContrastRatio,
+        onSolid: isSolid,
+        isSafeHavenPop: woodContrastRatio >= 0.70,
+    };
+
+    // ─── 2. High-Visibility Oar Blade Highlight Intensity ────────────────────
+    // Active strokes/swings flare the paddle edge so the pilot/spectator immediately perceives paddle vector.
+    const baseOarIntensity = 0.45;
+    const strokeBoost = isStroking ? 0.50 : 0.0;
+    const sideBias = isStroking && side ? 0.15 : 0.0;
+    const oarIntensity = Number(clamp(baseOarIntensity + strokeBoost + sideBias, 0.20, 1.25).toFixed(3));
+
+    const oarProfile = {
+        strokeActive: isStroking,
+        swingSide: side,
+        bladeHighlightIntensity: oarIntensity,
+        leftBladeGlow: Number(clamp(baseOarIntensity + (isStroking && (side === 'left' || !side) ? 0.45 : 0.05), 0.20, 1.20).toFixed(3)),
+        rightBladeGlow: Number(clamp(baseOarIntensity + (isStroking && (side === 'right' || !side) ? 0.45 : 0.05), 0.20, 1.20).toFixed(3)),
+        flashColor: { r: 1.0, g: 0.92, b: 0.74, hex: 0xffebbc },
+    };
+
+    // ─── 3. Stark Silhouette Rim Values for the 3 Dream Entities ─────────────
+    // A. White Guy (uncanny white humanoid in wizard hat):
+    // Needs stark key/rim contrast to pop against river water and misty canyon backgrounds.
+    const whiteGuyRim = Number(clamp(
+        act === 1 ? 0.95
+        : act === 2 ? 0.88
+        : act === 3 ? 0.92
+        : 0.98,
+        0.5, 1.0
+    ).toFixed(3));
+
+    // B. 3-Legged Mud Alien (brown-green lumpy tripod monster):
+    // Uses swamp-toxic rim/silhouette contrast so its formless silhouette doesn't drown into dark water.
+    const mudAlienRim = Number(clamp(
+        act === 1 ? 0.76
+        : act === 2 ? 0.82
+        : act === 3 ? 0.90
+        : 0.84,
+        0.5, 1.0
+    ).toFixed(3));
+
+    // C. Nokia-Vector Long Worm (26-segment straight-line snake):
+    // Crisp phosphor rim vector trail so segments pop like an arcade screen.
+    const nokiaWormRim = Number(clamp(
+        act === 1 ? 0.85
+        : act === 2 ? 0.90
+        : act === 3 ? 0.98
+        : 0.94,
+        0.5, 1.0
+    ).toFixed(3));
+
+    const enemySilhouettes = {
+        whiteGuy: {
+            id: 'whiteGuy',
+            name: 'White Guy in Wizard Hat',
+            rimIntensity: whiteGuyRim,
+            rimColor: { r: 0.95, g: 0.98, b: 1.0, hex: 0xf2faff }, // Stark icy/ethereal white
+            minSquintContrast: 0.75,
+            passesSquintTest: whiteGuyRim >= 0.75,
+        },
+        mudAlien: {
+            id: 'mudAlien',
+            name: '3-Legged Headless Mud Alien',
+            rimIntensity: mudAlienRim,
+            rimColor: { r: 0.42, g: 0.88, b: 0.38, hex: 0x6be061 }, // Toxic swamp green
+            minSquintContrast: 0.70,
+            passesSquintTest: mudAlienRim >= 0.70,
+        },
+        nokiaWorm: {
+            id: 'longWorm',
+            name: 'Nokia-Vector Long Worm',
+            rimIntensity: nokiaWormRim,
+            rimColor: { r: 0.32, g: 0.95, b: 0.85, hex: 0x52f3d9 }, // Retro arcade phosphor cyan
+            minSquintContrast: 0.80,
+            passesSquintTest: nokiaWormRim >= 0.80,
+        },
+    };
+
+    // ─── 4. Specular Glare & Bloom Clamping (Zero Checkerboard Artifacts) ─────
+    // Water reflections must never produce checkerboard artifacts or wash out the raft silhouette.
+    const rawSpecular = lighting.waterSpecular.specularIntensity;
+    const clampedSpecularGlare = Number(clamp(rawSpecular, 0.40, 1.25).toFixed(3));
+    const bloomCeiling = Number(clamp(1.40 - clampedSpecularGlare * 0.25, 0.65, 1.15).toFixed(3));
+    const antiCheckerboardSuppression = Number(clamp(1.0 - (rawSpecular > 1.20 ? (rawSpecular - 1.20) * 0.5 : 0), 0.85, 1.0).toFixed(3));
+    const raftSilhouetteProtection = Number(clamp(1.0 - clampedSpecularGlare * 0.15, 0.75, 1.0).toFixed(3));
+
+    const waterGlareControl = {
+        rawSpecularIntensity: rawSpecular,
+        clampedSpecularGlare,
+        bloomCeiling,
+        antiCheckerboardSuppression,
+        raftSilhouetteProtection,
+        isCheckerboardSuppressed: antiCheckerboardSuppression >= 0.85,
+        isRaftSilhouetteProtected: raftSilhouetteProtection >= 0.75,
+    };
+
+    return {
+        z,
+        actIndex: act,
+        primaryBiomeId: lighting.primaryBiomeId,
+        woodPlanks: woodPlankProfile,
+        oarBlade: oarProfile,
+        enemies: enemySilhouettes,
+        waterGlareControl,
+        squintTestPassed: (
+            woodPlankProfile.contrastRatio >= 0.60 &&
+            enemySilhouettes.whiteGuy.passesSquintTest &&
+            enemySilhouettes.mudAlien.passesSquintTest &&
+            enemySilhouettes.nokiaWorm.passesSquintTest &&
+            waterGlareControl.isCheckerboardSuppressed &&
+            waterGlareControl.isRaftSilhouetteProtected
+        ),
+    };
+}

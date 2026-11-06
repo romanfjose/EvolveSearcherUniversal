@@ -3,10 +3,21 @@
  * Combat Elevation & Safe-Height Fairness Test Suite
  * (`test/qa-wave5c-combat-elevation-fairness.test.js`)
  *
- * Mission w5c-08: Verifies that players standing on Sanctuary Platforms / elevated
- * docks (y > PLAYER.safeHeight) can strike enemies below or near the dock edge with
- * ranged/oar melee swings while remaining 100% protected from waterborne enemy lunges
- * and throws.
+ * Mission w5c-08 & Helmet 05 Upgrade:
+ * Verifies:
+ * 1. Players standing on Sanctuary Platforms / elevated docks (y > PLAYER.safeHeight)
+ *    can strike enemies below or near the dock edge with ranged/oar melee swings while
+ *    remaining 100% protected from waterborne enemy lunges and throws.
+ * 2. Directional Oar Strikes (`resolveDirectionalOarStrike`):
+ *    - Accurately detects enemy side ('left' vs 'right') relative to heading yaw.
+ *    - Sweeps port (left) outward to port + forward (-Z downriver).
+ *    - Sweeps starboard (right) outward to starboard + forward.
+ *    - 1.5x punish multiplier when striking staggered enemies.
+ *    - Upgraded Squeaky Hammer weapon damage integration.
+ * 3. Enemy Pursuit Fairness (`evaluateEnemyPursuitFairness`):
+ *    - Guarantees early-game pre-motor manual rowing has an honest escape margin under rhythmic strokes.
+ *    - Motorized crafts maintain adequate escape margins.
+ *    - Solid platform resting halts pursuit attrition completely.
  *
  * Strict Adversarial Invariants & Guarantees Tested:
  * 1. Safe-Height Immunity (Waterborne Enemy Lunge Protection):
@@ -28,6 +39,12 @@
  *    - Multi-Enemy Dock Siege: Multiple enemies swarming platform perimeter; player cleaves through them without taking contact damage.
  *    - Fuzzing & NaN Resilience: Non-finite player/enemy positions do not throw or crash combat resolver.
  *    - Block/Parry Interaction on Deck: Elevated player can block without losing positional stability or platform solid state.
+ *
+ * 4. Helmet 05 — Directional Oar Strikes & Kinetic Punch:
+ *    - Side detection, heading angle rotations, lateral + forward knockback vectors, and 1.5x punish multiplier.
+ *
+ * 5. Helmet 05 — Early-Game Pre-Motor Pursuit Fairness & Escape Margin:
+ *    - Pre-motor manual rowing vs motorized propulsion vs sanctuary dock immunity.
  *
  * Zero external dependencies, pure ES module, standard node:test and node:assert/strict.
  */
@@ -63,6 +80,13 @@ import {
     selectDeterministicTarget,
     ENEMY_ARCHETYPES,
 } from '../shared/swarm-stress.js';
+
+import {
+    COMBAT_ELEVATION_CONFIG,
+    isElevatedAboveSafeHeight,
+    resolveDirectionalOarStrike,
+    evaluateEnemyPursuitFairness,
+} from '../shared/combat-elevation.js';
 
 // Helper to construct a clean, isolated game state with deterministic RNG
 function setupTestState(seed = 1337) {
@@ -401,6 +425,253 @@ describe('Helmet 03 — QA Combat Elevation & Safe-Height Fairness Suite', () =>
                 assert.equal(events.length, 0, `Wave ${wave}: safe-height immunity must hold 100%`);
                 assert.equal(state.players.p1.health, PLAYER.startHealth);
             }
+        });
+    });
+
+    describe('4. Helmet 05 — Directional Oar Strikes & Kinetic Punch', () => {
+
+        it('identifies starboard (right) enemy relative to downriver heading and cleanly connects right oar sweep', () => {
+            const attackerPos = { x: 0, y: 0.25, z: 0 };
+            const attackerYaw = 0; // Facing -Z
+            const enemyPos = { x: 2.0, y: 0.25, z: -1.0 }; // Starboard (+X) and slightly downriver (-Z)
+
+            const res = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw,
+                swingSide: 'right',
+                enemyPos,
+                isStaggered: false,
+                hasHammer: false,
+            });
+
+            assert.equal(res.hit, true, 'Right oar must hit enemy on starboard side');
+            assert.equal(res.enemySide, 'right');
+            assert.equal(res.sideMatch, true);
+            assert.equal(res.damage, COMBAT_ELEVATION_CONFIG.BASE_OAR_DAMAGE);
+            // Right sweep knocks outward to starboard (+X) and forward (-Z)
+            assert.ok(res.knockback.x > 0, 'Starboard knockback must have positive X');
+            assert.ok(res.knockback.z < 0, 'Downriver knockback must have negative Z');
+            assert.ok(res.knockback.magnitude > 0);
+        });
+
+        it('identifies port (left) enemy relative to downriver heading and cleanly connects left oar sweep', () => {
+            const attackerPos = { x: 0, y: 0.25, z: 0 };
+            const attackerYaw = 0; // Facing -Z
+            const enemyPos = { x: -2.0, y: 0.25, z: -1.0 }; // Port (-X) and downriver (-Z)
+
+            const res = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw,
+                swingSide: 'left',
+                enemyPos,
+                isStaggered: false,
+                hasHammer: false,
+            });
+
+            assert.equal(res.hit, true, 'Left oar must hit enemy on port side');
+            assert.equal(res.enemySide, 'left');
+            assert.equal(res.sideMatch, true);
+            assert.equal(res.damage, COMBAT_ELEVATION_CONFIG.BASE_OAR_DAMAGE);
+            // Left sweep knocks outward to port (-X) and forward (-Z)
+            assert.ok(res.knockback.x < 0, 'Port knockback must have negative X');
+            assert.ok(res.knockback.z < 0, 'Downriver knockback must have negative Z');
+            assert.ok(res.knockback.magnitude > 0);
+        });
+
+        it('applies 1.5x punish multiplier to damage and knockback when striking a staggered enemy', () => {
+            const attackerPos = { x: 0, y: 0.25, z: 0 };
+            const enemyPos = { x: 2.0, y: 0.25, z: -1.5 };
+
+            const normalRes = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw: 0,
+                swingSide: 'right',
+                enemyPos,
+                isStaggered: false,
+            });
+
+            const punishRes = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw: 0,
+                swingSide: 'right',
+                enemyPos,
+                isStaggered: true,
+            });
+
+            assert.equal(normalRes.hit, true);
+            assert.equal(punishRes.hit, true);
+            assert.equal(punishRes.punishApplied, true);
+            assert.equal(punishRes.damage, Math.round(normalRes.damage * 1.5));
+            assert.ok(punishRes.knockback.magnitude > normalRes.knockback.magnitude * 1.45);
+        });
+
+        it('applies Squeaky Hammer weapon upgrade stats from directional oar strikes', () => {
+            const attackerPos = { x: 0, y: 0.25, z: 0 };
+            const enemyPos = { x: 1.8, y: 0.25, z: -1.0 };
+
+            const hammerRes = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw: 0,
+                swingSide: 'right',
+                enemyPos,
+                isStaggered: false,
+                hasHammer: true,
+            });
+
+            assert.equal(hammerRes.hit, true);
+            assert.equal(hammerRes.damage, COMBAT_ELEVATION_CONFIG.HAMMER_OAR_DAMAGE);
+
+            const staggeredHammerRes = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw: 0,
+                swingSide: 'right',
+                enemyPos,
+                isStaggered: true,
+                hasHammer: true,
+            });
+
+            assert.equal(staggeredHammerRes.hit, true);
+            assert.equal(staggeredHammerRes.damage, Math.round(COMBAT_ELEVATION_CONFIG.HAMMER_OAR_DAMAGE * 1.5));
+            assert.equal(staggeredHammerRes.damage, 45);
+        });
+
+        it('correctly rotates lateral sweep orientation when raft is turned 90 degrees (yaw = PI / 2)', () => {
+            // Yaw = PI/2 -> heading towards -X (fwdX = -1, fwdZ = 0; rightX = 0, rightZ = -1)
+            const attackerPos = { x: 0, y: 0.25, z: 0 };
+            const attackerYaw = Math.PI / 2;
+
+            // Enemy located at (x = -1, z = -2) -> ahead in -X and starboard in -Z
+            const enemyPos = { x: -1.0, y: 0.25, z: -2.0 };
+
+            const res = resolveDirectionalOarStrike({
+                attackerPos,
+                attackerYaw,
+                swingSide: 'right',
+                enemyPos,
+            });
+
+            assert.equal(res.hit, true);
+            assert.equal(res.enemySide, 'right');
+            // Knockback forward along heading (-X) and outward to starboard (-Z)
+            assert.ok(res.knockback.x < 0, 'Heading forward (-X) knockback');
+            assert.ok(res.knockback.z < 0, 'Starboard lateral (-Z) knockback');
+        });
+
+        it('fails to hit when enemy is significantly out of reach or beyond vertical elevation limit', () => {
+            const attackerPos = { x: 0, y: 0.25, z: 0 };
+            const distantEnemyPos = { x: 10.0, y: 0.25, z: 0 };
+
+            const resDistant = resolveDirectionalOarStrike({
+                attackerPos,
+                swingSide: 'right',
+                enemyPos: distantEnemyPos,
+            });
+            assert.equal(resDistant.hit, false);
+            assert.equal(resDistant.damage, 0);
+
+            const highEnemyPos = { x: 1.5, y: 8.0, z: -1.0 };
+            const resHigh = resolveDirectionalOarStrike({
+                attackerPos,
+                swingSide: 'right',
+                enemyPos: highEnemyPos,
+            });
+            assert.equal(resHigh.hit, false);
+            assert.equal(resHigh.damage, 0);
+        });
+
+        it('sanitizes non-finite or degenerate inputs gracefully without crashing', () => {
+            const res = resolveDirectionalOarStrike({
+                attackerPos: { x: NaN, y: Infinity, z: null },
+                attackerYaw: NaN,
+                swingSide: 'right',
+                enemyPos: { x: undefined, y: NaN, z: 0 },
+            });
+
+            assert.equal(typeof res.hit, 'boolean');
+            assert.equal(res.damage, 0);
+            assert.equal(res.knockback.magnitude, 0);
+        });
+    });
+
+    describe('5. Helmet 05 — Early-Game Pre-Motor Pursuit Fairness & Escape Margin', () => {
+
+        it('guarantees solid sanctuary platforms grant complete immunity and infinite escape margin', () => {
+            const res = evaluateEnemyPursuitFairness({
+                playerSpeed: 0,
+                enemySpeed: 15.0, // White Guy max speed
+                hasMotor: false,
+                onSolid: true,
+            });
+
+            assert.equal(res.isFair, true);
+            assert.equal(res.status, 'safe_haven');
+            assert.equal(res.escapeMargin, Infinity);
+            assert.equal(res.recommendedPlayerBoost, 0);
+        });
+
+        it('verifies early-game rhythmic pre-motor rowing (speed = 15 m/s) maintains fair escape against White Guy (speed = 15 m/s)', () => {
+            const res = evaluateEnemyPursuitFairness({
+                playerSpeed: 15.0,
+                enemySpeed: ENEMY_TYPES.whiteGuy.speed, // 15
+                hasMotor: false,
+                onSolid: false,
+            });
+
+            assert.equal(res.isFair, true, 'Rhythmic manual rowing matching enemy speed must be evaluated as fair');
+            assert.equal(res.status, 'rowing_fair_escape');
+            assert.equal(res.recommendedPlayerBoost, 0);
+        });
+
+        it('verifies early-game rowing easily outpaces Mud Alien (speed = 10 m/s) with generous escape margin', () => {
+            const res = evaluateEnemyPursuitFairness({
+                playerSpeed: 14.0,
+                enemySpeed: ENEMY_TYPES.mudAlien.speed, // 10
+                hasMotor: false,
+                onSolid: false,
+            });
+
+            assert.equal(res.isFair, true);
+            assert.equal(res.status, 'rowing_fair_escape');
+            assert.ok(res.escapeMargin >= COMBAT_ELEVATION_CONFIG.PRE_MOTOR_ROWING_ESCAPE_MARGIN);
+            assert.equal(res.recommendedPlayerBoost, 0);
+        });
+
+        it('flags unfair pursuit pacing when enemy speed severely outpaces manual rowing without motor', () => {
+            // Player paddling slowly or exhausted (e.g. 5 m/s) vs fast charging enemy (30 m/s)
+            const res = evaluateEnemyPursuitFairness({
+                playerSpeed: 5.0,
+                enemySpeed: 30.0,
+                hasMotor: false,
+                onSolid: false,
+            });
+
+            assert.equal(res.isFair, false);
+            assert.equal(res.status, 'rowing_unfair_pressure');
+            assert.ok(res.recommendedPlayerBoost > 0);
+            assert.ok(res.summary.includes('without adequate escape window'));
+        });
+
+        it('verifies motorized crafts maintain fair pursuit advantage over standard enemies', () => {
+            const res = evaluateEnemyPursuitFairness({
+                playerSpeed: 20.0,
+                enemySpeed: 15.0,
+                hasMotor: true,
+                onSolid: false,
+            });
+
+            assert.equal(res.isFair, true);
+            assert.equal(res.status, 'motorized_advantaged');
+            assert.ok(res.escapeMargin > 0);
+            assert.equal(res.recommendedPlayerBoost, 0);
+        });
+
+        it('validates helper isElevatedAboveSafeHeight accurately distinguishes platform elevation', () => {
+            assert.equal(isElevatedAboveSafeHeight({ y: 1.5 }), true);
+            assert.equal(isElevatedAboveSafeHeight({ y: 2.0 }), true);
+            assert.equal(isElevatedAboveSafeHeight({ y: 1.0 }), false);
+            assert.equal(isElevatedAboveSafeHeight({ y: 0.25 }), false);
+            assert.equal(isElevatedAboveSafeHeight({ y: NaN }), false);
+            assert.equal(isElevatedAboveSafeHeight(null), false);
         });
     });
 });

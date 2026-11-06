@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -14,7 +14,9 @@ import {
     auditSnapshotIntegrity,
     applySanitizedSnapshotToHUD,
     applySanitizedSnapshotToThreeObject,
-} from '../shared/qa-snapshot-sanitizer.js';
+    sanitizeOarAndCombatPayload,
+    COMBAT_SANITIZER_COUNTERS,
+} from '../shared/snapshot-sanitizer.js';
 
 import {
     sanitizeObject3DTree,
@@ -379,6 +381,128 @@ describe('Helmet 02 QA Breaker: Multiplayer Snapshot Sanitization & Defensive In
                 assert.equal(Number.isFinite(sanitized.players.p1.position.x), true);
                 assert.equal(Array.isArray(sanitized.players.p1.upgrades), true);
             }
+        });
+    });
+
+    describe('9. Helmet 02: Oar & Combat Payload Sanitization', () => {
+        beforeEach(() => {
+            COMBAT_SANITIZER_COUNTERS.resetDiagnostics();
+        });
+
+        it('guarantees swingSide is strictly "left" or "right" and defaults invalid inputs to "right"', () => {
+            const validLeft = sanitizeOarAndCombatPayload({ swingSide: 'left' });
+            assert.equal(validLeft.swingSide, 'left');
+            assert.equal(validLeft.diagnostics.healedSwingSide, false);
+
+            const validRight = sanitizeOarAndCombatPayload({ swingSide: 'right' });
+            assert.equal(validRight.swingSide, 'right');
+            assert.equal(validRight.diagnostics.healedSwingSide, false);
+
+            const invalidInputs = [undefined, null, '', 'center', 'both', 123, NaN, {}, []];
+            for (const invalid of invalidInputs) {
+                const sanitized = sanitizeOarAndCombatPayload({ swingSide: invalid });
+                assert.equal(sanitized.swingSide, 'right');
+                assert.equal(sanitized.diagnostics.healedSwingSide, true);
+            }
+
+            assert.equal(COMBAT_SANITIZER_COUNTERS.healedSwingSide, invalidInputs.length);
+        });
+
+        it('strictly clamps strokePhase, strokeChoked, and swing to [0, 1]', () => {
+            const clean = sanitizeOarAndCombatPayload({
+                strokePhase: 0.45,
+                strokeChoked: 0.2,
+                swing: 0.8,
+            });
+            assert.equal(clean.strokePhase, 0.45);
+            assert.equal(clean.strokeChoked, 0.2);
+            assert.equal(clean.swing, 0.8);
+            assert.equal(clean.diagnostics.clampedStrokePhase, false);
+            assert.equal(clean.diagnostics.clampedStrokeChoked, false);
+            assert.equal(clean.diagnostics.clampedSwing, false);
+
+            // Test underflow, overflow, NaN, Infinity, string
+            const corrupt = sanitizeOarAndCombatPayload({
+                strokePhase: -0.5,
+                strokeChoked: 2.75,
+                swing: NaN,
+            });
+            assert.equal(corrupt.strokePhase, 0);
+            assert.equal(corrupt.strokeChoked, 1);
+            assert.equal(corrupt.swing, 0);
+            assert.equal(corrupt.diagnostics.clampedStrokePhase, true);
+            assert.equal(corrupt.diagnostics.clampedStrokeChoked, true);
+            assert.equal(corrupt.diagnostics.clampedSwing, true);
+
+            assert.equal(COMBAT_SANITIZER_COUNTERS.clampedStrokePhase, 1);
+            assert.equal(COMBAT_SANITIZER_COUNTERS.clampedStrokeChoked, 1);
+            assert.equal(COMBAT_SANITIZER_COUNTERS.clampedSwing, 1);
+
+            const infCorrupt = sanitizeOarAndCombatPayload({
+                strokePhase: Infinity,
+                strokeChoked: -Infinity,
+                swing: 9999,
+            });
+            assert.equal(infCorrupt.strokePhase, 0);
+            assert.equal(infCorrupt.strokeChoked, 0);
+            assert.equal(infCorrupt.swing, 1);
+        });
+
+        it('strips NaN and Infinity from position, velocity, and quaternion with loud diagnostic counters', () => {
+            const rawHostile = {
+                swingSide: 'left',
+                position: { x: NaN, y: Infinity, z: -100 },
+                velocity: { x: 5, y: -Infinity, z: 20 },
+                quaternion: { x: NaN, y: 0, z: 0, w: 0 },
+            };
+
+            const result = sanitizeOarAndCombatPayload(rawHostile);
+
+            // Diagnostics should loudly record heals
+            assert.equal(result.diagnostics.healedPosition, true);
+            assert.equal(result.diagnostics.healedVelocity, true);
+            assert.equal(result.diagnostics.healedQuaternion, true);
+            assert.equal(COMBAT_SANITIZER_COUNTERS.healedPosition, 1);
+            assert.equal(COMBAT_SANITIZER_COUNTERS.healedVelocity, 1);
+            assert.equal(COMBAT_SANITIZER_COUNTERS.healedQuaternion, 1);
+
+            // Fields must be safely restored to finite values
+            assert.equal(Number.isFinite(result.position.x), true);
+            assert.equal(Number.isFinite(result.position.y), true);
+            assert.equal(Number.isFinite(result.position.z), true);
+            assert.equal(result.position.x, SNAPSHOT_SANITIZER_LIMITS.DEFAULT_POS_X);
+            assert.equal(result.position.y, SNAPSHOT_SANITIZER_LIMITS.DEFAULT_POS_Y);
+            assert.equal(result.position.z, -100);
+
+            assert.equal(Number.isFinite(result.velocity.x), true);
+            assert.equal(Number.isFinite(result.velocity.y), true);
+            assert.equal(Number.isFinite(result.velocity.z), true);
+            assert.equal(result.velocity.x, 5);
+            assert.equal(result.velocity.y, 0);
+            assert.equal(result.velocity.z, 20);
+
+            assert.equal(Number.isFinite(result.quaternion.x), true);
+            assert.equal(Number.isFinite(result.quaternion.y), true);
+            assert.equal(Number.isFinite(result.quaternion.z), true);
+            assert.equal(Number.isFinite(result.quaternion.w), true);
+            assert.equal(result.quaternion.w, 1);
+        });
+
+        it('handles null, undefined, empty object without crashing and yields safe defaults', () => {
+            const res1 = sanitizeOarAndCombatPayload();
+            assert.equal(res1.swingSide, 'right');
+            assert.equal(res1.strokePhase, 0);
+            assert.equal(res1.strokeChoked, 0);
+            assert.equal(res1.swing, 0);
+            assert.equal(typeof res1.position, 'object');
+            assert.equal(typeof res1.velocity, 'object');
+            assert.equal(typeof res1.quaternion, 'object');
+
+            const res2 = sanitizeOarAndCombatPayload(null);
+            assert.equal(res2.swingSide, 'right');
+
+            const res3 = sanitizeOarAndCombatPayload('corrupt_string');
+            assert.equal(res3.swingSide, 'right');
         });
     });
 });

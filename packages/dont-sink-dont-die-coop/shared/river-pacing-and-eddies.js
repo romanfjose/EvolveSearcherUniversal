@@ -67,6 +67,30 @@ export const PACING_ZONES = Object.freeze({
         DRAG_MULTIPLIER: 4.5,        // Rapid velocity settling when anchored
         MIN_SETTLE_SPEED: 0.05,      // Speed below which velocity snaps to 0
     }),
+
+    // Helmet 03 (Pacing, Narrative & Essence): Pre-motor tension curve and costado eddy margins
+    ESSENCE_PACING: Object.freeze({
+        PRE_MOTOR_CURRENT_SCALE: 0.14,      // Deliberate ~0.95 m/s drift for oar-powered rafts
+        POST_MOTOR_CURRENT_SCALE: 0.28,     // Outboard motor cruising current scale
+        EARLY_PURSUIT_SPEED_CAP: 3.3,       // Grounded White Guy early pursuit cap (~3.3 m/s)
+        MOTOR_PURSUIT_SPEED_CAP: 15.0,      // Full pursuit speed once outboard motor is equipped
+        COSTADO_THRESHOLD_RATIO: 0.72,      // |x| > channelHalfWidth * 0.72 defines costado shelter
+        COSTADO_MIN_RELIEF_FACTOR: 0.20,    // Residual current factor at extreme vegetation edge
+        TIMED_OAR_SPEED_MIN: 4.8,           // Velocity lower bound of clean, timed oar strokes (m/s)
+        TIMED_OAR_SPEED_MAX: 6.0,           // Velocity upper bound of clean, timed oar strokes (m/s)
+        CYCLE_LENGTH_Z: 140.0,              // Z interval of full tension cycle (quiet -> threat -> scramble -> breather)
+    }),
+});
+
+/**
+ * Tension curve phases for pre-motor river navigation.
+ */
+export const TENSION_PHASES = Object.freeze({
+    QUIET: 'quiet',
+    THREAT: 'threat',
+    SCRAMBLE: 'scramble',
+    BREATHER: 'breather',
+    MOTOR_CRUISING: 'motor_cruising',
 });
 
 /**
@@ -295,5 +319,174 @@ export function toggleRaftAnchor(playerState, options = {}) {
         anchorDropped: nextAnchor,
         toggled: currentAnchor !== nextAnchor,
         timestamp,
+    };
+}
+
+/**
+ * Computes pre-motor rowing pacing, tension phase, and enemy pursuit speed caps.
+ *
+ * Enforces Helmet 03 (Synthetic José Pacing, Narrative & Essence Director):
+ * Models the Quiet -> Threat -> Scramble -> Breather survival tension curve:
+ * 1. Pre-motor open water uses a deliberate `currentScale = 0.14` (~0.95 m/s drift)
+ *    and caps early-game White Guy pursuit speed at ~3.3 m/s so timed oar pulls
+ *    (~4.8-6.0 m/s) beat him while choked/spammed strokes lose ground.
+ * 2. Post-motor (`hasMotor = true`) transitions cleanly to `currentScale = 0.28`
+ *    and full pursuit speed.
+ *
+ * @param {object} [options]
+ * @param {number} [options.z=0] - World Z coordinate of craft (progressing into negative Z)
+ * @param {boolean} [options.hasMotor=false] - Whether outboard motor upgrade is active
+ * @param {number} [options.strokeCadence=0] - Oar strokes per second (ideal 1.0 - 1.4 Hz)
+ * @param {number} [options.chokedRatio=0] - Ratio of short/spammed strokes (0.0 to 1.0)
+ * @returns {{ currentScale: number, enemyPursuitSpeedCap: number, breatherActive: boolean, tensionPhase: string }}
+ */
+export function computePreMotorRowingPacing({
+    z = 0,
+    hasMotor = false,
+    strokeCadence = 0,
+    chokedRatio = 0,
+} = {}) {
+    const safeZ = Number.isFinite(z) ? z : 0;
+    const safeCadence = Number.isFinite(strokeCadence) ? Math.max(0, strokeCadence) : 0;
+    const safeChoked = Number.isFinite(chokedRatio) ? clamp(chokedRatio, 0.0, 1.0) : 0.0;
+
+    // Post-motor: engine powers through, leaving oar-rhythm curve behind
+    if (hasMotor) {
+        return {
+            currentScale: PACING_ZONES.ESSENCE_PACING.POST_MOTOR_CURRENT_SCALE,
+            enemyPursuitSpeedCap: PACING_ZONES.ESSENCE_PACING.MOTOR_PURSUIT_SPEED_CAP,
+            breatherActive: false,
+            tensionPhase: TENSION_PHASES.MOTOR_CRUISING,
+        };
+    }
+
+    // Pre-motor: Deliberate river drift scale (0.14 = ~0.95 m/s)
+    const currentScale = PACING_ZONES.ESSENCE_PACING.PRE_MOTOR_CURRENT_SCALE;
+
+    // Harbor basin is an absolute calm sanctuary / breather
+    if (isInHarborBasin(safeZ)) {
+        return {
+            currentScale: 0.0,
+            enemyPursuitSpeedCap: 0.0,
+            breatherActive: true,
+            tensionPhase: TENSION_PHASES.BREATHER,
+        };
+    }
+
+    // Determine tension phase along the river course:
+    // River distance progresses in negative Z from 0 to -1500+
+    // Repeatable survival rhythm: Quiet (40%) -> Threat (25%) -> Scramble (20%) -> Breather (15%)
+    const cycleZ = PACING_ZONES.ESSENCE_PACING.CYCLE_LENGTH_Z;
+    const rawDist = Math.max(0, -safeZ);
+    const cyclePos = (rawDist % cycleZ) / cycleZ;
+
+    let tensionPhase;
+    let breatherActive = false;
+
+    // Stroke choking/spamming can force a player into Scramble mode if in Threat
+    if (cyclePos < 0.40) {
+        // Quiet stretch: fog, calm river sounds, player plans ahead
+        tensionPhase = TENSION_PHASES.QUIET;
+    } else if (cyclePos < 0.65) {
+        // Threat stretch: White Guy appears in distance, shadows creep
+        if (safeChoked > 0.45) {
+            // Choking strokes turns Threat into a panic Scramble
+            tensionPhase = TENSION_PHASES.SCRAMBLE;
+        } else {
+            tensionPhase = TENSION_PHASES.THREAT;
+        }
+    } else if (cyclePos < 0.85) {
+        // Scramble stretch: active escape / maneuvering, oar timing tested
+        tensionPhase = TENSION_PHASES.SCRAMBLE;
+    } else {
+        // Breather stretch: clearing in fog, platform approaching, momentary relief
+        tensionPhase = TENSION_PHASES.BREATHER;
+        breatherActive = true;
+    }
+
+    // Enemy pursuit speed cap:
+    // Capped at ~3.3 m/s during early game / pre-motor navigation.
+    // If the player spams/chokes strokes (high chokedRatio), enemy closes distance naturally
+    // because the player's forward speed drops below 3.3 m/s.
+    // During a breather phase, enemy pressure drops.
+    let enemyPursuitSpeedCap = PACING_ZONES.ESSENCE_PACING.EARLY_PURSUIT_SPEED_CAP;
+    if (breatherActive) {
+        enemyPursuitSpeedCap = Math.max(1.5, enemyPursuitSpeedCap * 0.5);
+    } else if (tensionPhase === TENSION_PHASES.QUIET) {
+        enemyPursuitSpeedCap = Math.max(2.0, enemyPursuitSpeedCap * 0.75);
+    }
+
+    return {
+        currentScale,
+        enemyPursuitSpeedCap: Number(enemyPursuitSpeedCap.toFixed(2)),
+        breatherActive,
+        tensionPhase,
+    };
+}
+
+/**
+ * Computes calm shoreline eddy relief near the `costado` vegetation borders.
+ *
+ * Enforces Helmet 03 (Pacing, Narrative & Essence) & Videogame Shore Design:
+ * Near the riverbanks (|x| > channelHalfWidth * 0.72), flat-topped mossy grass ledges
+ * and wood planks (`costado`) line the waterway.
+ * Hugging the banks provides genuine hydrodynamic shelter from the rushing current,
+ * dampening downstream drift so players can easily line up plank jumps.
+ *
+ * @param {number} x - Craft X coordinate
+ * @param {number} [z=0] - Craft Z coordinate
+ * @param {number} [channelHalfWidth=40] - River channel half-width (e.g. 40m for 80m river)
+ * @returns {{ inCostadoZone: boolean, reliefFactor: number, currentMultiplier: number, distanceIntoCostado: number }}
+ */
+export function computeCostadoEddyRelief(x, z = 0, channelHalfWidth = 40) {
+    if (!Number.isFinite(x) || !Number.isFinite(channelHalfWidth) || channelHalfWidth <= 0) {
+        return {
+            inCostadoZone: false,
+            reliefFactor: 0.0,
+            currentMultiplier: 1.0,
+            distanceIntoCostado: 0.0,
+        };
+    }
+
+    const absX = Math.abs(x);
+    const thresholdX = channelHalfWidth * PACING_ZONES.ESSENCE_PACING.COSTADO_THRESHOLD_RATIO;
+
+    // Center channel (|x| <= thresholdX): full current, zero costado relief
+    if (absX <= thresholdX) {
+        return {
+            inCostadoZone: false,
+            reliefFactor: 0.0,
+            currentMultiplier: 1.0,
+            distanceIntoCostado: 0.0,
+        };
+    }
+
+    // Outside river channel bounds (|x| >= channelHalfWidth): landlocked
+    if (absX >= channelHalfWidth) {
+        return {
+            inCostadoZone: true,
+            reliefFactor: 1.0,
+            currentMultiplier: 0.0,
+            distanceIntoCostado: channelHalfWidth - thresholdX,
+        };
+    }
+
+    // Inside costado margin: thresholdX < |x| < channelHalfWidth
+    const costadoWidth = channelHalfWidth - thresholdX;
+    const distanceIntoCostado = absX - thresholdX;
+    const t = clamp(distanceIntoCostado / costadoWidth, 0.0, 1.0);
+
+    // Relief factor ramps from 0.0 at threshold to 1.0 at outer edge
+    const reliefFactor = t;
+
+    // Current multiplier drops smoothly from 1.0 down to COSTADO_MIN_RELIEF_FACTOR (0.20)
+    const minFactor = PACING_ZONES.ESSENCE_PACING.COSTADO_MIN_RELIEF_FACTOR;
+    const currentMultiplier = 1.0 - (1.0 - minFactor) * t;
+
+    return {
+        inCostadoZone: true,
+        reliefFactor: Number(reliefFactor.toFixed(3)),
+        currentMultiplier: Number(currentMultiplier.toFixed(3)),
+        distanceIntoCostado: Number(distanceIntoCostado.toFixed(2)),
     };
 }

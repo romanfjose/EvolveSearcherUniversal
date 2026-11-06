@@ -330,3 +330,206 @@ describe('Biome Shoreline Landmarks Module', () => {
         assert.equal(highAct.userData.actIndex, 4);
     });
 });
+
+
+import {
+    TIER_QUIET_TEXTURE,
+    TIER_TRUE_SIGNPOST,
+    TIER_CENTERPIECE_MAGNET,
+    VALID_PAYOFF_TYPES,
+    PROGRESSION_THRESHOLDS,
+    CURATION_TIERS,
+    classifyLandmarkCurationTier,
+    curateWorldLandmarks,
+    getProgressionThresholdNearZ,
+    isNearProgressionThreshold,
+    isValidPayoffType,
+} from '../shared/biome-shoreline-landmarks.js';
+
+describe('Videogame Helmet 07: 3-Tier World Curation Law', () => {
+    it('exports all standard 3-tier curation constants and valid payoff types', () => {
+        assert.equal(TIER_QUIET_TEXTURE, 'quiet_texture');
+        assert.equal(TIER_TRUE_SIGNPOST, 'true_signpost');
+        assert.equal(TIER_CENTERPIECE_MAGNET, 'centerpiece_magnet');
+
+        assert.deepEqual(CURATION_TIERS, ['quiet_texture', 'true_signpost', 'centerpiece_magnet']);
+
+        assert.ok(VALID_PAYOFF_TYPES.includes('sanctuary_heal'));
+        assert.ok(VALID_PAYOFF_TYPES.includes('armory_dock'));
+        assert.ok(VALID_PAYOFF_TYPES.includes('police_aggro_zone'));
+        assert.ok(VALID_PAYOFF_TYPES.includes('speed_flume'));
+
+        assert.equal(isValidPayoffType('sanctuary_heal'), true);
+        assert.equal(isValidPayoffType('armory_dock'), true);
+        assert.equal(isValidPayoffType('police_aggro_zone'), true);
+        assert.equal(isValidPayoffType('speed_flume'), true);
+        assert.equal(isValidPayoffType('fake_payoff'), false);
+        assert.equal(isValidPayoffType(''), false);
+        assert.equal(isValidPayoffType(null), false);
+    });
+
+    it('identifies genuine progression thresholds along the river route', () => {
+        assert.ok(PROGRESSION_THRESHOLDS.length >= 4, 'Has at least 4 key progression thresholds');
+        const ids = PROGRESSION_THRESHOLDS.map((t) => t.id);
+        assert.ok(ids.includes('threshold_white_guy_zone'));
+        assert.ok(ids.includes('threshold_walled_harbor_city'));
+        assert.ok(ids.includes('threshold_nokia_worm_canyon'));
+        assert.ok(ids.includes('threshold_dread_kraken_arena'));
+
+        // Test getProgressionThresholdNearZ
+        const nearWhiteGuy = getProgressionThresholdNearZ(-85);
+        assert.ok(nearWhiteGuy);
+        assert.equal(nearWhiteGuy.id, 'threshold_white_guy_zone');
+
+        const nearHarbor = getProgressionThresholdNearZ(-150);
+        assert.ok(nearHarbor);
+        assert.equal(nearHarbor.id, 'threshold_walled_harbor_city');
+
+        const nearWorm = getProgressionThresholdNearZ(-765);
+        assert.ok(nearWorm);
+        assert.equal(nearWorm.id, 'threshold_nokia_worm_canyon');
+
+        const nearKraken = getProgressionThresholdNearZ(-1340);
+        assert.ok(nearKraken);
+        assert.equal(nearKraken.id, 'threshold_dread_kraken_arena');
+
+        // Test non-threshold middle-of-nowhere Z coordinate
+        const nowhere = getProgressionThresholdNearZ(-450);
+        assert.equal(nowhere, null);
+    });
+
+    it('classifyLandmarkCurationTier classifies quiet texture, true signpost, and centerpiece magnet', () => {
+        // 1. Quiet Texture: simple background pine bluff or rock
+        const quietBluff = {
+            name: 'Granite Bluff',
+            type: 'bluff',
+            z: -50,
+        };
+        assert.equal(classifyLandmarkCurationTier(quietBluff), TIER_QUIET_TEXTURE);
+
+        // 2. True Signpost: situated at genuine progression threshold
+        const harborPylon = {
+            name: 'Harbor Gate Pylon Signpost',
+            isSignpost: true,
+            z: -145,
+        };
+        assert.equal(classifyLandmarkCurationTier(harborPylon), TIER_TRUE_SIGNPOST);
+
+        // 3. Centerpiece Magnet: visually loud + non-empty payoffType
+        const sanctuaryShrine = {
+            name: 'Glowing Emerald Sanctuary Platform',
+            isGlow: true,
+            payoffType: 'sanctuary_heal',
+            z: -110,
+        };
+        assert.equal(classifyLandmarkCurationTier(sanctuaryShrine), TIER_CENTERPIECE_MAGNET);
+    });
+
+    it('classifyLandmarkCurationTier enforces Helmet 07 law against Spotlight Without Flavor', () => {
+        // Visceral Disgust: Loud glowing beacon demanding focus but lacking payoffType
+        const fakeSpotlight = {
+            name: 'Golden Spinning Pyramid of Emptiness',
+            isGlow: true,
+            spotlight: true,
+            payoffType: null, // Empty promise!
+            z: -200,
+        };
+        // Must be demoted to quiet texture
+        assert.equal(classifyLandmarkCurationTier(fakeSpotlight), TIER_QUIET_TEXTURE);
+
+        // Another empty spotlight with invalid payoff type
+        const fakeLootOrb = {
+            name: 'Pulsing Alien Orb',
+            glowing: true,
+            payoffType: 'bogus_loot_that_does_nothing',
+            z: -300,
+        };
+        assert.equal(classifyLandmarkCurationTier(fakeLootOrb), TIER_QUIET_TEXTURE);
+    });
+
+    it('classifyLandmarkCurationTier demotes Lying Signposts placed away from genuine thresholds', () => {
+        // Signpost placed randomly in the middle of nowhere without signaling any threshold
+        const randomSignpost = {
+            name: 'Random Warning Signpost in Empty Stretch',
+            isSignpost: true,
+            z: -480, // Far from any progression threshold
+        };
+        // Must be demoted to quiet texture
+        assert.equal(classifyLandmarkCurationTier(randomSignpost), TIER_QUIET_TEXTURE);
+    });
+
+    it('curateWorldLandmarks cleanses redundant clutter, spaces signposts, and preserves genuine payoffs', () => {
+        const rawLandmarks = [
+            // Genuine signpost for White Guy zone
+            { id: 'sign_wg', name: 'White Guy Danger Warning Signpost', isSignpost: true, z: -78 },
+            // Redundant signpost too close to the first one within same threshold
+            { id: 'sign_wg_dupe', name: 'Second Warning Signpost', isSignpost: true, z: -88 },
+            // Genuine Harbor City entrance signpost
+            { id: 'sign_harbor', name: 'Harbor City Welcome Pylon', isSignpost: true, z: -145 },
+            // Lying signpost in deep abyss with no threshold
+            { id: 'sign_lying', name: 'Lying Beacon Pylon', isSignpost: true, z: -500 },
+            // Valid Centerpiece: Armory dock
+            { id: 'armory_magnet', name: 'Armory Dock Crane & Forge', isGlow: true, payoffType: 'armory_dock', z: -175 },
+            // Valid Centerpiece: Police aggro zone
+            { id: 'police_magnet', name: 'Harbor Police Pier Cruiser', isGlow: true, payoffType: 'police_aggro_zone', z: -180 },
+            // Valid Centerpiece: Speed flume
+            { id: 'flume_magnet', name: 'Redwood Flume Stunt Ramp', isGlow: true, payoffType: 'speed_flume', z: -60 },
+            // Empty Centerpiece (Spotlight without flavor)
+            { id: 'empty_prop', name: 'Fake Spinning Crystal with No Payoff', isGlow: true, payoffType: undefined, z: -350 },
+            // Quiet texture
+            { id: 'rock_quiet', name: 'Mossy Shoreline Boulder', z: -20 },
+        ];
+
+        const curated = curateWorldLandmarks(rawLandmarks, { minSignpostSpacingZ: 85 });
+
+        // 1. Check all elements have curated tiers assigned
+        assert.equal(curated.length, rawLandmarks.length);
+        for (const item of curated) {
+            assert.ok(CURATION_TIERS.includes(item.curationTier));
+            assert.equal(item.tier, item.curationTier);
+        }
+
+        // 2. White Guy warning signpost is preserved as true signpost
+        const signWg = curated.find((c) => c.id === 'sign_wg');
+        assert.equal(signWg.curationTier, TIER_TRUE_SIGNPOST);
+        assert.equal(signWg.signpostThresholdId, 'threshold_white_guy_zone');
+
+        // 3. Duplicate signpost within 85m was demoted to quiet texture
+        const signWgDupe = curated.find((c) => c.id === 'sign_wg_dupe');
+        assert.equal(signWgDupe.curationTier, TIER_QUIET_TEXTURE);
+
+        // 4. Harbor City signpost is preserved as true signpost
+        const signHarbor = curated.find((c) => c.id === 'sign_harbor');
+        assert.equal(signHarbor.curationTier, TIER_TRUE_SIGNPOST);
+        assert.equal(signHarbor.signpostThresholdId, 'threshold_walled_harbor_city');
+
+        // 5. Lying signpost at z = -500 was demoted to quiet texture
+        const signLying = curated.find((c) => c.id === 'sign_lying');
+        assert.equal(signLying.curationTier, TIER_QUIET_TEXTURE);
+
+        // 6. Centerpieces with valid payoffs retain centerpiece_magnet status
+        const armory = curated.find((c) => c.id === 'armory_magnet');
+        assert.equal(armory.curationTier, TIER_CENTERPIECE_MAGNET);
+        assert.equal(armory.payoffType, 'armory_dock');
+
+        const police = curated.find((c) => c.id === 'police_magnet');
+        assert.equal(police.curationTier, TIER_CENTERPIECE_MAGNET);
+        assert.equal(police.payoffType, 'police_aggro_zone');
+
+        const flume = curated.find((c) => c.id === 'flume_magnet');
+        assert.equal(flume.curationTier, TIER_CENTERPIECE_MAGNET);
+        assert.equal(flume.payoffType, 'speed_flume');
+
+        // 7. Empty prop had its fake spotlight stripped and was demoted to quiet texture
+        const emptyProp = curated.find((c) => c.id === 'empty_prop');
+        assert.equal(emptyProp.curationTier, TIER_QUIET_TEXTURE);
+        assert.equal(emptyProp.isGlow, false);
+    });
+
+    it('curateWorldLandmarks handles empty inputs, nulls, and malformed lists gracefully', () => {
+        assert.deepEqual(curateWorldLandmarks(null), []);
+        assert.deepEqual(curateWorldLandmarks(undefined), []);
+        assert.deepEqual(curateWorldLandmarks([]), []);
+        assert.deepEqual(curateWorldLandmarks([null, undefined, {}]), [{ z: 0, tier: TIER_QUIET_TEXTURE, curationTier: TIER_QUIET_TEXTURE }]);
+    });
+});

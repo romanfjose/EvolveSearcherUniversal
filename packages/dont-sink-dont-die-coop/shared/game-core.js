@@ -213,6 +213,7 @@ export function stepWatercraftKinematics(craft, input, dt) {
 export function resolveWorldBoundsAndObstacles(craft, obstacles = [], options = {}) {
     const { position: p, velocity: v } = craft;
     let onSolid = false;
+    let hitImpact = 0;
 
     for (let i = 0; i < obstacles.length; i++) {
         const obs = obstacles[i];
@@ -241,8 +242,10 @@ export function resolveWorldBoundsAndObstacles(craft, obstacles = [], options = 
                 p.z = obs.z + nz * minDist;
                 const vn = v.x * nx + v.z * nz;
                 if (vn < 0) {
-                    v.x -= vn * nx;
-                    v.z -= vn * nz;
+                    const restitution = 0.35;
+                    hitImpact = Math.max(hitImpact, -vn);
+                    v.x -= (1 + restitution) * vn * nx;
+                    v.z -= (1 + restitution) * vn * nz;
                 }
             }
         }
@@ -268,7 +271,7 @@ export function resolveWorldBoundsAndObstacles(craft, obstacles = [], options = 
         if (v.x > 0) v.x = 0;
     }
 
-    return { onSolid };
+    return { onSolid, hitImpact };
 }
 
 /** 0 at the muddy start, 1 at the clear finish. */

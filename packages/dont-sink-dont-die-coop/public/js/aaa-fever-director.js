@@ -512,6 +512,10 @@ export function createAAAFeverDirector({
         trickVFX,
         screenFX,
         banterDirector,
+        hazardsHandle,
+        hazardsLayout,
+        krakenState,
+        krakenMesh,
         isPaused: () => isPhotoPaused,
 
         /** Called when player presses right-click or Shift to block/parry */
@@ -732,11 +736,15 @@ export function createAAAFeverDirector({
                 sfx.wave();
             }
             if (krakenState.isSpawned && !krakenState.isDefeated) {
+                krakenState.targetPosition = craft.position;
                 tickKraken(krakenState, fixedDt, [{ id: 'local', position: craft.position }]);
             }
 
-            // 9. Record Ghost Frame
+            // 9. Record Ghost Frame (Helmet 06: hard ring-buffer cap of 7200 frames so 8-hour runs use constant RAM)
             runRecorder.recordFrame(nowMs, craft.position, craft.yaw, vis?.anim?.airborne ? 1 : 0);
+            if (Array.isArray(runRecorder.frames) && runRecorder.frames.length > 7200) {
+                runRecorder.frames.shift();
+            }
         },
 
         /** Per-Frame Visual & UI Update (60-144Hz) */
@@ -776,14 +784,17 @@ export function createAAAFeverDirector({
             const camPos = camera.position;
             weatherSystem.update(dt, camPos, z);
 
-            // 3. Animate 3D Hazards, Destructibles, Fever-Dream Events, Loot, Gadgets, and Kraken
-            animateRiverHazards(hazardsHandle, elapsedSec, dt);
+            // 3. Animate 3D Hazards, Destructibles, Fever-Dream Events, Loot, Gadgets, and Kraken (with Helmet 06 spatial distance culling)
+            animateRiverHazards(hazardsHandle, elapsedSec, dt, z);
             animateDestructibles(destructiblesHandle, destructiblesState, elapsedSec, dt);
             animateDreamEvents(dreamEventsHandle, elapsedSec, dt);
             for (const item of lootPickups) {
                 const mesh = lootMeshes.get(item.id);
                 if (mesh && !item.collected) {
-                    animateLootPickupMesh(mesh, elapsedSec, dt);
+                    const itemZ = item.position?.z ?? item.z ?? 0;
+                    if (Math.abs(itemZ - z) <= 220) {
+                        animateLootPickupMesh(mesh, elapsedSec, dt);
+                    }
                 }
             }
             if (gadgetMeshesHandle) {

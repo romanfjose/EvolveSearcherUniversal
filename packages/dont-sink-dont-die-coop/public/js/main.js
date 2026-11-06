@@ -327,7 +327,19 @@ socket.on('scoreboard', (sb) => hud.renderScoreboard(sb, socket.id));
 // --- City Pedestrians & Armed Police Officers on the Riverside Promenade (z = -165..-235) ---
 let npcMeshes = {};
 let npcStateList = [];
-const policeTracers = [];
+const TRACER_POOL_SIZE = 8;
+const policeTracers = Array.from({ length: TRACER_POOL_SIZE }, () => {
+    const posArr = new Float32Array(6);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3).setUsage(THREE.DynamicDrawUsage));
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.95 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.visible = false;
+    line.frustumCulled = false;
+    scene.add(line);
+    return { line, posArr, expireAt: 0 };
+});
+let nextTracerIdx = 0;
 
 function firePoliceTracerAt(policeId, targetPos) {
     const pMesh = npcMeshes[policeId];
@@ -339,13 +351,17 @@ function firePoliceTracerAt(policeId, targetPos) {
             if (pMesh.userData?.muzzleFlash) pMesh.userData.muzzleFlash.visible = false;
         }, 90);
     }
-    const start = new THREE.Vector3(pMesh.position.x, pMesh.position.y + 0.45, pMesh.position.z);
-    const end = new THREE.Vector3(targetPos.x, targetPos.y + 1.2, targetPos.z);
-    const lineGeo = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.95 });
-    const line = new THREE.Line(lineGeo, lineMat);
-    scene.add(line);
-    policeTracers.push({ line, expireAt: performance.now() + 120 });
+    const slot = policeTracers[nextTracerIdx];
+    nextTracerIdx = (nextTracerIdx + 1) % TRACER_POOL_SIZE;
+    slot.posArr[0] = pMesh.position.x;
+    slot.posArr[1] = pMesh.position.y + 0.45;
+    slot.posArr[2] = pMesh.position.z;
+    slot.posArr[3] = targetPos.x;
+    slot.posArr[4] = targetPos.y + 1.2;
+    slot.posArr[5] = targetPos.z;
+    slot.line.geometry.attributes.position.needsUpdate = true;
+    slot.line.visible = true;
+    slot.expireAt = performance.now() + 120;
 }
 
 socket.on('npcsUpdate', (data) => {
@@ -401,8 +417,13 @@ scene.add(foamPoints);
 function emitFoam(x, y, z, vx, vy, vz, life, size) {
     const i = foam.next;
     foam.next = (i + 1) % FOAM_MAX;
-    foam.pos.set([x, y, z], i * 3);
-    foam.vel.set([vx, vy, vz], i * 3);
+    const k = i * 3;
+    foam.pos[k] = x;
+    foam.pos[k + 1] = y;
+    foam.pos[k + 2] = z;
+    foam.vel[k] = vx;
+    foam.vel[k + 1] = vy;
+    foam.vel[k + 2] = vz;
     foam.life[i] = foam.maxLife[i] = life;
     foam.base[i] = size;
 }
@@ -568,21 +589,74 @@ function createRaftMesh(color, upgrades = []) {
     return vis;
 }
 
-/** Per-frame visual life of a raft: oar strokes, articulated crew limbs, attack swing, banking, planing pitch, bob, propeller, wake. */
+function disposeObject3DTree(root) {
+    if (!root || typeof root.traverse !== 'function') return;
+    root.traverse((node) => {
+        if (node.geometry && typeof node.geometry.dispose === 'function') {
+            node.geometry.dispose();
+        }
+        if (node.material && !node.userData?.sharedMaterial) {
+            if (Array.isArray(node.material)) {
+                node.material.forEach((m) => m && typeof m.dispose === 'function' && m.dispose());
+            } else if (typeof node.material.dispose === 'function') {
+                node.material.dispose();
+            }
+        }
+    });
+}
+
+/**
+ * Per-frame visual life of a raft & survivor (Videogame Helmet 06 — Physical Common-Sense & World-Believability):
+ * - On Water (!a.onSolid && !a.airborne): mounted in full-size inflatable raft; hull pitches/rolls with actual river wave slope & hydrodynamic forces; oar strokes, propeller spin & V-wake.
+ * - On Solid Land / Planks / Harbor Promenade (a.onSolid) or Airborne (a.airborne): survivor steps out on foot with the inflatable raft compactly slung on their backpack; velocity-locked walking stride; zero water wake or wave bobbing on dry ground.
+ */
 function animateRaft(vis, dt, t) {
     const a = vis.anim;
     const ease = (rate) => 1 - Math.exp(-rate * dt);
-    const speedN = Math.min(1, Math.abs(a.speed) / 15);
+    const speedAbs = Math.abs(a.speed);
+    const speedN = Math.min(1, speedAbs / 15);
+    const onFoot = Boolean(a.onSolid || a.airborne);
 
-    a.bank += (THREE.MathUtils.clamp(a.turn * (0.08 + 0.12 * speedN), -0.32, 0.32) - a.bank) * ease(7);
-    const pitchTarget = a.airborne ? 0.12 : (a.thrust > 0 ? 0.07 : a.thrust < 0 ? -0.05 : 0) + 0.06 * speedN;
-    a.pitch += (pitchTarget - a.pitch) * ease(5);
-    vis.tilt.rotation.set(a.pitch + Math.sin(t * 1.7) * 0.015, 0, a.bank + Math.sin(t * 2.3 + 1) * 0.02);
-    vis.tilt.position.y = a.airborne ? 0 : Math.sin(t * 2.1) * 0.04;
-    vis.raft.visible = !a.airborne; // the raft goes into the inventory mid-jump
+    // 1. Wave-coupled pitch & roll on water vs. planted upright posture on solid ground
+    const wx = vis.group.position.x;
+    const wz = vis.group.position.z;
+    const wavePitch = onFoot ? 0 : Math.cos(wz * 0.22 - t * 2.8) * 0.032 + Math.sin(wx * 0.35 + t * 1.9) * 0.014;
+    const waveRoll = onFoot ? 0 : Math.sin(wx * 0.28 + t * 2.3) * 0.035 + Math.cos(wz * 0.18 - t * 2.1) * 0.015;
 
-    const rowing = !a.airborne && (a.thrust !== 0 || Math.abs(a.turn) > 0.3);
-    if (rowing) a.rowPhase += dt * 9 * (a.thrust < 0 ? -1 : 1);
+    const bankTarget = onFoot
+        ? THREE.MathUtils.clamp(-a.turn * 0.05 * speedN, -0.12, 0.12)
+        : THREE.MathUtils.clamp(a.turn * (0.09 + 0.14 * speedN), -0.34, 0.34) + waveRoll;
+    const pitchTarget = a.airborne
+        ? 0.12
+        : a.onSolid
+            ? THREE.MathUtils.clamp(a.thrust * 0.04 * speedN, -0.06, 0.08)
+            : (a.thrust > 0 ? 0.07 : a.thrust < 0 ? -0.05 : 0) + 0.06 * speedN + wavePitch;
+
+    a.bank += (bankTarget - a.bank) * ease(8);
+    a.pitch += (pitchTarget - a.pitch) * ease(6);
+    vis.tilt.rotation.set(a.pitch, 0, a.bank);
+    vis.tilt.position.y = onFoot ? 0 : Math.sin(t * 2.4 + wx * 0.25 + wz * 0.15) * 0.048;
+
+    // 2. Context-Shift Mount Flip: Full inflatable raft on water <-> Compact backpack-stowed raft when on foot / mid-air
+    vis.raft.visible = true;
+    const mountLerp = ease(14);
+    const targetRaftY = onFoot ? 1.18 : 0;
+    const targetRaftZ = onFoot ? 0.34 : 0;
+    const targetRaftRotX = onFoot ? -Math.PI * 0.48 : 0;
+    const targetRaftScale = onFoot ? 0.36 : 1.0;
+    vis.raft.position.y += (targetRaftY - vis.raft.position.y) * mountLerp;
+    vis.raft.position.z += (targetRaftZ - vis.raft.position.z) * mountLerp;
+    vis.raft.rotation.x += (targetRaftRotX - vis.raft.rotation.x) * mountLerp;
+    const nextScale = vis.raft.scale.x + (targetRaftScale - vis.raft.scale.x) * mountLerp;
+    vis.raft.scale.setScalar(nextScale);
+
+    // 3. Oar / Mallet state: Row in water vs. Carry at side on foot vs. Swing/Block
+    const rowing = !onFoot && (a.thrust !== 0 || Math.abs(a.turn) > 0.25);
+    if (rowing) a.rowPhase += dt * (7.5 + speedAbs * 0.35) * (a.thrust < 0 ? -1 : 1);
+    if (a.onSolid && speedAbs > 0.12) {
+        a.walkPhase = (a.walkPhase || 0) + dt * (4.5 + speedAbs * 1.45) * (a.speed < 0 ? -1 : 1);
+    }
+
     const p = vis.paddle;
     p.position.copy(vis.paddleHome);
     if (a.block) {
@@ -593,8 +667,14 @@ function animateRaft(vis, dt, t) {
         const swingArc = Math.sin((a.swing / SWING_S) * Math.PI);
         p.rotation.set(-Math.PI * 0.42 * swingArc, -0.35 * swingArc, 0);
         p.position.z = vis.paddleHome.z - 0.45 * swingArc;
+    } else if (a.onSolid) {
+        // Carried in hand on solid ground (swaying naturally with walking stride, never rowing dry floorboards!)
+        const stride = Math.min(1, speedAbs / 3.5);
+        const swingStep = Math.sin(a.walkPhase || 0) * 0.25 * stride;
+        p.position.set(0.64, vis.paddleHome.y - 0.08 + Math.abs(swingStep) * 0.06, -0.12);
+        p.rotation.set(0.32 + swingStep, 0, -0.22);
     } else if (rowing && !vis.hammer) {
-        // stroke: blade dips (roll), sweeps aft (pitch), lifts out on the recovery
+        // Water stroke: blade dips (roll), sweeps aft (pitch), lifts out on recovery
         p.rotation.set(Math.sin(a.rowPhase) * 0.65, 0, 0.35 + Math.cos(a.rowPhase) * 0.3);
         p.position.y = vis.paddleHome.y - 0.25 + Math.cos(a.rowPhase) * 0.2;
     } else {
@@ -603,43 +683,67 @@ function animateRaft(vis, dt, t) {
         p.rotation.z *= 1 - ease(10);
     }
 
-    // Articulated crew limb animation
+    // 4. Articulated Crew Limbs: Velocity-locked walking stride on solid ground vs. Rowing in water vs. Airborne tuck
     if (vis.rig) {
-        const { headGroup, leftArm, rightArm, leftLeg, rightLeg } = vis.rig;
+        const { character, headGroup, leftArm, rightArm, leftLeg, rightLeg } = vis.rig;
         headGroup.rotation.y = THREE.MathUtils.clamp(-a.turn * 0.22, -0.45, 0.45);
-        if (a.block) {
-            leftArm.rotation.set(-1.1, 0.3, 0.4);
-            rightArm.rotation.set(-1.1, -0.3, -0.4);
-        } else if (a.swing > 0) {
-            const s = Math.sin((a.swing / SWING_S) * Math.PI);
-            rightArm.rotation.set(-1.4 * s + 0.4, 0, -0.35);
-            leftArm.rotation.set(-0.6 * s + 0.3, 0, 0.25);
-        } else if (rowing) {
-            rightArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.55;
-            leftArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.35;
+        if (a.onSolid) {
+            const stride = Math.min(1, speedAbs / 3.5);
+            const wp = a.walkPhase || 0;
+            const legSwing = Math.sin(wp) * 0.68 * stride;
+            leftLeg.rotation.x = legSwing;
+            rightLeg.rotation.x = -legSwing;
+            character.position.y = raftSize.h / 2 + Math.abs(Math.sin(wp)) * 0.09 * stride;
+            if (a.block) {
+                leftArm.rotation.set(-1.1, 0.3, 0.4);
+                rightArm.rotation.set(-1.1, -0.3, -0.4);
+            } else if (a.swing > 0) {
+                const s = Math.sin((a.swing / SWING_S) * Math.PI);
+                rightArm.rotation.set(-1.4 * s + 0.4, 0, -0.35);
+                leftArm.rotation.set(-0.6 * s + 0.3, 0, 0.25);
+            } else {
+                leftArm.rotation.set(-legSwing * 0.65, 0, 0.18);
+                rightArm.rotation.set(legSwing * 0.55 + 0.2, 0, -0.22);
+            }
         } else {
-            rightArm.rotation.x = 0.45 + Math.sin(t * 2.2) * 0.06;
-            leftArm.rotation.x = 0.35 + Math.cos(t * 2.2) * 0.06;
+            character.position.y = raftSize.h / 2;
+            if (a.block) {
+                leftArm.rotation.set(-1.1, 0.3, 0.4);
+                rightArm.rotation.set(-1.1, -0.3, -0.4);
+            } else if (a.swing > 0) {
+                const s = Math.sin((a.swing / SWING_S) * Math.PI);
+                rightArm.rotation.set(-1.4 * s + 0.4, 0, -0.35);
+                leftArm.rotation.set(-0.6 * s + 0.3, 0, 0.25);
+            } else if (rowing) {
+                rightArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.55;
+                leftArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.35;
+            } else {
+                rightArm.rotation.x = 0.45 + Math.sin(t * 2.2) * 0.06;
+                leftArm.rotation.x = 0.35 + Math.cos(t * 2.2) * 0.06;
+            }
+            const legTuck = a.airborne ? 0.55 : 0;
+            leftLeg.rotation.x = legTuck;
+            rightLeg.rotation.x = -legTuck * 0.6;
         }
-        const legTuck = a.airborne ? 0.55 : 0;
-        leftLeg.rotation.x = legTuck;
-        rightLeg.rotation.x = -legTuck * 0.6;
     }
 
-    if (vis.prop) {
-        a.propAngle += dt * (8 + Math.abs(a.speed) * 2.5 + (a.thrust > 0 ? 25 : 0));
+    // 5. Outboard Motor & Water Wake: ONLY active when in the water (!onFoot)
+    if (vis.prop && !onFoot) {
+        a.propAngle += dt * (8 + speedAbs * 2.5 + (a.thrust > 0 ? 25 : 0));
         vis.prop.rotation.z = a.propAngle;
-        if (a.thrust > 0 && !a.airborne && Math.random() < dt * 30) {
+        if (a.thrust > 0 && Math.random() < dt * 30) {
             const f = headingOf(a.yaw);
-            const { x, z } = vis.group.position;
-            emitFoam(x - f.x * 2.2, FOAM_Y + 0.05, z - f.z * 2.2, -f.x * 3 + (Math.random() - 0.5), 1.5 * Math.random(), -f.z * 3 + (Math.random() - 0.5), 0.8, 0.25);
+            emitFoam(wx - f.x * 2.2, FOAM_Y + 0.05, wz - f.z * 2.2, -f.x * 3 + (Math.random() - 0.5), 1.5 * Math.random(), -f.z * 3 + (Math.random() - 0.5), 0.8, 0.25);
         }
     }
-    if (vis.group.visible) emitWake(vis, dt);
+    if (vis.group.visible && !onFoot) emitWake(vis, dt);
 }
 
 function reRenderMyRaft(p) {
-    if (myRaft?.vis) scene.remove(myRaft.vis.group);
+    if (myRaft?.vis) {
+        scene.remove(myRaft.vis.group);
+        disposeObject3DTree(myRaft.vis.group);
+    }
     const vis = createRaftMesh(p.color, p.upgrades);
     const craft = myRaft?.craft ?? {
         position: new THREE.Vector3(p.position.x, p.position.y, p.position.z),
@@ -717,6 +821,7 @@ socket.on('newPlayer', (p) => createRemote(p));
 socket.on('playerDisconnected', (id) => {
     if (otherPlayers[id]) {
         scene.remove(otherPlayers[id].group);
+        disposeObject3DTree(otherPlayers[id].group);
         delete otherPlayers[id];
     }
 });
@@ -785,6 +890,7 @@ socket.on('playerUpgraded', (d) => {
     Object.assign(vis.anim, old.anim);
     vis.target = old.target;
     scene.remove(old.group);
+    disposeObject3DTree(old.group);
     otherPlayers[d.id] = vis;
 });
 
@@ -1055,30 +1161,39 @@ function fixedStep() {
         craft.angularVelocity.y = 0;
     }
     const live = !isDead && !inIntroSequence;
-    // Helmet 01 (Camera & Game-Feel Pilot):
-    // - Open river moves with real visceral momentum (0.85x current) and snappy paddle/turn bite.
-    // - Docking on solid `Costado` vegetation/planks (onSolid), pulling over to the Harbor City pier (inCalmHarbor && x > 10), or holding [S] gives 0 drift so you can chill & shop.
+    // Helmet 01 & Videogame Helmet 06 (Physical Common-Sense & World-Believability):
+    // - Open river moves with continuous physical current (0.85x) even when back-paddling ([S] fights the current rather than turning the river off!).
+    // - Docking on solid `Costado` vegetation/planks (onSolid) or pulling into the sheltered Harbor City pier (inCalmHarbor && x > 10) gives 0 water drift.
     const inCalmHarbor = craft.position.z < -135 && craft.position.z > -275;
     const dockedAtHarborPier = inCalmHarbor && craft.position.x > 10;
-    const currentScale = dockedAtHarborPier || onSolid || keys.s || shopOpen ? 0 : 0.85;
+    const currentScale = dockedAtHarborPier || onSolid || shopOpen ? 0 : 0.85;
     const input = live
         ? { ...keys, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
         : { onSolid, currentScale: 0 };
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
-    // Extra responsive steering & forward paddle bite on water (Helmet 01: never feel like swimming in glue)
-    if (live && !onSolid && !mageGrab.active) {
+    // Extra responsive steering & forward bite on water AND agile on-foot stride on solid ground (Helmet 01 & Helmet 06)
+    if (live && !mageGrab.active) {
         if (keys.a || keys.d) {
             const steerSign = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
-            craft.yaw += steerSign * 0.55 * FIXED_DT;
+            craft.yaw += steerSign * (onSolid ? 0.95 : 0.55) * FIXED_DT;
         }
         if (keys.w) {
             const f = headingOf(craft.yaw);
-            craft.velocity.x += f.x * 4.2 * FIXED_DT;
-            craft.velocity.z += f.z * 4.2 * FIXED_DT;
+            const thrustAccel = onSolid ? 5.2 : 4.2;
+            craft.velocity.x += f.x * thrustAccel * FIXED_DT;
+            craft.velocity.z += f.z * thrustAccel * FIXED_DT;
         }
     }
     const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
     onSolid = col.onSolid;
+    if (col.hitImpact > 2.2) {
+        const hitStr = Math.min(1.2, col.hitImpact / 10);
+        splash(craft.position.x, craft.position.z, hitStr * 0.75);
+        cameraShake = Math.max(cameraShake, 0.14 * hitStr);
+        if (myRaft?.vis?.anim) {
+            myRaft.vis.anim.pitch -= 0.14 * hitStr;
+        }
+    }
 
     // On the City Promenade sidewalk (z = -145..-255, x >= 13.5), keep player height at y = 0.85 (<= PLAYER.safeHeight of 1.0)
     // so the 3-Legged Mud Alien follows you out of the water onto the City sidewalk right next to the Pedestrians & Police!
@@ -1202,6 +1317,10 @@ function updateLocalRaft(dt, now) {
     const yaw = craft.yaw;
     const f = headingOf(yaw);
     vis.group.position.copy(craft.position);
+    // Keep visual feet flush on the Harbor City wooden pier deck (y = 1.12) when walking on the promenade
+    if (onSolid && craft.position.z < -145 && craft.position.z > -255 && craft.position.x >= 13.5) {
+        vis.group.position.y = Math.max(craft.position.y, 1.12);
+    }
     vis.group.quaternion.copy(craft.quaternion);
     Object.assign(vis.anim, {
         yaw,
@@ -1209,6 +1328,7 @@ function updateLocalRaft(dt, now) {
         turn: craft.angularVelocity.y,
         thrust: isDead ? 0 : Math.sign(watercraftThrust(keys, myStats.upgrades, isAttacking)),
         airborne: wasAirborne,
+        onSolid,
         block: isBlocking,
     });
 
@@ -1313,17 +1433,24 @@ function updateRemote(vis, dt) {
     vis.group.position.z += (t.z - vis.group.position.z) * k;
     vis.anim.yaw += wrapAngle(t.yaw - vis.anim.yaw) * k;
     vis.group.quaternion.setFromAxisAngle(yAxis, vis.anim.yaw);
-    vis.anim.airborne = vis.group.position.y > WATER_SURFACE_Y + 0.3;
+    const inHarborPromenade = vis.group.position.z < -145 && vis.group.position.z > -255 && vis.group.position.x >= 13.5;
+    vis.anim.onSolid = inHarborPromenade || (vis.group.position.y > WATER_SURFACE_Y + 0.35 && Math.abs(t.y - vis.group.position.y) < 0.08);
+    vis.anim.airborne = !vis.anim.onSolid && vis.group.position.y > WATER_SURFACE_Y + 0.3;
     if (performance.now() - t.at > 300) { vis.anim.speed *= 1 - k; vis.anim.turn *= 1 - k; vis.anim.thrust = 0; }
 }
+
+// Helmet 06 (Pragmatic Performance & Smoothness): Pre-allocated camera scratch vectors (zero per-frame GC allocations)
+const _camIntroOffset = new THREE.Vector3();
+const _camDesired = new THREE.Vector3();
+const _camLook = new THREE.Vector3();
 
 function updateCamera(dt) {
     const target = myRaft.vis.group.position;
     if (inIntroSequence) {
         const progress = Math.min(1, introTime / introDuration);
         const eased = progress < 0.5 ? 2 * progress * progress : 1 - (-2 * progress + 2) ** 2 / 2;
-        const offset = new THREE.Vector3().lerpVectors(introCameraStartOffset, introCameraEndOffset, eased);
-        camera.position.copy(offset.applyMatrix4(myRaft.vis.group.matrixWorld));
+        _camIntroOffset.lerpVectors(introCameraStartOffset, introCameraEndOffset, eased);
+        camera.position.copy(_camIntroOffset.applyMatrix4(myRaft.vis.group.matrixWorld));
         camera.lookAt(target);
         cam.look.copy(target);
         cam.yaw = myRaft.vis.anim.yaw;
@@ -1331,8 +1458,8 @@ function updateCamera(dt) {
     }
 
     const speed = Math.hypot(myRaft.craft.velocity.x, myRaft.craft.velocity.z);
-    const desired = new THREE.Vector3();
-    const look = new THREE.Vector3();
+    const desired = _camDesired;
+    const look = _camLook;
     if (isDead) {
         desired.set(0, 55, target.z + 25);
         look.set(0, 0, target.z - 15);
@@ -1358,7 +1485,7 @@ function updateCamera(dt) {
         look.set(target.x + f.x * 15, target.y + 1.15, target.z + f.z * 15);
     }
 
-    if (!cam.live) { camera.position.copy(desired); cam.vel.set(0, 0, 0); cam.look.copy(look); cam.live = true; }
+    if (!cam.live || camera.position.distanceTo(desired) > 55) { camera.position.copy(desired); cam.vel.set(0, 0, 0); cam.look.copy(look); cam.live = true; }
     const w = CAM.stiffness;
     for (let left = dt; left > 1e-6; left -= 1 / 120) {
         const h = Math.min(left, 1 / 120);
@@ -1428,12 +1555,10 @@ function animate() {
     }
 
     animateAAAEnemies(enemyMeshes, enemiesData, t);
-    for (let i = policeTracers.length - 1; i >= 0; i--) {
-        if (performance.now() >= policeTracers[i].expireAt) {
-            scene.remove(policeTracers[i].line);
-            policeTracers[i].line.geometry.dispose();
-            policeTracers[i].line.material.dispose();
-            policeTracers.splice(i, 1);
+    const pNowTracer = performance.now();
+    for (let i = 0; i < TRACER_POOL_SIZE; i++) {
+        if (policeTracers[i].line.visible && pNowTracer >= policeTracers[i].expireAt) {
+            policeTracers[i].line.visible = false;
         }
     }
     for (const key in hitPulse) {

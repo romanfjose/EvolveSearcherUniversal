@@ -297,10 +297,19 @@ export function updateKrakenMesh(krakenMesh, krakenState, dt = 0.016, totalTime 
 
     const time = totalTime || krakenState.time;
 
-    // 1. Overall Root Position
+    // 1. Overall Root Position & Menacing Head Tracking toward Lead Raft
     krakenMesh.position.x = krakenState.position.x;
     krakenMesh.position.y = krakenState.position.y + (krakenState.headBobOffset || 0);
     krakenMesh.position.z = krakenState.position.z;
+    if (headGroup && krakenState.targetPosition) {
+        const dx = krakenState.targetPosition.x - krakenState.position.x;
+        const dz = krakenState.targetPosition.z - krakenState.position.z;
+        if (Math.hypot(dx, dz) > 0.5) {
+            const targetYaw = Math.atan2(dx, dz);
+            const safeDt = Math.max(0.001, Math.min(0.1, dt || 0.016));
+            headGroup.rotation.y += (targetYaw - headGroup.rotation.y) * Math.min(1.0, safeDt * 4.5);
+        }
+    }
 
     // 2. Eye Bioluminescence Pulse
     const eyeIntensity = (krakenState.isStunned ? 0.2 : krakenState.eyeGlow || 1.0);

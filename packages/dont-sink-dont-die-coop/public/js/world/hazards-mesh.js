@@ -16,11 +16,14 @@ export function createRapidsMesh(THREE, rapidsConfig) {
 
     const group = new THREE.Group();
     group.position.set(rapidsConfig.x || 0, 0.28, rapidsConfig.z || 0);
-    if (rapidsConfig.angle) {
-        group.rotation.y = rapidsConfig.angle;
+    const dirAngle = rapidsConfig.angle !== undefined
+        ? rapidsConfig.angle
+        : (rapidsConfig.direction ? Math.atan2(-(rapidsConfig.direction.x || 0), -(rapidsConfig.direction.z ?? -1)) : 0);
+    if (dirAngle) {
+        group.rotation.y = dirAngle;
     }
 
-    // A. Base Foam Surge Plane with Custom Shader
+    // A. Base Foam Surge Plane with Custom Shader (V-chevrons point & scroll toward -Z downriver)
     const planeGeo = new THREE.PlaneGeometry(width, length, 16, 32);
     const planeMat = new THREE.ShaderMaterial({
         transparent: true,
@@ -49,10 +52,10 @@ export function createRapidsMesh(THREE, rapidsConfig) {
             varying vec3 vWorldPos;
 
             void main() {
-                // Moving chevron stripes pointing downriver (uv.y flow)
-                float flow = vUv.y * 6.0 + uTime * 4.5;
+                // Moving chevron stripes pointing & scrolling downriver toward -Z (vUv.y -> 1.0)
+                float flow = vUv.y * 6.0 - uTime * 4.5;
                 float chevron = abs(vUv.x - 0.5) * 2.2;
-                float wave = sin((flow - chevron) * 3.14159);
+                float wave = sin((flow + chevron) * 3.14159);
                 float sharpChevron = smoothstep(0.4, 0.95, wave);
 
                 // Edge fade along river width & length
@@ -70,7 +73,7 @@ export function createRapidsMesh(THREE, rapidsConfig) {
     surgeMesh.rotation.x = -Math.PI / 2;
     group.add(surgeMesh);
 
-    // B. Procedural 3D Chevron Arrow Markers
+    // B. Procedural 3D Chevron Arrow Markers (pointing strictly toward -Z downriver matching boost vector)
     const chevronCount = 5;
     const chevronMat = new THREE.MeshBasicMaterial({
         color: 0x38f2ff,
@@ -84,19 +87,21 @@ export function createRapidsMesh(THREE, rapidsConfig) {
         const halfSpan = width * 0.38;
         const armLength = halfSpan * 1.1;
 
-        // Left and right angled chevron wings
+        // Left and right angled chevron wings meeting at a V-tip at -Z (downriver)
         const armGeo = new THREE.BoxGeometry(0.35, 0.08, armLength);
         const leftWing = new THREE.Mesh(armGeo, chevronMat);
-        leftWing.position.set(-halfSpan * 0.45, 0.04, armLength * 0.25);
-        leftWing.rotation.y = 0.65;
+        leftWing.position.set(-halfSpan * 0.45, 0.04, -armLength * 0.25);
+        leftWing.rotation.y = -0.65;
 
         const rightWing = new THREE.Mesh(armGeo, chevronMat);
-        rightWing.position.set(halfSpan * 0.45, 0.04, armLength * 0.25);
-        rightWing.rotation.y = -0.65;
+        rightWing.position.set(halfSpan * 0.45, 0.04, -armLength * 0.25);
+        rightWing.rotation.y = 0.65;
 
         arrowGroup.add(leftWing, rightWing);
-        const zOffset = (i - (chevronCount - 1) * 0.5) * (length / chevronCount);
+        // Order i = 0 at +Z (entry) through i = chevronCount - 1 at -Z (exit)
+        const zOffset = ((chevronCount - 1) * 0.5 - i) * (length / chevronCount);
         arrowGroup.position.set(0, 0.04, zOffset);
+        arrowGroup.userData = { leftWing, rightWing, baseZ: zOffset, directionZ: -1 };
         group.add(arrowGroup);
         chevronArrows.push(arrowGroup);
     }
@@ -106,6 +111,7 @@ export function createRapidsMesh(THREE, rapidsConfig) {
         shaderMat: planeMat,
         chevronArrows,
         config: rapidsConfig,
+        boostDirectionZ: -1,
     };
     return group;
 }
@@ -263,9 +269,9 @@ export function createRampMesh(THREE, rampConfig) {
             new THREE.BoxGeometry(width * 0.96, 0.16, plankLength * 0.92),
             woodMat
         );
-        // Slanted angle matching ramp slope
+        // Slanted angle matching ramp slope (positive rotation.x tilts -Z launch lip UP and +Z entry DOWN)
         const slopeAngle = Math.atan2(height, length);
-        plank.rotation.x = -slopeAngle;
+        plank.rotation.x = slopeAngle;
         plank.position.set(0, py + 0.1, pz);
         plank.castShadow = true;
         plank.receiveShadow = true;
@@ -312,6 +318,8 @@ export function createRampMesh(THREE, rampConfig) {
     group.userData = {
         type: 'ramp',
         config: rampConfig,
+        deckGroup,
+        launchDirectionZ: -1,
     };
     return group;
 }
@@ -523,31 +531,36 @@ export function buildRiverHazardsGroup(THREE, hazardsLayout) {
 /**
  * Animates all hazards: pulses shaders, spins vortexes, bobs mines, rotates coin rings.
  */
-export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016) {
+export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016, playerZ = null) {
     if (!hazardsGroupHandle) return;
+    const hasCullZ = Number.isFinite(playerZ);
+    const MAX_CULL_DIST = 240;
 
     // 1. Animate Rapids
     for (const rMesh of hazardsGroupHandle.rapidsMeshes || []) {
+        if (hasCullZ && Math.abs(rMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
         if (rMesh.userData.shaderMat) {
             rMesh.userData.shaderMat.uniforms.uTime.value = time;
         }
-        // Chevron arrows pulse forward
+        // Chevron arrows pulse sequentially from +Z (entry, i=0) toward -Z (exit, i=4)
         const arrows = rMesh.userData.chevronArrows || [];
         for (let i = 0; i < arrows.length; i++) {
             const arr = arrows[i];
-            const pulse = (time * 2.5 + i * 0.4) % 1.0;
-            arr.scale.setScalar(0.95 + 0.1 * Math.sin(pulse * Math.PI));
+            const phase = ((time * 3.0 - i * 0.25) % 1.0 + 1.0) % 1.0;
+            arr.scale.setScalar(0.95 + 0.12 * Math.sin(phase * Math.PI));
         }
     }
 
     // 2. Animate Whirlpools
     for (const wMesh of hazardsGroupHandle.whirlpoolMeshes || []) {
+        if (hasCullZ && Math.abs(wMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
         if (wMesh.userData.shaderMat) {
             wMesh.userData.shaderMat.uniforms.uTime.value = time;
         }
         if (wMesh.userData.ringGroup) {
             const dir = wMesh.userData.clockwise ? 1 : -1;
-            wMesh.userData.ringGroup.rotation.z = time * 2.0 * dir;
+            // Spin horizontally around Y axis on the water surface (never tilt around Z!)
+            wMesh.userData.ringGroup.rotation.y = -time * 2.2 * dir;
         }
     }
 
@@ -557,8 +570,9 @@ export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016) {
             cMesh.visible = false;
             continue;
         }
-        // Spin coin and float ring
-        cMesh.rotation.y = time * 2.2;
+        if (hasCullZ && Math.abs(cMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
+        // Keep hoop facing the river lane (+Z/-Z) with gentle yaw sway while spinning inner gold coin
+        cMesh.rotation.y = Math.sin(time * 1.6) * 0.18;
         if (cMesh.userData.coinMesh) {
             cMesh.userData.coinMesh.rotation.z = time * 3.5;
         }
@@ -571,6 +585,7 @@ export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016) {
             mMesh.visible = false;
             continue;
         }
+        if (hasCullZ && Math.abs(mMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
 
         // Bob up and down on water
         const baseY = mMesh.userData.baseY || 0.25;

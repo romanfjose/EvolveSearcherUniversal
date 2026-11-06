@@ -143,7 +143,7 @@ async function runQaHelmet() {
     const threeWarnings = [];
 
     try {
-        const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+        const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
         const page = await context.newPage();
 
         page.on('console', (msg) => {
@@ -156,7 +156,11 @@ async function runQaHelmet() {
             }
         });
         page.on('pageerror', (err) => {
+            console.error('PAGEERROR:', err.stack || err.message || String(err));
             pageErrors.push(err.stack || err.message || String(err));
+        });
+        page.on('requestfailed', (req) => {
+            console.error('REQFAILED:', req.url());
         });
 
         console.log(`-> Navigating to ${url}`);
@@ -260,6 +264,18 @@ async function runQaHelmet() {
                 ? (bossBarStyle.display !== 'none' && Number(bossBarStyle.opacity) > 0.05 && myRaft.craft.position.z > -200)
                 : false;
 
+            // Check 6: Economy Integrity (Coins must never be undefined or NaN) & Cursor Visibility
+            const hudCoinsText = document.getElementById('coins')?.textContent?.trim() || '';
+            const statsCoins = qa.getMyStats()?.coins;
+            const coinsFinite = Number.isFinite(statsCoins) && /^\d+$/.test(hudCoinsText);
+            const cursorFree = document.pointerLockElement === null;
+
+            // Check 7: Helmet 01 Low Over-the-Shoulder Chase Camera & 100% Player-Centered Lock (0% bot centroid drift)
+            const cameraAltitude = Number((qa.camera.position.y - myRaft.vis.group.position.y).toFixed(2));
+            const lowOverShoulderCamera = cameraAltitude >= 3.0 && cameraAltitude <= 9.5;
+            const cameraLateralOffset = Number(Math.abs(qa.camera.position.x - myRaft.vis.group.position.x).toFixed(2));
+            const playerCenteredLock = cameraLateralOffset < 4.5;
+
             return {
                 ok: true,
                 raftPosition: {
@@ -267,6 +283,14 @@ async function runQaHelmet() {
                     y: Number(myRaft.craft.position.y.toFixed(2)),
                     z: Number(myRaft.craft.position.z.toFixed(2)),
                 },
+                cameraAltitude,
+                lowOverShoulderCamera,
+                cameraLateralOffset,
+                playerCenteredLock,
+                coinsFinite,
+                hudCoinsText,
+                statsCoins,
+                cursorFree,
                 groupVisible,
                 tiltVisible,
                 raftHullVisible,
@@ -279,14 +303,275 @@ async function runQaHelmet() {
             };
         });
 
-        // Test jumping/kickflip and opening the 3-Tier Harbor Armory ([B])
+        // Gate G15: Dual Oars (`leftPaddle` & `rightPaddle`), Side-Aware Left/Right Oar Attack, and Timed [W] Oar Pull vs. Fast-Press Cancel
+        const dualOarAndStrokeCheck = await page.evaluate(async () => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const lp = raft?.vis?.leftPaddle;
+            const rp = raft?.vis?.rightPaddle;
+            const hasDualOars = Boolean(lp && rp && lp !== rp && lp.position.x < -0.5 && rp.position.x > 0.5);
+
+            // Test Left Oar Attack vs Right Oar Attack
+            qa.triggerAttack('left');
+            const leftSwingSide = raft.vis.anim.swingSide;
+            await new Promise((r) => setTimeout(r, 120));
+            const leftOarLifted = lp.position.y > raft.vis.leftPaddleHome.y + 0.15;
+            const rightOarStayed = Math.abs(rp.position.y - raft.vis.rightPaddleHome.y) < 0.35;
+
+            await new Promise((r) => setTimeout(r, 300));
+            qa.triggerAttack('right');
+            const rightSwingSide = raft.vis.anim.swingSide;
+            await new Promise((r) => setTimeout(r, 120));
+            const rightOarLifted = rp.position.y > raft.vis.rightPaddleHome.y + 0.15;
+
+            await new Promise((r) => setTimeout(r, 300));
+            // Test Timed [W] Oar Pull vs Fast-Press Cancel (Choke)
+            raft.craft.position.set(0, 0.25, -18);
+            raft.craft.velocity.set(0, 0, -1.0);
+            const os = qa.getOarStroke();
+            os.active = false;
+            os.elapsed = 0;
+            qa.triggerOarStroke();
+            const t0 = performance.now();
+            while (os.active && os.elapsed < 0.42 && performance.now() - t0 < 1500) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+            const timedPullSpeed = Math.hypot(raft.craft.velocity.x, raft.craft.velocity.z);
+
+            // Now trigger a new stroke and spam-cancel it early (< 0.48s cancelThreshold)
+            os.active = false;
+            os.elapsed = 0;
+            const prevChoked = os.chokedCount;
+            qa.triggerOarStroke();
+            const t1 = performance.now();
+            while (os.active && os.elapsed < 0.18 && performance.now() - t1 < 800) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+            const speedBeforeChoke = Math.hypot(raft.craft.velocity.x, raft.craft.velocity.z);
+            qa.triggerOarStroke(); // Fast press cancels early!
+            const speedAfterChoke = Math.hypot(raft.craft.velocity.x, raft.craft.velocity.z);
+            const spamCancelled = os.chokedCount > prevChoked && speedAfterChoke < speedBeforeChoke;
+
+            return {
+                hasDualOars,
+                leftSwingSide,
+                rightSwingSide,
+                leftOarLifted,
+                rightOarStayed,
+                rightOarLifted,
+                sideAwareOarAttack: leftSwingSide === 'left' && rightSwingSide === 'right' && leftOarLifted && rightOarLifted,
+                timedPullSpeed: Number(timedPullSpeed.toFixed(2)),
+                spamCancelled,
+                chokedCount: os.chokedCount,
+            };
+        });
+
+        // Test jumping/kickflip, opening the 3-Tier Harbor Armory ([B]), and buying an upgrade via hotkey [1]
         await page.keyboard.press('Space');
         await page.waitForTimeout(300);
         await page.keyboard.press('KeyB');
-        await page.waitForTimeout(400);
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Digit1');
+        await page.waitForTimeout(300);
+        const shopCheck = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const st = qa?.getMyStats?.() || {};
+            const armoryCoinText = document.getElementById('armory-coin-val')?.textContent?.trim() || '';
+            return {
+                coinsAfterBuy: st.coins,
+                upgradesAfterBuy: st.upgrades || [],
+                armoryCoinText,
+                pointerLocked: document.pointerLockElement !== null,
+            };
+        });
         const shot3 = path.join(OUT_DIR, 'qa-03-armory-modal.png');
         await page.screenshot({ path: shot3 });
         console.log(`📸 Captured 3-Tier Harbor Armory Modal -> ${shot3}`);
+
+        // Close Armory [Escape] and test Gate G8 (Whirlpool Spin & Pull at z = -76) + Gate G9 (River Mage Telekinetic Grab -> Spin -> Throw)
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(150);
+
+        const whirlpoolCheck = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            raft.craft.position.set(4.5, 0.25, -76);
+            raft.craft.velocity.set(0, 0, 0);
+            raft.craft.yaw = 0;
+            return { initialYaw: raft.craft.yaw, initialX: raft.craft.position.x };
+        });
+        await page.waitForTimeout(350);
+        const whirlpoolAfter = await page.evaluate((init) => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const yawDelta = Math.abs(raft.craft.yaw - init.initialYaw);
+            const posDelta = Math.hypot(raft.craft.position.x - init.initialX, raft.craft.position.z - -76);
+            const speed = Math.hypot(raft.craft.velocity.x, raft.craft.velocity.z);
+            return {
+                yawDelta: Number(yawDelta.toFixed(3)),
+                posDelta: Number(posDelta.toFixed(2)),
+                speed: Number(speed.toFixed(2)),
+                spunAndPulled: yawDelta > 0.15 && (posDelta > 0.4 || speed > 1.5),
+            };
+        }, whirlpoolCheck);
+
+        // Now trigger Gate G9: River Mage (whiteGuy) Telekinetic Grab -> Slow Spin -> Throw
+        await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            // Advance raft past -105 so whiteGuy spawns, then position raft right next to whiteGuy
+            raft.craft.position.set(0, 0.25, -108);
+            raft.craft.velocity.set(0, 0, 0);
+        });
+        await page.waitForTimeout(250);
+        await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const enemies = qa.getEnemiesData?.();
+            if (enemies?.whiteGuy && enemies.whiteGuy.health > 0) {
+                raft.craft.position.set(enemies.whiteGuy.position.x, 0.25, enemies.whiteGuy.position.z + 2.0);
+                raft.craft.velocity.set(0, 0, 0);
+            }
+        });
+        await page.waitForFunction(
+            () => {
+                const g = window.__GAME_QA__?.getMageGrab?.();
+                return g && g.active && g.elapsed > 0.45;
+            },
+            { timeout: 3500 }
+        );
+        const mageSpinCheck = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const grab = qa.getMageGrab?.() || {};
+            return {
+                grabActive: !!grab.active,
+                levitatedY: Number(raft.craft.position.y.toFixed(2)),
+                spinRate: Number(raft.craft.angularVelocity.y.toFixed(2)),
+                yaw: Number(raft.craft.yaw.toFixed(2)),
+            };
+        });
+        const shot4 = path.join(OUT_DIR, 'qa-04-mage-telekinesis-spin.png');
+        await page.screenshot({ path: shot4 });
+        console.log(`📸 Captured River Mage Telekinetic Grab & Spin -> ${shot4}`);
+
+        // Wait for the telekinetic spin to complete and hurl the raft
+        await page.waitForFunction(() => !window.__GAME_QA__?.getMageGrab?.()?.active, { timeout: 3000 });
+        await page.waitForTimeout(80);
+        const mageThrowCheck = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const grab = qa.getMageGrab?.() || {};
+            const speed3D = Math.hypot(raft.craft.velocity.x, raft.craft.velocity.y, raft.craft.velocity.z);
+            return {
+                grabReleased: !grab.active,
+                throwSpeed3D: Number(speed3D.toFixed(2)),
+                altitudeAfterThrow: Number(raft.craft.position.y.toFixed(2)),
+                thrownBehindVelocityZ: Number(raft.craft.velocity.z.toFixed(2)),
+            };
+        });
+
+        // Gate G10: 3-Legged Headless Mud Alien + City Pedestrians + Police Gunfire + Helmet 06 On-Foot Backpack Raft Stow at z = -196
+        await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            raft.craft.position.set(18.2, 0.85, -196);
+            raft.craft.velocity.set(0, 0, -2.5);
+            raft.craft.yaw = 0;
+        });
+        await page.waitForTimeout(1100);
+        const onFootCityCheck = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const rMesh = raft?.vis?.raft;
+            return {
+                onSolid: Boolean(raft?.vis?.anim?.onSolid),
+                raftBackpackScale: Number((rMesh?.scale?.x ?? 1).toFixed(2)),
+                raftBackpackY: Number((rMesh?.position?.y ?? 0).toFixed(2)),
+                stowedOnBack: Boolean(raft?.vis?.anim?.onSolid && (rMesh?.scale?.x ?? 1) < 0.65 && (rMesh?.position?.y ?? 0) > 0.5),
+            };
+        });
+        const shot5 = path.join(OUT_DIR, 'qa-05-city-mud-alien-police.png');
+        await page.screenshot({ path: shot5 });
+        console.log(`📸 Captured City 3-Legged Mud Alien & Police Gunfire -> ${shot5}`);
+
+        // Gate G11: 26-Segment Nokia-Vector Long Worm at z = -335
+        await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            raft.craft.position.set(-4, 0.25, -335);
+            raft.craft.velocity.set(0, 0, 0);
+            raft.craft.yaw = 0;
+        });
+        await page.waitForTimeout(950);
+        const shot6 = path.join(OUT_DIR, 'qa-06-nokia-vector-worm.png');
+        await page.screenshot({ path: shot6 });
+        console.log(`📸 Captured Nokia-Vector Long Worm -> ${shot6}`);
+
+        // Gate G12: Speed Platform (Rapids Chevrons at z = -112) Directional Alignment & Downriver (-Z) Boost
+        const rapidsAlignmentCheck = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            const enemies = qa.getEnemiesData?.() || {};
+            if (enemies.whiteGuy) enemies.whiteGuy.health = 0; // clear mage so we isolate the speed platform boost
+            const fd = qa?.feverDirector;
+            const rapidsMesh = fd?.hazardsHandle?.rapidsMeshes?.[0];
+            const firstArrow = rapidsMesh?.userData?.chevronArrows?.[0];
+            const leftRotY = firstArrow?.userData?.leftWing?.rotation?.y ?? 0;
+            const rightRotY = firstArrow?.userData?.rightWing?.rotation?.y ?? 0;
+            const rampMesh = fd?.hazardsHandle?.rampMeshes?.[0];
+            const firstPlankRotX = rampMesh?.userData?.deckGroup?.children?.[0]?.rotation?.x ?? 1;
+            const whirlpoolRingRotZ = fd?.hazardsHandle?.whirlpoolMeshes?.[0]?.userData?.ringGroup?.rotation?.z ?? 0;
+
+            // Place raft at z = -104 entering the z = -112 Speed Platform
+            raft.craft.position.set(0, 0.25, -104);
+            raft.craft.velocity.set(0, 0, -2.0);
+            raft.craft.yaw = 0;
+            return {
+                leftRotY: Number(leftRotY.toFixed(3)),
+                rightRotY: Number(rightRotY.toFixed(3)),
+                chevronsPointDownriver: leftRotY < -0.3 && rightRotY > 0.3,
+                rampSlopesUpDownriver: firstPlankRotX > 0,
+                whirlpoolRingFlatOnWater: Math.abs(whirlpoolRingRotZ) < 0.001,
+            };
+        });
+        await page.waitForTimeout(380);
+        const rapidsBoostAfter = await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            return {
+                raftZ: Number(raft.craft.position.z.toFixed(2)),
+                velZ: Number(raft.craft.velocity.z.toFixed(2)),
+                pushedDownriver: raft.craft.velocity.z < -6.5 && raft.craft.position.z < -106,
+            };
+        });
+        const shot7 = path.join(OUT_DIR, 'qa-07-speed-platform-rapids.png');
+        await page.screenshot({ path: shot7 });
+        console.log(`📸 Captured Aligned Speed Platform (Rapids Chevrons) -> ${shot7}`);
+
+        // Gate G13: The Dread Kraken Boss Encounter at z = -1350
+        await page.evaluate(() => {
+            const qa = window.__GAME_QA__;
+            const raft = qa.getMyRaft();
+            raft.craft.position.set(0, 0.25, -1332);
+            raft.craft.velocity.set(0, 0, 0);
+            raft.craft.yaw = 0;
+        });
+        await page.waitForTimeout(650);
+        const krakenCheck = await page.evaluate(() => {
+            const fd = window.__GAME_QA__?.feverDirector;
+            const ks = fd?.krakenState;
+            const km = fd?.krakenMesh;
+            return {
+                spawned: Boolean(ks?.isSpawned),
+                meshVisible: Boolean(km?.visible),
+                health: ks?.health ?? 0,
+                phase: ks?.phase ?? 0,
+            };
+        });
+        const shot8 = path.join(OUT_DIR, 'qa-08-dread-kraken-boss.png');
+        await page.screenshot({ path: shot8 });
+        console.log(`📸 Captured Dread Kraken Boss Encounter -> ${shot8}`);
 
         console.log('\n=== 🪖 SOVEREIGN QA HELMET REPORT ===');
         console.log(JSON.stringify({
@@ -294,6 +579,15 @@ async function runQaHelmet() {
             pageErrors,
             threeWarnings,
             audit,
+            dualOarAndStrokeCheck,
+            shopCheck,
+            whirlpoolAfter,
+            mageSpinCheck,
+            mageThrowCheck,
+            onFootCityCheck,
+            rapidsAlignmentCheck,
+            rapidsBoostAfter,
+            krakenCheck,
         }, null, 2));
 
         const failures = [];
@@ -316,6 +610,42 @@ async function runQaHelmet() {
             }
             if (audit.bossBarPremature) {
                 failures.push('Boss Health Bar is prematurely visible at river spawn!');
+            }
+            if (!audit.coinsFinite) {
+                failures.push(`Coins corrupted (HUD="${audit.hudCoinsText}", stats=${audit.statsCoins})`);
+            }
+            if (!audit.cursorFree || shopCheck.pointerLocked) {
+                failures.push('Mouse cursor trapped in PointerLock!');
+            }
+            if (!audit.lowOverShoulderCamera || !audit.playerCenteredLock) {
+                failures.push(`Helmet 01 Camera check failed (altitude=${audit.cameraAltitude}m, lateralOffset=${audit.cameraLateralOffset}m)`);
+            }
+            if (!shopCheck.upgradesAfterBuy.includes('motor')) {
+                failures.push(`Shop hotkey [1] failed to purchase motor: ${JSON.stringify(shopCheck)}`);
+            }
+            if (!whirlpoolAfter.spunAndPulled) {
+                failures.push(`Whirlpool failed to spin/pull raft: ${JSON.stringify(whirlpoolAfter)}`);
+            }
+            if (!mageSpinCheck.grabActive || mageSpinCheck.levitatedY < 1.2 || mageSpinCheck.spinRate < 2.0) {
+                failures.push(`Mage Telekinetic Grab/Spin failed: ${JSON.stringify(mageSpinCheck)}`);
+            }
+            if (!mageThrowCheck.grabReleased || (mageThrowCheck.throwSpeed3D < 5.0 && mageThrowCheck.altitudeAfterThrow < 1.0)) {
+                failures.push(`Mage Throw release failed: ${JSON.stringify(mageThrowCheck)}`);
+            }
+            if (!rapidsAlignmentCheck.chevronsPointDownriver || !rapidsAlignmentCheck.rampSlopesUpDownriver || !rapidsAlignmentCheck.whirlpoolRingFlatOnWater) {
+                failures.push(`Speed Platform / Hazard Directional Alignment failed: ${JSON.stringify(rapidsAlignmentCheck)}`);
+            }
+            if (!rapidsBoostAfter.pushedDownriver) {
+                failures.push(`Speed Platform failed to boost raft downriver (-Z): ${JSON.stringify(rapidsBoostAfter)}`);
+            }
+            if (!krakenCheck.spawned || !krakenCheck.meshVisible) {
+                failures.push(`Dread Kraken Boss failed to spawn or render: ${JSON.stringify(krakenCheck)}`);
+            }
+            if (!onFootCityCheck.stowedOnBack) {
+                failures.push(`Helmet 06 Physical Realism (On-Foot Backpack Stow) failed: ${JSON.stringify(onFootCityCheck)}`);
+            }
+            if (!dualOarAndStrokeCheck.hasDualOars || !dualOarAndStrokeCheck.sideAwareOarAttack || dualOarAndStrokeCheck.timedPullSpeed < 2.2 || !dualOarAndStrokeCheck.spamCancelled) {
+                failures.push(`Dual Oars & Timed [W] Stroke / Spam-Cancel check failed: ${JSON.stringify(dualOarAndStrokeCheck)}`);
             }
         }
 

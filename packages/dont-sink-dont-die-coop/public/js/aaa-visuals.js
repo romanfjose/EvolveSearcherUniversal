@@ -641,60 +641,91 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     goggles.position.set(0, 0.05, -0.24);
     headGroup.add(head, bandana, goggles);
 
-    // Articulated Arms
+    // Articulated Arms (positioned to grip both left and right oars / remos)
     const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.48, 4, 8), shirtMat);
-    leftArm.position.set(-0.5, 0.95, -0.1);
-    leftArm.rotation.z = 0.25;
+    leftArm.position.set(-0.52, 0.95, -0.1);
+    leftArm.rotation.z = 0.35;
     leftArm.rotation.x = 0.45;
     const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.48, 4, 8), shirtMat);
-    rightArm.position.set(0.5, 0.95, -0.1);
+    rightArm.position.set(0.52, 0.95, -0.1);
     rightArm.rotation.z = -0.35;
     rightArm.rotation.x = 0.45;
 
     character.add(leftLeg, rightLeg, torso, lifeVest, belt, headGroup, leftArm, rightArm);
 
-    // 6C. Plastic Oar / Squeaky Mallet Weapon
-    const hammer = upgrades.includes('weapon');
-    const paddle = new THREE.Group();
-    if (hammer) {
-        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.3, 8), woodMaterial);
-        handle.rotation.x = Math.PI / 2;
-        const malletHead = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.95, 12), hammerMaterial);
-        malletHead.rotation.z = Math.PI / 2;
-        malletHead.position.z = -0.95;
-        const goldCap1 = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.6 }));
-        goldCap1.rotation.z = Math.PI / 2;
-        goldCap1.position.set(-0.46, 0, -0.95);
-        const goldCap2 = goldCap1.clone();
-        goldCap2.position.x = 0.46;
-        paddle.add(handle, malletHead, goldCap1, goldCap2);
-    } else {
-        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.5, 8), paddleMaterial);
-        shaft.rotation.x = Math.PI / 2;
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.85), patchMat);
-        blade.position.z = -1.25;
-        const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.24, 6), paddleMaterial);
-        grip.rotation.z = Math.PI / 2;
-        grip.position.z = 1.25;
-        paddle.add(shaft, blade, grip);
+    // 6C. Twin Oars (`remos` — Left Oar on Port `-X` and Right Oar on Starboard `+X`) + Oarlock Mounts
+    const oarlockGeo = new THREE.TorusGeometry(0.08, 0.024, 6, 12, Math.PI * 1.3);
+    for (const sideSign of [-1, 1]) {
+        const lockBase = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.24), patchMat);
+        lockBase.position.set(sideSign * 0.88, raftSize.h * 0.38, -0.12);
+        const lockRing = new THREE.Mesh(oarlockGeo, darkMat);
+        lockRing.position.set(sideSign * 0.88, raftSize.h * 0.48, -0.12);
+        lockRing.rotation.y = Math.PI / 2;
+        raft.add(lockBase, lockRing);
     }
-    const paddleHome = new THREE.Vector3(0.88, 0.88 + raftSize.h / 2, -0.1);
-    paddle.position.copy(paddleHome);
 
-    tilt.add(raft, character, paddle);
+    const hammer = upgrades.includes('weapon');
+    const buildOarMesh = (sideSign, isHammer) => {
+        const oar = new THREE.Group();
+        if (isHammer) {
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.3, 8), woodMaterial);
+            handle.rotation.x = Math.PI / 2;
+            const malletHead = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.95, 12), hammerMaterial);
+            malletHead.rotation.z = Math.PI / 2;
+            malletHead.position.z = -0.95;
+            const goldCap1 = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.6 }));
+            goldCap1.rotation.z = Math.PI / 2;
+            goldCap1.position.set(-0.46, 0, -0.95);
+            const goldCap2 = goldCap1.clone();
+            goldCap2.position.x = 0.46;
+            oar.add(handle, malletHead, goldCap1, goldCap2);
+        } else {
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.55, 8), paddleMaterial);
+            shaft.rotation.x = Math.PI / 2;
+            shaft.rotation.y = sideSign * 0.36;
+            shaft.position.x = sideSign * 0.22;
+            const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.14, 8), darkMat);
+            collar.rotation.x = Math.PI / 2;
+            collar.rotation.y = sideSign * 0.36;
+            collar.position.set(sideSign * 0.06, 0, -0.05);
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.055, 0.88), patchMat);
+            blade.position.set(sideSign * 0.68, -0.14, -1.22);
+            blade.rotation.y = sideSign * 0.36;
+            blade.rotation.z = sideSign * -0.18;
+            const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.24, 6), paddleMaterial);
+            grip.rotation.z = Math.PI / 2;
+            grip.position.set(-sideSign * 0.22, 0.08, 1.18);
+            oar.add(shaft, collar, blade, grip);
+        }
+        return oar;
+    };
+
+    const leftPaddle = buildOarMesh(-1, false);
+    const rightPaddle = buildOarMesh(1, hammer);
+    const leftPaddleHome = new THREE.Vector3(-0.82, 0.86 + raftSize.h / 2, -0.12);
+    const rightPaddleHome = new THREE.Vector3(0.82, 0.86 + raftSize.h / 2, -0.12);
+    leftPaddle.position.copy(leftPaddleHome);
+    rightPaddle.position.copy(rightPaddleHome);
+
+    tilt.add(raft, character, leftPaddle, rightPaddle);
 
     return {
         group,
         tilt,
         raft,
-        paddle,
-        paddleHome,
+        leftPaddle,
+        leftPaddleHome,
+        rightPaddle,
+        rightPaddleHome,
+        paddle: rightPaddle,
+        paddleHome: rightPaddleHome,
         prop,
         hammer,
-        rig: { character, headGroup, leftArm, rightArm, leftLeg, rightLeg },
+        rig: { character, torso, headGroup, leftArm, rightArm, leftLeg, rightLeg },
         anim: {
             yaw: 0, speed: 0, turn: 0, thrust: 0, airborne: false,
-            rowPhase: 0, bank: 0, pitch: 0, swing: 0, block: false,
+            rowPhase: 0, strokePhase: 0, strokeChoked: 0,
+            bank: 0, pitch: 0, swing: 0, swingSide: 'right', block: false,
             wakeAcc: 0, propAngle: 0,
         },
     };

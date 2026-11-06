@@ -262,9 +262,11 @@ function popAt(pos, text, color, lift) {
 
 socket.on('enemiesUpdate', (data) => {
     enemiesData = data;
+    const hasMotor = Array.isArray(myStats?.upgrades) && myStats.upgrades.some((u) => u === 'motor' || String(u).startsWith('motor_'));
     for (const key in data) {
         const e = data[key];
         if (e.health > 0) {
+            const wasVisible = enemyMeshes[key].visible;
             enemyMeshes[key].visible = true;
             // If player is in the Riverside City (z = -140..-260) and on/near the City Pier (x >= 10),
             // have the 3-Legged Mud Alien follow the player out of the water onto the City sidewalk toward the Pedestrians & Police!
@@ -280,7 +282,27 @@ socket.on('enemiesUpdate', (data) => {
                 enemyMeshes.mudAlien.position.set(nextX, 1.12, nextZ);
             } else {
                 const onCityPier = key === 'mudAlien' && e.position.x > 12.5 && e.position.z < -140 && e.position.z > -260;
-                enemyMeshes[key].position.set(e.position.x, onCityPier ? 1.12 : e.position.y, e.position.z);
+                if (key === 'whiteGuy' && !hasMotor && wasVisible) {
+                    // Grounded early-game pursuit pace (~3.3 m/s at 15Hz tick) matching physical oar-pull rowing speed
+                    const curX = enemyMeshes.whiteGuy.position.x;
+                    const curZ = enemyMeshes.whiteGuy.position.z;
+                    const dx = e.position.x - curX;
+                    const dz = e.position.z - curZ;
+                    const dist = Math.hypot(dx, dz);
+                    const maxStep = 0.22;
+                    if (dist > 0.001 && dist < 24) {
+                        const step = Math.min(dist, maxStep);
+                        const nx = curX + (dx / dist) * step;
+                        const nz = curZ + (dz / dist) * step;
+                        e.position.x = nx;
+                        e.position.z = nz;
+                        enemyMeshes.whiteGuy.position.set(nx, e.position.y, nz);
+                    } else {
+                        enemyMeshes.whiteGuy.position.set(e.position.x, e.position.y, e.position.z);
+                    }
+                } else {
+                    enemyMeshes[key].position.set(e.position.x, onCityPier ? 1.12 : e.position.y, e.position.z);
+                }
             }
 
             // White Guy & Mud Alien face the rear-most player they are hunting;
@@ -429,7 +451,7 @@ let myRaft = null; // { vis, body }
 let isDead = false;
 let myHealth = 100;
 const raftSize = { w: 2, h: 0.5, d: 3 };
-const SWING_S = 0.2;
+const SWING_S = 0.36;
 const yAxis = new THREE.Vector3(0, 1, 0);
 const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffccaa });
 const motorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2f36, metalness: 0.4, roughness: 0.5 });
@@ -562,77 +584,180 @@ function animateRaft(vis, dt, t) {
     const nextScale = vis.raft.scale.x + (targetRaftScale - vis.raft.scale.x) * mountLerp;
     vis.raft.scale.setScalar(nextScale);
 
-    // 3. Oar / Mallet state: Row in water vs. Carry at side on foot vs. Swing/Block
-    const rowing = !onFoot && (a.thrust !== 0 || Math.abs(a.turn) > 0.25);
-    if (rowing) a.rowPhase += dt * (7.5 + speedAbs * 0.35) * (a.thrust < 0 ? -1 : 1);
+    // 3. Twin Oars (`remos` — leftPaddle & rightPaddle): Rhythmic Dual-Oar Pull vs. Side-Aware Oar Attack vs. On-Foot Carry
+    const strokeP = a.strokePhase || 0;
+    const chokedP = a.strokeChoked || 0;
+    const rowing = !onFoot && (strokeP > 0 || a.thrust !== 0 || Math.abs(a.turn) > 0.25);
+    if (rowing && strokeP <= 0) a.rowPhase += dt * (4.8 + speedAbs * 0.28) * (a.thrust < 0 ? -1 : 1);
     if (a.onSolid && speedAbs > 0.12) {
         a.walkPhase = (a.walkPhase || 0) + dt * (4.5 + speedAbs * 1.45) * (a.speed < 0 ? -1 : 1);
     }
 
-    const p = vis.paddle;
-    p.position.copy(vis.paddleHome);
-    if (a.block) {
-        p.position.set(0, vis.paddleHome.y - 0.25, -1.35);
-        p.rotation.set(0, Math.PI / 2, 0);
-    } else if (a.swing > 0) {
+    const lp = vis.leftPaddle;
+    const rp = vis.rightPaddle || vis.paddle;
+    const lHome = vis.leftPaddleHome || new THREE.Vector3(-0.82, 0.86 + raftSize.h / 2, -0.12);
+    const rHome = vis.rightPaddleHome || vis.paddleHome;
+    if (lp) lp.position.copy(lHome);
+    if (rp) rp.position.copy(rHome);
+
+    let swingArc = 0;
+    const swingLeft = a.swingSide === 'left';
+    if (a.swing > 0) {
         a.swing = Math.max(0, a.swing - dt);
-        const swingArc = Math.sin((a.swing / SWING_S) * Math.PI);
-        p.rotation.set(-Math.PI * 0.42 * swingArc, -0.35 * swingArc, 0);
-        p.position.z = vis.paddleHome.z - 0.45 * swingArc;
-    } else if (a.onSolid) {
-        // Carried in hand on solid ground (swaying naturally with walking stride, never rowing dry floorboards!)
-        const stride = Math.min(1, speedAbs / 3.5);
-        const swingStep = Math.sin(a.walkPhase || 0) * 0.25 * stride;
-        p.position.set(0.64, vis.paddleHome.y - 0.08 + Math.abs(swingStep) * 0.06, -0.12);
-        p.rotation.set(0.32 + swingStep, 0, -0.22);
-    } else if (rowing && !vis.hammer) {
-        // Water stroke: blade dips (roll), sweeps aft (pitch), lifts out on recovery
-        p.rotation.set(Math.sin(a.rowPhase) * 0.65, 0, 0.35 + Math.cos(a.rowPhase) * 0.3);
-        p.position.y = vis.paddleHome.y - 0.25 + Math.cos(a.rowPhase) * 0.2;
-    } else {
-        p.rotation.x *= 1 - ease(10);
-        p.rotation.y *= 1 - ease(10);
-        p.rotation.z *= 1 - ease(10);
+        swingArc = Math.sin((a.swing / SWING_S) * Math.PI);
     }
 
-    // 4. Articulated Crew Limbs: Velocity-locked walking stride on solid ground vs. Rowing in water vs. Airborne tuck
+    // Helper for resting or rowing a single oar when it is not being swung as a weapon
+    const applyRowOrRestOar = (oar, home, sideSign) => {
+        if (!oar) return;
+        if (a.onSolid) {
+            const stride = Math.min(1, speedAbs / 3.5);
+            const swingStep = Math.sin((a.walkPhase || 0) + (sideSign < 0 ? Math.PI : 0)) * 0.22 * stride;
+            oar.position.set(sideSign * 0.64, home.y - 0.08 + Math.abs(swingStep) * 0.06, -0.12);
+            oar.rotation.set(0.32 + swingStep, 0, -sideSign * 0.22);
+        } else if (chokedP > 0) {
+            // Cancelled/choked stroke: blades yank out of the water prematurely and slap the surface
+            const jerk = Math.sin(chokedP * Math.PI * 2.5);
+            oar.position.set(home.x, home.y + 0.24 * Math.abs(jerk), home.z + 0.18);
+            oar.rotation.set(-0.55 * jerk, sideSign * 0.18, sideSign * -0.42);
+        } else if (strokeP > 0 && !onFoot) {
+            // Timed W-stroke: 0..0.16 Catch (reach forward & dip), 0.16..0.72 Power Pull (deep sweep aft), 0.72..1.0 Recovery
+            let pitch = 0;
+            let lift = 0;
+            let slideZ = 0;
+            if (strokeP < 0.16) {
+                const u = strokeP / 0.16;
+                pitch = -0.58 * u;
+                lift = -0.26 * u;
+                slideZ = -0.22 * u;
+            } else if (strokeP < 0.72) {
+                const u = (strokeP - 0.16) / 0.56;
+                pitch = -0.58 + 1.28 * u;
+                lift = -0.28 + 0.06 * Math.sin(u * Math.PI);
+                slideZ = -0.22 + 0.48 * u;
+            } else {
+                const u = (strokeP - 0.72) / 0.28;
+                pitch = 0.70 * (1 - u);
+                lift = 0.18 * Math.sin(u * Math.PI);
+                slideZ = 0.26 * (1 - u);
+            }
+            oar.position.set(home.x, home.y + lift, home.z + slideZ);
+            oar.rotation.set(pitch, sideSign * -0.12 * Math.sin(strokeP * Math.PI), sideSign * (0.24 - lift * 0.6));
+        } else if (rowing && !vis.hammer) {
+            const phaseOffset = a.thrust === 0 && Math.abs(a.turn) > 0.25 ? (sideSign < 0 ? 0 : Math.PI) : 0;
+            const ph = a.rowPhase + phaseOffset;
+            oar.rotation.set(Math.sin(ph) * 0.55, 0, sideSign * (0.28 + Math.cos(ph) * 0.25));
+            oar.position.y = home.y - 0.22 + Math.cos(ph) * 0.18;
+        } else {
+            oar.rotation.x *= 1 - ease(10);
+            oar.rotation.y *= 1 - ease(10);
+            oar.rotation.z *= 1 - ease(10);
+        }
+    };
+
+    if (a.block) {
+        // Cross both left and right oars in front of chest in an X-guard
+        if (lp) {
+            lp.position.set(-0.28, lHome.y - 0.18, -1.18);
+            lp.rotation.set(0.15, -Math.PI * 0.38, 0.52);
+        }
+        if (rp) {
+            rp.position.set(0.28, rHome.y - 0.18, -1.18);
+            rp.rotation.set(0.15, Math.PI * 0.38, -0.52);
+        }
+    } else if (swingArc > 0) {
+        // Pick up the LEFT oar (`leftPaddle`) when attacking to the left, or the RIGHT oar (`rightPaddle`) when attacking to the right!
+        if (swingLeft && lp) {
+            lp.position.set(lHome.x - 0.32 * swingArc, lHome.y + 0.42 * swingArc, lHome.z - 0.58 * swingArc);
+            lp.rotation.set(-Math.PI * 0.48 * swingArc, 0.78 * swingArc, -0.38 * swingArc);
+            applyRowOrRestOar(rp, rHome, 1);
+        } else if (rp) {
+            rp.position.set(rHome.x + 0.32 * swingArc, rHome.y + 0.42 * swingArc, rHome.z - 0.58 * swingArc);
+            rp.rotation.set(-Math.PI * 0.48 * swingArc, -0.78 * swingArc, 0.38 * swingArc);
+            applyRowOrRestOar(lp, lHome, -1);
+        }
+    } else {
+        applyRowOrRestOar(lp, lHome, -1);
+        applyRowOrRestOar(rp, rHome, 1);
+    }
+
+    // 4. Articulated Crew Limbs: Full-body torso lean + two-handed oar pull vs. Side-aware oar swing vs. Walking stride
     if (vis.rig) {
-        const { character, headGroup, leftArm, rightArm, leftLeg, rightLeg } = vis.rig;
-        headGroup.rotation.y = THREE.MathUtils.clamp(-a.turn * 0.22, -0.45, 0.45);
+        const { character, torso, headGroup, leftArm, rightArm, leftLeg, rightLeg } = vis.rig;
+        headGroup.rotation.y = THREE.MathUtils.clamp(-a.turn * 0.22 + (swingArc > 0 ? (swingLeft ? 0.38 : -0.38) * swingArc : 0), -0.55, 0.55);
         if (a.onSolid) {
             const stride = Math.min(1, speedAbs / 3.5);
             const wp = a.walkPhase || 0;
             const legSwing = Math.sin(wp) * 0.68 * stride;
             leftLeg.rotation.x = legSwing;
             rightLeg.rotation.x = -legSwing;
+            if (torso) torso.rotation.set(0, 0, 0);
             character.position.y = raftSize.h / 2 + Math.abs(Math.sin(wp)) * 0.09 * stride;
             if (a.block) {
                 leftArm.rotation.set(-1.1, 0.3, 0.4);
                 rightArm.rotation.set(-1.1, -0.3, -0.4);
-            } else if (a.swing > 0) {
-                const s = Math.sin((a.swing / SWING_S) * Math.PI);
-                rightArm.rotation.set(-1.4 * s + 0.4, 0, -0.35);
-                leftArm.rotation.set(-0.6 * s + 0.3, 0, 0.25);
+            } else if (swingArc > 0) {
+                if (swingLeft) {
+                    leftArm.rotation.set(-1.45 * swingArc + 0.4, 0.45 * swingArc, 0.45);
+                    rightArm.rotation.set(0.35, 0, -0.25);
+                } else {
+                    rightArm.rotation.set(-1.45 * swingArc + 0.4, -0.45 * swingArc, -0.45);
+                    leftArm.rotation.set(0.35, 0, 0.25);
+                }
             } else {
                 leftArm.rotation.set(-legSwing * 0.65, 0, 0.18);
                 rightArm.rotation.set(legSwing * 0.55 + 0.2, 0, -0.22);
             }
         } else {
             character.position.y = raftSize.h / 2;
+            let torsoLeanX = 0;
+            let torsoTwistY = 0;
             if (a.block) {
                 leftArm.rotation.set(-1.1, 0.3, 0.4);
                 rightArm.rotation.set(-1.1, -0.3, -0.4);
-            } else if (a.swing > 0) {
-                const s = Math.sin((a.swing / SWING_S) * Math.PI);
-                rightArm.rotation.set(-1.4 * s + 0.4, 0, -0.35);
-                leftArm.rotation.set(-0.6 * s + 0.3, 0, 0.25);
+            } else if (swingArc > 0) {
+                if (swingLeft) {
+                    leftArm.rotation.set(-1.52 * swingArc + 0.42, 0.52 * swingArc, 0.48);
+                    rightArm.rotation.set(0.42, 0, -0.32);
+                    torsoTwistY = 0.34 * swingArc;
+                } else {
+                    rightArm.rotation.set(-1.52 * swingArc + 0.42, -0.52 * swingArc, -0.48);
+                    leftArm.rotation.set(0.42, 0, 0.32);
+                    torsoTwistY = -0.34 * swingArc;
+                }
+            } else if (chokedP > 0) {
+                torsoLeanX = 0.22 * Math.sin(chokedP * Math.PI * 2);
+                leftArm.rotation.set(0.15, 0, 0.48);
+                rightArm.rotation.set(0.15, 0, -0.48);
+            } else if (strokeP > 0) {
+                // Full-body rowing physics: lean forward on Catch (0..0.16), throw back weight on Power Pull (0.16..0.72), recover upright
+                if (strokeP < 0.16) {
+                    const u = strokeP / 0.16;
+                    torsoLeanX = 0.26 * u;
+                    const armReach = 0.45 + 0.48 * u;
+                    leftArm.rotation.set(armReach, 0, 0.35);
+                    rightArm.rotation.set(armReach, 0, -0.35);
+                } else if (strokeP < 0.72) {
+                    const u = (strokeP - 0.16) / 0.56;
+                    torsoLeanX = 0.26 - 0.54 * u;
+                    const armPull = 0.93 - 0.88 * u;
+                    leftArm.rotation.set(armPull, 0, 0.35);
+                    rightArm.rotation.set(armPull, 0, -0.35);
+                } else {
+                    const u = (strokeP - 0.72) / 0.28;
+                    torsoLeanX = -0.28 * (1 - u);
+                    const armRec = 0.05 + 0.40 * u;
+                    leftArm.rotation.set(armRec, 0, 0.35);
+                    rightArm.rotation.set(armRec, 0, -0.35);
+                }
             } else if (rowing) {
-                rightArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.55;
-                leftArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.35;
+                rightArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.52;
+                leftArm.rotation.x = 0.45 + Math.sin(a.rowPhase) * 0.52;
             } else {
                 rightArm.rotation.x = 0.45 + Math.sin(t * 2.2) * 0.06;
-                leftArm.rotation.x = 0.35 + Math.cos(t * 2.2) * 0.06;
+                leftArm.rotation.x = 0.45 + Math.cos(t * 2.2) * 0.06;
             }
+            if (torso) torso.rotation.set(torsoLeanX, torsoTwistY, 0);
             const legTuck = a.airborne ? 0.55 : 0;
             leftLeg.rotation.x = legTuck;
             rightLeg.rotation.x = -legTuck * 0.6;
@@ -943,7 +1068,10 @@ window.addEventListener('wheel', (e) => {
     CAM.distance = THREE.MathUtils.clamp(CAM.distance + Math.sign(e.deltaY) * 2.5, CAM.minDistance, CAM.maxDistance);
 }, { passive: true });
 
+let lastMouseScreenX = typeof window !== 'undefined' ? window.innerWidth * 0.65 : 960;
+
 document.addEventListener('mousemove', (e) => {
+    if (Number.isFinite(e.clientX)) lastMouseScreenX = e.clientX;
     const dragging = (e.buttons & 2) || (e.buttons & 4) || document.pointerLockElement === document.body;
     if (!dragging) return;
     if ((!e.movementX && !e.movementY) || Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;
@@ -953,14 +1081,90 @@ document.addEventListener('mousemove', (e) => {
     cam.lastInput = performance.now();
 });
 
-function triggerAttack() {
+// Rhythmic Dual-Oar Rowing State Machine (`[W]` pre-motor requires timed pulls; spamming `[W]` cancels/chokes the stroke!)
+const oarStroke = {
+    active: false,
+    elapsed: 0,
+    duration: 0.84,
+    pullStart: 0.05,
+    pullEnd: 0.62,
+    cancelThreshold: 0.48,
+    chokedTimer: 0,
+    strokeCount: 0,
+    chokedCount: 0,
+    lastPowerRatio: 0,
+};
+
+function hasMotorUpgrade() {
+    return Array.isArray(myStats?.upgrades) && myStats.upgrades.some((u) => u === 'motor' || String(u).startsWith('motor_'));
+}
+
+function triggerOarStroke() {
+    if (isDead || shopOpen || !myRaft?.craft) return;
+    inIntroSequence = false;
+    if (hasMotorUpgrade() || onSolid) return;
+
+    // Fast-Press Cancel Penalty: pressing `[W]` again before the current pull finishes (`elapsed < cancelThreshold`)
+    // yanks the oars out of the water early, cancelling the remaining thrust and restarting from the Catch phase!
+    if (oarStroke.active && oarStroke.elapsed < oarStroke.cancelThreshold) {
+        oarStroke.lastPowerRatio = oarStroke.elapsed / oarStroke.pullEnd;
+        oarStroke.chokedCount++;
+        oarStroke.chokedTimer = 0.26;
+        oarStroke.elapsed = 0;
+        myRaft.craft.velocity.x *= 0.68;
+        myRaft.craft.velocity.z *= 0.68;
+        splash(myRaft.craft.position.x, myRaft.craft.position.z, 0.32);
+        cameraShake = Math.max(cameraShake, 0.06);
+        return;
+    }
+
+    oarStroke.active = true;
+    oarStroke.elapsed = 0;
+    oarStroke.chokedTimer = 0;
+    oarStroke.strokeCount++;
+    oarStroke.lastPowerRatio = 1.0;
+    sfx.splash?.(0.28);
+}
+
+function triggerAttack(preferredSide = null) {
     if (isDead || shopOpen || !myRaft || isBlocking) return;
     inIntroSequence = false;
     isAttacking = true;
+
+    // Determine whether to pick up and swing the LEFT oar (`leftPaddle`) or RIGHT oar (`rightPaddle`)
+    const myPos = myRaft.vis.group.position;
+    const yaw = myRaft.craft?.yaw || 0;
+    const rightX = Math.cos(yaw);
+    const rightZ = -Math.sin(yaw);
+
+    let swingSide = preferredSide === 'left' || preferredSide === 'right' ? preferredSide : null;
+    if (!swingSide && enemiesData) {
+        let nearestDist = Infinity;
+        let nearestDot = 0;
+        for (const key in enemiesData) {
+            const eMesh = enemyMeshes[key];
+            if (enemiesData[key].health > 0 && eMesh) {
+                const d = myPos.distanceTo(eMesh.position);
+                if (d < nearestDist && d < PLAYER.attackRange + 9.0) {
+                    nearestDist = d;
+                    nearestDot = (eMesh.position.x - myPos.x) * rightX + (eMesh.position.z - myPos.z) * rightZ;
+                }
+            }
+        }
+        if (nearestDist < Infinity) {
+            swingSide = nearestDot < -0.05 ? 'left' : 'right';
+        }
+    }
+    if (!swingSide) {
+        if (keys.a && !keys.d) swingSide = 'left';
+        else if (keys.d && !keys.a) swingSide = 'right';
+        else swingSide = lastMouseScreenX < window.innerWidth * 0.5 ? 'left' : 'right';
+    }
+
+    myRaft.vis.anim.swingSide = swingSide;
     myRaft.vis.anim.swing = SWING_S;
     feverDirector.onPlayerAttack();
     if (enemiesData) {
-        const myPos = myRaft.vis.group.position;
         for (const key in enemiesData) {
             const eMesh = enemyMeshes[key];
             if (enemiesData[key].health > 0 && eMesh && myPos.distanceTo(eMesh.position) < PLAYER.attackRange + 1.4) {
@@ -990,12 +1194,15 @@ function triggerAttack() {
             }
         }
     }
-    setTimeout(() => { isAttacking = false; }, 200);
+    setTimeout(() => { isAttacking = false; }, 220);
 }
 
 window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'm') hud.toast(sfx.toggle() ? 'SOUND OFF' : 'SOUND ON', 800);
+    if ((k === 'w' || k === 'arrowup') && !e.repeat) {
+        triggerOarStroke();
+    }
     if (k === 'arrowup') keys.w = true;
     if (k === 'arrowdown') keys.s = true;
     if (k === 'arrowleft') keys.a = true;
@@ -1040,6 +1247,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; isBlocking = false; });
 
 window.addEventListener('mousedown', (e) => {
+    if (Number.isFinite(e.clientX)) lastMouseScreenX = e.clientX;
     if (e.target?.closest?.('#shop') || e.target?.closest?.('#armory-overlay') || e.target?.closest?.('#title-menu-root')) return;
     if (isDead || shopOpen || feverDirector.armoryShop.isOpen() || !myRaft) return;
     if (e.button === 0) {
@@ -1078,27 +1286,94 @@ function fixedStep() {
         craft.angularVelocity.y = 0;
     }
     const live = !isDead && !inIntroSequence;
-    // Helmet 01 & Videogame Helmet 06 (Physical Common-Sense & World-Believability):
-    // - Open river moves with continuous physical current (0.85x) even when back-paddling ([S] fights the current rather than turning the river off!).
-    // - Docking on solid `Costado` vegetation/planks (onSolid) or pulling into the sheltered Harbor City pier (inCalmHarbor && x > 10) gives 0 water drift.
+    const hasMotor = hasMotorUpgrade();
+    // Slower, Heavy, Physical River Pacing:
+    // - Pre-motor open river drifts gently (`currentScale = 0.14`, ~1.0 m/s) so every timed pull of the remos counts!
+    // - Once an Outboard Motor is purchased (`hasMotor`), holding `[W]` drives continuous motor throttle just as before.
     const inCalmHarbor = craft.position.z < -135 && craft.position.z > -275;
     const dockedAtHarborPier = inCalmHarbor && craft.position.x > 10;
-    const currentScale = dockedAtHarborPier || onSolid || shopOpen ? 0 : 0.85;
+    const currentScale = dockedAtHarborPier || onSolid || shopOpen ? 0 : (hasMotor ? 0.28 : 0.14);
+    const continuousW = (hasMotor || onSolid) ? keys.w : false;
+    const prevVx = craft.velocity.x;
+    const prevVz = craft.velocity.z;
     const input = live
-        ? { ...keys, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
+        ? { ...keys, w: continuousW, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
         : { onSolid, currentScale: 0 };
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
-    // Extra responsive steering & forward bite on water AND agile on-foot stride on solid ground (Helmet 01 & Helmet 06)
+
+    // Extra responsive steering + Rhythmic Dual-Oar Pull Physics (pre-motor) vs. Continuous Motor/Walk (post-motor / onSolid)
     if (live && !mageGrab.active) {
         if (keys.a || keys.d) {
             const steerSign = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
-            craft.yaw += steerSign * (onSolid ? 0.95 : 0.55) * FIXED_DT;
+            craft.yaw += steerSign * (onSolid ? 0.85 : 0.45) * FIXED_DT;
         }
-        if (keys.w) {
+        if ((hasMotor || onSolid) && keys.w) {
             const f = headingOf(craft.yaw);
-            const thrustAccel = onSolid ? 5.2 : 4.2;
+            const thrustAccel = onSolid ? 4.4 : 4.2;
             craft.velocity.x += f.x * thrustAccel * FIXED_DT;
             craft.velocity.z += f.z * thrustAccel * FIXED_DT;
+        } else if (!hasMotor && !onSolid && craft.position.y <= WATER_SURFACE_Y + PHYSICS.surfaceSnap) {
+            if (oarStroke.chokedTimer > 0) {
+                oarStroke.chokedTimer = Math.max(0, oarStroke.chokedTimer - FIXED_DT);
+            }
+            let pullCurve = 0;
+            if (oarStroke.active) {
+                oarStroke.elapsed += FIXED_DT;
+                if (
+                    oarStroke.chokedTimer <= 0 &&
+                    oarStroke.elapsed >= oarStroke.pullStart &&
+                    oarStroke.elapsed <= oarStroke.pullEnd
+                ) {
+                    const u = (oarStroke.elapsed - oarStroke.pullStart) / (oarStroke.pullEnd - oarStroke.pullStart);
+                    pullCurve = Math.sin(u * Math.PI) ** 1.15;
+                    const f = headingOf(craft.yaw);
+                    // Emit twin oar-blade water splashes on BOTH left (`-X`) and right (`+X`) sides during peak pull
+                    if (u > 0.15 && u < 0.88 && Math.random() < 0.48) {
+                        const rx = Math.cos(craft.yaw);
+                        const rz = -Math.sin(craft.yaw);
+                        for (const side of [-1, 1]) {
+                            emitFoam(
+                                craft.position.x + rx * side * 1.35 - f.x * 0.25,
+                                FOAM_Y + 0.04,
+                                craft.position.z + rz * side * 1.35 - f.z * 0.25,
+                                -f.x * 2.2 + (Math.random() - 0.5) * 0.7,
+                                0.85 + Math.random() * 0.55,
+                                -f.z * 2.2 + (Math.random() - 0.5) * 0.7,
+                                0.55,
+                                0.22
+                            );
+                        }
+                    }
+                }
+                if (oarStroke.elapsed >= oarStroke.duration) {
+                    oarStroke.active = false;
+                    oarStroke.elapsed = 0;
+                }
+            }
+
+            // Genuine Hydrodynamic Water Glide & Oar Impulse (replaces arcade 6.67/s stop-drag with realistic 1.35/s water glide):
+            const stepVx = craft.velocity.x;
+            const stepVz = craft.velocity.z;
+            const f = headingOf(craft.yaw);
+            const r = { x: -f.z, z: f.x };
+            const driftVz = (dockedAtHarborPier || shopOpen) ? 0 : -0.95;
+            const driftF = driftVz * f.z;
+            const driftL = driftVz * r.z;
+            let vF = prevVx * f.x + prevVz * f.z;
+            let vL = prevVx * r.x + prevVz * r.z;
+            const pullAccel = (isAttacking ? 12.5 : 22.0) * pullCurve;
+            const backAccel = keys.s ? -5.8 : 0;
+            const kWater = 1.35;
+            const kKeel = 6.0;
+            vF += (pullAccel + backAccel - kWater * (vF - driftF)) * FIXED_DT;
+            vL += (-kKeel * (vL - driftL)) * FIXED_DT;
+            if (oarStroke.chokedTimer > 0) {
+                vF *= 0.94;
+            }
+            craft.velocity.x = vF * f.x + vL * r.x;
+            craft.velocity.z = vF * f.z + vL * r.z;
+            craft.position.x += (craft.velocity.x - stepVx) * FIXED_DT;
+            craft.position.z += (craft.velocity.z - stepVz) * FIXED_DT;
         }
     }
     const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
@@ -1300,11 +1575,19 @@ function updateLocalRaft(dt, now) {
         vis.group.position.y = Math.max(craft.position.y, 1.12);
     }
     vis.group.quaternion.copy(craft.quaternion);
+    const hasMotor = hasMotorUpgrade();
+    const activeThrust = isDead
+        ? 0
+        : hasMotor || onSolid
+            ? Math.sign(watercraftThrust(keys, myStats.upgrades, isAttacking))
+            : (oarStroke.active && oarStroke.elapsed >= oarStroke.pullStart && oarStroke.elapsed <= oarStroke.pullEnd ? 1 : (keys.s ? -1 : 0));
     Object.assign(vis.anim, {
         yaw,
         speed: craft.velocity.x * f.x + craft.velocity.z * f.z,
         turn: craft.angularVelocity.y,
-        thrust: isDead ? 0 : Math.sign(watercraftThrust(keys, myStats.upgrades, isAttacking)),
+        thrust: activeThrust,
+        strokePhase: (!hasMotor && !onSolid && oarStroke.active) ? Math.min(1, oarStroke.elapsed / oarStroke.duration) : 0,
+        strokeChoked: oarStroke.chokedTimer,
         airborne: wasAirborne,
         onSolid,
         block: isBlocking,
@@ -1585,6 +1868,9 @@ if (typeof window !== 'undefined') {
         getEnemiesData: () => enemiesData,
         getMyStats: () => myStats,
         getMageGrab: () => mageGrab,
+        getOarStroke: () => oarStroke,
+        triggerOarStroke,
+        triggerAttack,
         feverDirector,
     };
 }

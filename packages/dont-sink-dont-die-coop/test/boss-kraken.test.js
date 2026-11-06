@@ -13,6 +13,7 @@ import {
     shouldKrakenSpawn,
     spawnKraken,
     calculateWhirlpoolSuction,
+    calculateKrakenShockwaveForce,
     damageKraken,
     triggerKrakenDefeat,
     tickKraken,
@@ -712,5 +713,165 @@ describe('3D Articulated Kraken Boss Builder (Three.js Mesh & Rigging)', () => {
     it('36. resolveTHREE falls back cleanly or returns null when no instance available', () => {
         assert.equal(resolveTHREE(mockTHREE), mockTHREE);
         assert.equal(resolveTHREE(null), null);
+    });
+
+    it('37. generates expanding water shockwave and event when tentacle slam lands', () => {
+        const k = createKrakenState();
+        spawnKraken(k);
+        k.telegraphRings.push({
+            id: 'slam_shockwave_test',
+            position: { x: 4, y: 0, z: -1348 },
+            maxRadius: 5.5,
+            currentRadius: 5.5,
+            duration: 1.0,
+            elapsed: 1.0, // landing right now
+            tentacleIndex: 2,
+            damage: 35,
+        });
+
+        const evs = tickKraken(k, 0.05, []);
+        const swEvent = evs.find((e) => e.event === 'kraken:shockwave');
+        assert.ok(swEvent, 'Must emit kraken:shockwave event on slam land');
+        assert.equal(swEvent.data.position.x, 4);
+        assert.equal(swEvent.data.position.z, -1348);
+        assert.ok(swEvent.data.maxRadius >= 14.0);
+
+        assert.equal(k.shockwaves.length, 1);
+        assert.equal(k.shockwaves[0].position.x, 4);
+        assert.equal(k.shockwaves[0].position.z, -1348);
+    });
+
+    it('38. computes calculateKrakenShockwaveForce radial push and wave-slope rocking on nearby rafts', () => {
+        const k = createKrakenState();
+        spawnKraken(k);
+        k.shockwaves.push({
+            id: 'sw_force_test',
+            position: { x: 0, y: 0, z: -1350 },
+            radius: 10.0,
+            maxRadius: 14.0,
+            duration: 1.25,
+            elapsed: 0.3,
+            pushStrength: 26.0,
+            rockingImpulse: 0.38,
+        });
+
+        // Raft placed at (0, -1345) -> 5 meters downriver (+Z displacement)
+        const nearRaft = { x: 0, y: 0, z: -1345 };
+        const force = calculateKrakenShockwaveForce(nearRaft, k);
+
+        assert.equal(force.inRange, true);
+        assert.ok(force.z > 0, 'Radial push must push raft away from slam (+Z)');
+        assert.notEqual(force.rockingPitch, 0, 'Must apply rocking pitch wave slope');
+
+        // Raft far away outside radius (30m)
+        const farRaft = { x: 30, y: 0, z: -1350 };
+        const farForce = calculateKrakenShockwaveForce(farRaft, k);
+        assert.equal(farForce.inRange, false);
+        assert.equal(farForce.x, 0);
+        assert.equal(farForce.z, 0);
+    });
+
+    it('39. pushes nearby player velocities radially during tickKraken shockwave expansion', () => {
+        const k = createKrakenState();
+        spawnKraken(k);
+        k.shockwaves.push({
+            id: 'sw_push_sim',
+            position: { x: 5, y: 0, z: -1350 },
+            radius: 8.0,
+            maxRadius: 14.0,
+            duration: 1.25,
+            elapsed: 0.2,
+            pushStrength: 30.0,
+            rockingImpulse: 0.4,
+        });
+
+        const player = {
+            id: 'player_raft',
+            position: { x: 8, y: 0, z: -1350 }, // 3m to the right (+X)
+            velocity: { x: 0, y: 0, z: 0 },
+            isDead: false,
+        };
+
+        tickKraken(k, 0.1, [player]);
+        assert.ok(player.velocity.x > 0, 'Shockwave wave crest must accelerate player velocity radially outward (+X)');
+    });
+
+    it('40. triggers physical boss recoil, thrash timer, and bioluminescent vein flashing on damage', () => {
+        const k = createKrakenState();
+        spawnKraken(k);
+
+        assert.equal(k.recoil.pitch, 0);
+        assert.equal(k.veinFlash.intensity, 0);
+        assert.equal(k.thrashTimer, 0);
+
+        damageKraken(k, 60);
+
+        assert.ok(k.recoil.velocityPitch > 0, 'Must impart head recoil pitch velocity');
+        assert.ok(k.recoil.velocityZ > 0, 'Must flinch boss body back (+Z)');
+        assert.ok(k.veinFlash.intensity > 0.5, 'Must flash bioluminescent veins');
+        assert.ok(k.thrashTimer > 0, 'Must start thrash timer');
+
+        // Tick recovery
+        tickKraken(k, 0.1, []);
+        assert.ok(k.recoil.pitch > 0, 'Pitch velocity integrates into recoil pitch angle');
+    });
+
+    it('41. phase changes trigger violent roar recoil, thrashing, and crimson/purple vein surges', () => {
+        const k = createKrakenState();
+        spawnKraken(k);
+
+        // Phase 1 -> Phase 2 transition
+        damageKraken(k, 510);
+        assert.equal(k.phase, 2);
+        assert.equal(k.veinFlash.color, 0xa855f7); // Abyssal purple surge
+        assert.ok(k.thrashTimer >= 1.5);
+
+        // Phase 2 -> Phase 3 transition
+        damageKraken(k, 80, 'barnacle_0'); // Remove armor
+        damageKraken(k, 600);
+        assert.equal(k.phase, 3);
+        assert.equal(k.veinFlash.color, 0xff0044); // Blood crimson overload
+        assert.ok(k.thrashTimer >= 2.0);
+    });
+
+    it('42. updates shockwavePool meshes, mantleVeinMesh, and head recoil transforms in updateKrakenMesh', () => {
+        const mesh = createKrakenMesh(mockTHREE);
+        const state = createKrakenState();
+        spawnKraken(state);
+
+        // Add active shockwave
+        state.shockwaves.push({
+            id: 'sw_mesh_test',
+            position: { x: 3, y: 0, z: -1345 },
+            radius: 6.0,
+            maxRadius: 14.0,
+            duration: 1.25,
+            elapsed: 0.5,
+        });
+
+        // Trigger recoil and vein flash
+        state.recoil.pitch = 0.22;
+        state.recoil.offsetY = -0.5;
+        state.recoil.offsetZ = 1.2;
+        state.veinFlash.intensity = 0.9;
+        state.veinFlash.color = 0xff0044;
+        state.thrashTimer = 0.8;
+
+        updateKrakenMesh(mesh, state, 0.016, 1.5);
+
+        const { shockwavePool, mantleVeinMesh, headGroup } = mesh.userData;
+        assert.ok(shockwavePool);
+        assert.equal(shockwavePool.length, 6);
+        assert.equal(shockwavePool[0].mesh.visible, true);
+        assert.equal(shockwavePool[1].mesh.visible, false);
+        assert.ok(shockwavePool[0].mesh.scale.x >= 6.0);
+
+        assert.ok(mantleVeinMesh);
+        assert.equal(mantleVeinMesh.visible, true);
+
+        // Head group should have recoil pitch & thrash applied
+        assert.ok(headGroup.rotation.x > 0);
+        // Kraken root mesh should reflect recoil Y and Z offsets
+        assert.equal(mesh.position.z, -1350 + 1.2);
     });
 });

@@ -516,11 +516,15 @@ describe('hazards-mesh: Three.js renderer and animation builders', () => {
     const mockThree = createMockThree();
 
     test('createRapidsMesh returns valid mesh group with shader uniforms', () => {
-        const rapidsConfig = { x: 0, z: -50, width: 12, length: 30 };
+        const rapidsConfig = { x: 0, z: -50, width: 12, length: 30, direction: { x: 0, z: -1 } };
         const group = MeshBuilder.createRapidsMesh(mockThree, rapidsConfig);
         assert.equal(group.userData.type, 'rapids');
+        assert.equal(group.userData.boostDirectionZ, -1);
         assert.ok(group.userData.shaderMat.uniforms.uTime);
         assert.equal(group.userData.chevronArrows.length, 5);
+        const firstArrow = group.userData.chevronArrows[0];
+        assert.ok(firstArrow.userData.leftWing.rotation.y < 0, 'leftWing angled inward toward -Z tip');
+        assert.ok(firstArrow.userData.rightWing.rotation.y > 0, 'rightWing angled inward toward -Z tip');
     });
 
     test('createWhirlpoolMesh builds funnel mesh with clockwise/counter-clockwise uniform', () => {
@@ -534,7 +538,9 @@ describe('hazards-mesh: Three.js renderer and animation builders', () => {
         const rampConfig = { x: 2, z: -250, width: 6, length: 8, height: 2.2 };
         const group = MeshBuilder.createRampMesh(mockThree, rampConfig);
         assert.equal(group.userData.type, 'ramp');
+        assert.equal(group.userData.launchDirectionZ, -1);
         assert.ok(group.children.length >= 4);
+        assert.ok(group.userData.deckGroup.children[0].rotation.x > 0, 'plank rotation.x tilts -Z launch lip upward');
     });
 
     test('createCoinRingMesh builds 3D gold ring and translucent disc', () => {
@@ -568,5 +574,136 @@ describe('hazards-mesh: Three.js renderer and animation builders', () => {
             MeshBuilder.animateRiverHazards(handle, 1.5, 0.016);
             MeshBuilder.animateRiverHazards(handle, 3.0, 0.016);
         });
+    });
+
+    test('createLogJamMesh builds timber logs and splinter fragments', () => {
+        const lj = H.createLogJam('lj_test', 0, -100);
+        const group = MeshBuilder.createLogJamMesh(mockThree, lj);
+        assert.equal(group.userData.type, 'logJam');
+        assert.ok(group.userData.logMeshes.length >= 6);
+        assert.ok(group.userData.splinterMeshes.length >= 8);
+    });
+
+    test('createGeyserMesh builds stone vent ring, boiling dome, and eruption plume', () => {
+        const g = H.createRiverGeyser('geyser_test', 0, -200);
+        const group = MeshBuilder.createGeyserMesh(mockThree, g);
+        assert.equal(group.userData.type, 'geyser');
+        assert.ok(group.userData.boilingDome);
+        assert.ok(group.userData.eruptionPlume);
+    });
+});
+
+describe('river hazards: Helmet 06 sensory promises & reaction dynamics', () => {
+    const mockThree = createMockThree();
+
+    test('speed chevrons pulse intensely and brighten when actively boosting a raft', () => {
+        const rap = { x: 0, z: -50, width: 10, length: 24, direction: { x: 0, z: -1 } };
+        const group = MeshBuilder.createRapidsMesh(mockThree, rap);
+
+        // Before boost: normal chevron scale
+        MeshBuilder.animateRiverHazards({ rapidsMeshes: [group] }, 1.0, 0.016);
+        const normalScale = group.userData.chevronArrows[0].scale.x;
+
+        // Trigger active boost on rapids
+        group.userData.config.isBoostingRaft = true;
+        group.userData.config.boostPulseTimerS = 0.65;
+        MeshBuilder.animateRiverHazards({ rapidsMeshes: [group] }, 1.0, 0.016);
+        const boostedScale = group.userData.chevronArrows[0].scale.x;
+
+        assert.ok(boostedScale > normalScale, 'actively boosting chevrons should scale up intensely');
+        assert.equal(group.userData.chevronArrows[0].userData.leftWing.material, group.userData.boostedChevronMat);
+    });
+
+    test('floating mine detonates with expanding shockwave and flying shrapnel rather than vanishing', () => {
+        const mine = H.createMineBarrel('m_blast', 0, -100);
+        const group = MeshBuilder.createMineMesh(mockThree, mine);
+
+        // Mine floating: shockwave and plume are hidden
+        assert.equal(group.userData.shockwaveRing.visible, false);
+        assert.equal(group.userData.plumeMesh.visible, false);
+
+        // Detonate mine
+        mine.state = 'detonated';
+        MeshBuilder.animateRiverHazards({ mineMeshes: [group] }, 1.0, 0.016);
+
+        // Reaction triggered! Shockwave and plume become visible
+        assert.equal(group.visible, true);
+        assert.equal(group.userData.barrelBody.visible, false);
+        assert.equal(group.userData.shockwaveRing.visible, true);
+        assert.equal(group.userData.plumeMesh.visible, true);
+        assert.ok(group.userData.shockwaveRing.scale.x > 1.0);
+    });
+
+    test('log jam shudders and splinters on craft collision impact', () => {
+        const lj = H.createLogJam('lj_impact', 0, -120, { hp: 100 });
+        const craft = {
+            position: { x: 0, y: 0.4, z: -120 },
+            velocity: { x: 0, y: 0, z: -10 },
+        };
+        const colRes = H.evaluateLogJamCollision(craft, lj, 0.05);
+
+        assert.equal(colRes.collided, true);
+        assert.ok(colRes.damageDealt > 0);
+        assert.ok(colRes.remainingHp > 0);
+        assert.equal(lj.state, 'shuddering');
+        assert.ok(lj.splinters.length >= 8);
+        assert.ok(colRes.reboundForce.z > 0, 'rebound force pushes raft back from barricade');
+
+        // Verify 3D mesh shudders
+        const group = MeshBuilder.createLogJamMesh(mockThree, lj);
+        MeshBuilder.animateRiverHazards({ logJamMeshes: [group] }, 1.0, 0.016);
+        assert.notEqual(group.position.x, 0, 'mesh position should shudder during vibration');
+    });
+
+    test('geyser telegraphs with pressurized boiling dome before erupting', () => {
+        const g = H.createRiverGeyser('g_cycle', 0, -200, {
+            boilDurationS: 1.0,
+            eruptDurationS: 1.0,
+            restDurationS: 2.0,
+        });
+
+        // 1. Boil phase (t = 0.5s): pressurized boiling dome active
+        const boilState = H.evaluateGeyserState(g, 0.5);
+        assert.equal(boilState.state, 'boiling');
+        assert.ok(boilState.domeHeight > 0);
+        assert.equal(boilState.updraftForce, 0);
+
+        // 2. Erupt phase (t = 1.5s): vertical steam eruption & updraft active
+        const eruptState = H.evaluateGeyserState(g, 1.5);
+        assert.equal(eruptState.state, 'erupting');
+        assert.ok(eruptState.updraftForce > 0);
+        assert.ok(eruptState.plumeHeight > 0);
+
+        // 3. Dormant phase (t = 2.5s)
+        const restState = H.evaluateGeyserState(g, 2.5);
+        assert.equal(restState.state, 'dormant');
+
+        // Test 3D visual telegraph transitions
+        const group = MeshBuilder.createGeyserMesh(mockThree, g);
+        MeshBuilder.animateRiverHazards({ geyserMeshes: [group] }, 0.5, 0.016);
+        assert.equal(group.userData.boilingDome.visible, true);
+        assert.equal(group.userData.eruptionPlume.visible, false);
+
+        MeshBuilder.animateRiverHazards({ geyserMeshes: [group] }, 1.5, 0.016);
+        assert.equal(group.userData.boilingDome.visible, false);
+        assert.equal(group.userData.eruptionPlume.visible, true);
+    });
+
+    test('airborne coin ring bursts with golden radial ring expansion upon collection', () => {
+        const coin = { id: 'coin_burst', x: 0, y: 3.0, z: -150, radius: 1.5, collected: false };
+        const group = MeshBuilder.createCoinRingMesh(mockThree, coin);
+
+        // Initially intact and uncollected
+        assert.equal(group.userData.burstRing.visible, false);
+
+        // Collect coin
+        coin.collected = true;
+        MeshBuilder.animateRiverHazards({ coinRingMeshes: [group] }, 1.0, 0.016);
+
+        // Expanding radial burst ring and sparkles are revealed
+        assert.equal(group.userData.burstRing.visible, true);
+        assert.ok(group.userData.burstRing.scale.x > 1.0);
+        assert.equal(group.userData.sparkles[0].visible, true);
+        assert.equal(group.userData.torusMesh.visible, false);
     });
 });

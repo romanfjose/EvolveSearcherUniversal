@@ -85,11 +85,12 @@ export function createMusicEngine({ audioContext = null } = {}) {
         masterGain.connect(audioCtx.destination);
 
         musicMasterGain = audioCtx.createGain();
-        musicMasterGain.gain.setValueAtTime(0.7, audioCtx.currentTime);
+        // Helmet 02 (Sound & Atmosphere Engineer): Warm, subtle atmospheric floor (never blast at 0.7 gain)
+        musicMasterGain.gain.setValueAtTime(0.14, audioCtx.currentTime);
         musicMasterGain.connect(masterGain);
 
         sfxMasterGain = audioCtx.createGain();
-        sfxMasterGain.gain.setValueAtTime(0.85, audioCtx.currentTime);
+        sfxMasterGain.gain.setValueAtTime(0.55, audioCtx.currentTime);
         sfxMasterGain.connect(masterGain);
 
         // Create individual stem layer gain nodes
@@ -362,28 +363,31 @@ export function createMusicEngine({ audioContext = null } = {}) {
             const patterns = MUSIC_PATTERNS[currentMode] || MUSIC_PATTERNS[MUSIC_MODES.CALM];
             const scheduleTime = now + 0.02; // Small lookahead
 
-            // 1. Bassline
-            const bassNote = patterns.bass[stepIndex];
-            if (bassNote && NOTE_FREQS[bassNote]) {
-                playBassNote(NOTE_FREQS[bassNote], scheduleTime, stepDuration * 1.8);
+            // Helmet 02 (Sound & Atmosphere Engineer):
+            // 1. Kill the procedural synth melody / sawtooth brass mosquito loop (no playLeadNote or playBrassStab spam).
+            // 2. Only play a sparse, deep sub-bass heartbeat on downbeats (stepIndex % 4 === 0) when in Combat or Rapids,
+            //    and let warm low-pass rushing river water carry the baseline atmosphere.
+            if (stepIndex % 4 === 0 && (currentMode === MUSIC_MODES.COMBAT || currentMode === MUSIC_MODES.RAPIDS)) {
+                const bassNote = patterns.bass[stepIndex];
+                if (bassNote && NOTE_FREQS[bassNote]) {
+                    playBassNote(Math.min(110, NOTE_FREQS[bassNote]), scheduleTime, stepDuration * 2.4);
+                }
             }
 
-            // 2. Percussion
-            const percVelocity = patterns.percussion[stepIndex];
-            if (percVelocity > 0) {
-                playPercussionHit(percVelocity, scheduleTime, currentMode);
-            }
-
-            // 3. Lead / Arp
-            const leadNote = patterns.lead[stepIndex];
-            if (leadNote && NOTE_FREQS[leadNote]) {
-                playLeadNote(NOTE_FREQS[leadNote], scheduleTime, stepDuration * 0.9);
-            }
-
-            // 4. Danger Brass
-            const brassNote = patterns.brass[stepIndex];
-            if (brassNote && NOTE_FREQS[brassNote]) {
-                playBrassStab(NOTE_FREQS[brassNote], scheduleTime, stepDuration * 2.2);
+            if (stepIndex % 2 === 0 && noiseBuffer && layerGains[TRACK_LAYERS.PERCUSSION]) {
+                // Soft low-pass-filtered rushing river water texture (320-580 Hz)
+                const noise = ctx.createBufferSource();
+                noise.buffer = noiseBuffer;
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(440 + (stepIndex % 4) * 35, scheduleTime);
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.001, scheduleTime);
+                gain.gain.linearRampToValueAtTime(0.06, scheduleTime + stepDuration * 0.5);
+                gain.gain.exponentialRampToValueAtTime(0.001, scheduleTime + stepDuration * 1.9);
+                noise.connect(filter).connect(gain).connect(layerGains[TRACK_LAYERS.PERCUSSION]);
+                noise.start(scheduleTime);
+                noise.stop(scheduleTime + stepDuration * 2.0);
             }
         }
     }

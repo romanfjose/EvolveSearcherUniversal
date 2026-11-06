@@ -65,26 +65,25 @@ export function upgradeRendererAndAtmosphere(renderer, scene) {
     return { skyDome, skyMat, hemiLight };
 }
 
-// ─── 2. Custom GLSL Gerstner Wave & Fresnel Specular River Surface ──────
+// ─── 2. Custom GLSL Gerstner Wave & Per-Pixel Smooth Specular River Surface (Helmet 04: Zero Checkerboard Artifacts) ──────
 export function createAAARiverMesh(riverWidth, riverLength, waterTex) {
-    const geo = new THREE.PlaneGeometry(riverWidth + 16, riverLength + 200, 72, 420);
+    const geo = new THREE.PlaneGeometry(riverWidth + 16, riverLength + 200, 96, 480);
     const mat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
             uClarity: { value: 0 },
-            uMudColor: { value: new THREE.Color(0x3a2f25) },
-            uClearColor: { value: new THREE.Color(0x094d73) },
-            uDeepColor: { value: new THREE.Color(0x041f36) },
-            uSkyColor: { value: new THREE.Color(0x7aa8d6) },
-            uSunColor: { value: new THREE.Color(0xffe0b2) },
-            uSunDir: { value: new THREE.Vector3(0.35, 0.45, -0.82).normalize() },
+            uMudColor: { value: new THREE.Color(0x1e3846) },
+            uClearColor: { value: new THREE.Color(0x0b4f6c) },
+            uDeepColor: { value: new THREE.Color(0x062338) },
+            uSkyColor: { value: new THREE.Color(0x6290b8) },
+            uSunColor: { value: new THREE.Color(0xffdca8) },
+            uSunDir: { value: new THREE.Vector3(0.28, 0.55, -0.78).normalize() },
             uHalfWidth: { value: riverWidth * 0.5 },
             uMap: { value: waterTex },
         },
         vertexShader: `
             uniform float uTime;
             varying vec3 vWorldPos;
-            varying vec3 vNormal;
             varying vec2 vUv;
             varying float vWaveH;
 
@@ -92,23 +91,15 @@ export function createAAARiverMesh(riverWidth, riverLength, waterTex) {
                 vUv = uv;
                 vec4 wp = modelMatrix * vec4(position, 1.0);
 
-                // Layered Gerstner-style river waves flowing toward -Z
-                float zFlow = wp.z + uTime * 9.0;
-                float w1 = sin(wp.x * 0.55 + zFlow * 0.28) * 0.08;
-                float w2 = cos(wp.x * 1.15 - zFlow * 0.52) * 0.045;
-                float w3 = sin((wp.x + wp.z) * 0.9 + uTime * 3.8) * 0.03;
-                float h = w1 + w2 + w3;
+                // Smooth Gerstner-style river swell flowing toward -Z
+                float zFlow = wp.z + uTime * 9.5;
+                float w1 = sin(wp.x * 0.32 + zFlow * 0.18) * 0.07;
+                float w2 = cos(wp.x * 0.58 - zFlow * 0.26) * 0.035;
+                float h = w1 + w2;
 
                 wp.y += h;
                 vWaveH = h;
                 vWorldPos = wp.xyz;
-
-                // Analytical normal approximation
-                float dx = 0.55 * 0.08 * cos(wp.x * 0.55 + zFlow * 0.28)
-                         - 1.15 * 0.045 * sin(wp.x * 1.15 - zFlow * 0.52);
-                float dz = 0.28 * 0.08 * cos(wp.x * 0.55 + zFlow * 0.28)
-                         + 0.52 * 0.045 * sin(wp.x * 1.15 - zFlow * 0.52);
-                vNormal = normalize(vec3(-dx * 2.4, 1.0, -dz * 2.4));
 
                 gl_Position = projectionMatrix * viewMatrix * wp;
             }
@@ -124,11 +115,10 @@ export function createAAARiverMesh(riverWidth, riverLength, waterTex) {
             uniform vec3 uSunDir;
             uniform float uHalfWidth;
             varying vec3 vWorldPos;
-            varying vec3 vNormal;
             varying vec2 vUv;
             varying float vWaveH;
 
-            // Procedural caustics / ripple hash
+            // Smooth procedural ripple noise (computed per-pixel to eliminate triangle grid checkerboards)
             float hash(vec2 p) {
                 return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
             }
@@ -144,38 +134,45 @@ export function createAAARiverMesh(riverWidth, riverLength, waterTex) {
             }
 
             void main() {
-                vec3 N = normalize(vNormal);
+                // Per-pixel continuous analytical wave normal (zero vertex-grid Mach bands or diamond checkerboards)
+                float zFlow = vWorldPos.z + uTime * 9.5;
+                float dx = 0.32 * 0.07 * cos(vWorldPos.x * 0.32 + zFlow * 0.18)
+                         - 0.58 * 0.035 * sin(vWorldPos.x * 0.58 - zFlow * 0.26)
+                         + 0.025 * sin(vWorldPos.x * 1.4 + zFlow * 0.6);
+                float dz = 0.18 * 0.07 * cos(vWorldPos.x * 0.32 + zFlow * 0.18)
+                         + 0.26 * 0.035 * sin(vWorldPos.x * 0.58 - zFlow * 0.26);
+                vec3 N = normalize(vec3(-dx * 1.35, 1.0, -dz * 1.35));
                 vec3 V = normalize(cameraPosition - vWorldPos);
 
-                // Base water color transitions from muddy headwaters to clear emerald/sapphire downstream
+                // Deep readable slate-teal river palette so rafts, planks, and monsters pop in 0.5s squint test
                 float downstream = clamp(-vWorldPos.z / 1500.0, 0.0, 1.0);
                 float clarity = clamp(mix(downstream, uClarity, 0.5), 0.0, 1.0);
                 vec3 shallow = mix(uMudColor, uClearColor, clarity);
                 float centerDepth = 1.0 - clamp(abs(vWorldPos.x) / uHalfWidth, 0.0, 1.0);
-                vec3 baseCol = mix(shallow, uDeepColor, centerDepth * 0.55);
+                vec3 baseCol = mix(shallow, uDeepColor, centerDepth * 0.62);
 
-                // Flowing current streaks & caustics
-                vec2 flowUv = vec2(vWorldPos.x * 0.45, vWorldPos.z * 0.18 + uTime * 2.2);
-                float n1 = noise(flowUv * 2.5);
-                float n2 = noise(flowUv * 5.2 - vec2(0.0, uTime * 1.4));
-                float caustic = smoothstep(0.58, 0.88, n1 * 0.6 + n2 * 0.4);
-                baseCol += vec3(0.18, 0.32, 0.38) * caustic * (0.25 + 0.45 * clarity);
+                // Flowing current streaks & subtle caustics
+                vec2 flowUv = vec2(vWorldPos.x * 0.38, vWorldPos.z * 0.15 + uTime * 2.4);
+                float n1 = noise(flowUv * 2.2);
+                float n2 = noise(flowUv * 4.5 - vec2(0.0, uTime * 1.5));
+                float caustic = smoothstep(0.60, 0.88, n1 * 0.6 + n2 * 0.4);
+                baseCol += vec3(0.14, 0.28, 0.35) * caustic * (0.22 + 0.35 * clarity);
 
                 // Shore foam along riverbanks
                 float bankDist = abs(abs(vWorldPos.x) - uHalfWidth);
                 float shoreFoam = smoothstep(2.4, 0.2, bankDist) * (0.45 + 0.55 * n1);
 
-                // Fresnel sky reflection + Sun Blinn-Phong specular glitter
-                float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.2);
-                vec3 col = mix(baseCol, uSkyColor, fresnel * 0.55);
+                // Smooth Fresnel sky reflection + soft sunset horizon sheen
+                float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.6);
+                vec3 col = mix(baseCol, uSkyColor, fresnel * 0.38);
 
                 vec3 H = normalize(uSunDir + V);
-                float spec = pow(max(dot(N, H), 0.0), 96.0);
-                col += uSunColor * spec * 0.95;
+                float spec = pow(max(dot(N, H), 0.0), 42.0);
+                col += uSunColor * spec * 0.32;
 
-                // Crest highlights & bank foam
-                col += vec3(0.88, 0.95, 1.0) * smoothstep(0.07, 0.13, vWaveH) * 0.25;
-                col = mix(col, vec3(0.92, 0.96, 1.0), clamp(shoreFoam * 0.65, 0.0, 0.8));
+                // Subtle wave crest highlights & bank foam
+                col += vec3(0.82, 0.92, 0.98) * smoothstep(0.06, 0.11, vWaveH) * 0.18;
+                col = mix(col, vec3(0.90, 0.95, 1.0), clamp(shoreFoam * 0.6, 0.0, 0.75));
 
                 gl_FragColor = vec4(col, 1.0);
             }
@@ -589,18 +586,26 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     const tilt = new THREE.Group();
     group.add(tilt);
 
-    // 6A. Glossy Puffy 1-Person Plastic Inflatable Dinghy (Red, Blue, Green, Yellow!)
+    // 6A. Satin PVC 1-Person Plastic Inflatable Dinghy (Helmet 04: Grounded high-contrast watercraft colors, zero neon pink/purple blowout)
     const raft = new THREE.Group();
-    const baseCol = new THREE.Color(color);
-    const floorCol = baseCol.clone().multiplyScalar(0.68);
-    const highlightCol = baseCol.clone().lerp(new THREE.Color(0xffffff), 0.22);
+    const rawHex = typeof color === 'number' ? color : new THREE.Color(color).getHex();
+    // Map raw programmer primaries to rich, saturated marine rescue colors that read cleanly under ACES tone mapping
+    const marinePaletteMap = {
+        0xef4444: 0xc8281e, // Crimson Rescue Red
+        0x3b82f6: 0x185adb, // Deep Cobalt Marine Blue
+        0x22c55e: 0x1b8a4b, // Emerald Moss Green
+        0xeab308: 0xd98218, // Rescue Amber Ochre
+    };
+    const baseCol = new THREE.Color(marinePaletteMap[rawHex] || color);
+    const floorCol = baseCol.clone().multiplyScalar(0.58);
+    const highlightCol = baseCol.clone().lerp(new THREE.Color(0xffffff), 0.08);
 
     const vinylTubeMat = new THREE.MeshStandardMaterial({
         color: highlightCol,
         emissive: baseCol,
-        emissiveIntensity: 0.14,
-        roughness: 0.22,
-        metalness: 0.06,
+        emissiveIntensity: 0.05,
+        roughness: 0.36,
+        metalness: 0.04,
     });
     const vinylFloorMat = new THREE.MeshStandardMaterial({
         color: floorCol,
@@ -870,8 +875,16 @@ export function createAAAEnemyMeshes(woodMaterial) {
     hatCone.rotation.z = -0.14;
     hatCone.rotation.x = -0.12;
 
-    whiteGuyGroup.add(wgTorso, wgLeftLeg, wgRightLeg, wgLeftArm, wgRightArm, wgHead, wgMouth, hatBrim, hatBand, hatCone);
-    whiteGuyGroup.userData = { wgLeftArm, wgRightArm, wgLeftLeg, wgRightLeg, wgTorso };
+    // Helmet 05 Telegraph Ring: visible 0.85s wind-up ring before the White Guy's grab lunge so players can block/dodge/jump on planks
+    const wgTelegraphRing = new THREE.Mesh(
+        new THREE.RingGeometry(2.6, 3.1, 32).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false })
+    );
+    wgTelegraphRing.position.y = 0.14;
+    wgTelegraphRing.visible = false;
+
+    whiteGuyGroup.add(wgTorso, wgLeftLeg, wgRightLeg, wgLeftArm, wgRightArm, wgHead, wgMouth, hatBrim, hatBand, hatCone, wgTelegraphRing);
+    whiteGuyGroup.userData = { wgLeftArm, wgRightArm, wgLeftLeg, wgRightLeg, wgTorso, wgTelegraphRing, windupProgress: 0, staggered: false };
 
     // 7B. The 3-Legged Headless Mud Alien (`mudAlien`):
     // "brown green... like mud color, doesn't have a form, maybe is three legged no head, like simple, but weird, with a small mouth"
@@ -992,33 +1005,57 @@ export function createAAAEnemyMeshes(woodMaterial) {
 }
 
 export function animateAAAEnemies(enemyMeshes, enemiesData, t) {
-    // 1. White Guy in Wizard Hat: frantic wading stride & grabbing white arms lunging forward
+    // 1. White Guy in Wizard Hat: wading stride + 0.85s overhead wind-up telegraph before grab + stagger slump on block/dodge
     const wiz = enemyMeshes.whiteGuy;
     if (wiz?.visible && wiz.userData.wgLeftArm) {
-        const reach = Math.sin(t * 7.5) * 0.32;
-        wiz.userData.wgLeftArm.rotation.x = reach;
-        wiz.userData.wgRightArm.rotation.x = -reach;
-        wiz.userData.wgLeftArm.rotation.y = Math.cos(t * 5.0) * 0.18;
-        wiz.userData.wgRightArm.rotation.y = -Math.cos(t * 5.0) * 0.18;
-        wiz.userData.wgLeftLeg.rotation.x = -reach * 1.2;
-        wiz.userData.wgRightLeg.rotation.x = reach * 1.2;
-        wiz.userData.wgTorso.position.y = 1.35 + Math.abs(Math.sin(t * 7.5)) * 0.12;
+        const wp = wiz.userData.windupProgress || 0;
+        const stag = wiz.userData.staggered || false;
+        if (stag) {
+            wiz.userData.wgLeftArm.rotation.x = 0.65;
+            wiz.userData.wgRightArm.rotation.x = 0.65;
+            wiz.userData.wgTorso.position.y = 1.05;
+            if (wiz.userData.wgTelegraphRing) wiz.userData.wgTelegraphRing.visible = false;
+        } else if (wp > 0.01) {
+            // Unmistakable 0.85s wind-up: raises both stark-white arms high overhead before lunging!
+            wiz.userData.wgLeftArm.rotation.x = -1.2 - wp * 1.35;
+            wiz.userData.wgRightArm.rotation.x = -1.2 - wp * 1.35;
+            wiz.userData.wgLeftArm.rotation.y = -0.35 * wp;
+            wiz.userData.wgRightArm.rotation.y = 0.35 * wp;
+            wiz.userData.wgTorso.position.y = 1.35 + wp * 0.42;
+            if (wiz.userData.wgTelegraphRing) {
+                wiz.userData.wgTelegraphRing.visible = true;
+                wiz.userData.wgTelegraphRing.scale.setScalar(1.35 - wp * 0.55);
+                wiz.userData.wgTelegraphRing.material.opacity = 0.35 + wp * 0.55;
+            }
+        } else {
+            const reach = Math.sin(t * 7.5) * 0.32;
+            wiz.userData.wgLeftArm.rotation.x = reach;
+            wiz.userData.wgRightArm.rotation.x = -reach;
+            wiz.userData.wgLeftArm.rotation.y = Math.cos(t * 5.0) * 0.18;
+            wiz.userData.wgRightArm.rotation.y = -Math.cos(t * 5.0) * 0.18;
+            wiz.userData.wgLeftLeg.rotation.x = -reach * 1.2;
+            wiz.userData.wgRightLeg.rotation.x = reach * 1.2;
+            wiz.userData.wgTorso.position.y = 1.35 + Math.abs(Math.sin(t * 7.5)) * 0.12;
+            if (wiz.userData.wgTelegraphRing) wiz.userData.wgTelegraphRing.visible = false;
+        }
     }
 
-    // 2. 3-Legged Headless Mud Alien: heavy tripod gait + pulsing mud AoE ring
+    // 2. 3-Legged Headless Mud Alien: heavy tripod gait + 0.85s rearing slam wind-up telegraph + pulsing mud AoE ring
     const mud = enemyMeshes.mudAlien;
     if (mud?.visible && mud.userData.tripodLegs) {
+        const wp = mud.userData.windupProgress || 0;
         const legs = mud.userData.tripodLegs;
         for (let i = 0; i < legs.length; i++) {
             const phase = t * 4.5 + (i * Math.PI * 2) / 3;
-            legs[i].rotation.x = Math.sin(phase) * 0.38;
+            legs[i].rotation.x = wp > 0.01 ? -0.45 * wp : Math.sin(phase) * 0.38;
             legs[i].rotation.z = Math.cos(phase) * 0.18;
         }
-        mud.userData.coreBody.position.y = 2.05 + Math.sin(t * 4.5) * 0.14;
+        mud.userData.coreBody.position.y = 2.05 + wp * 0.85 + Math.sin(t * 4.5) * 0.14;
         mud.userData.coreBody.rotation.z = Math.cos(t * 2.2) * 0.08;
         if (mud.userData.auraDisc) {
-            const pulse = 1.0 + Math.sin(t * 5.0) * 0.06;
+            const pulse = wp > 0.01 ? 1.15 - wp * 0.25 : 1.0 + Math.sin(t * 5.0) * 0.06;
             mud.userData.auraDisc.scale.setScalar(pulse);
+            mud.userData.auraDisc.material.opacity = wp > 0.01 ? 0.55 + wp * 0.35 : 0.32;
         }
     }
 

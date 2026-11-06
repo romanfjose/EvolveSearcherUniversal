@@ -301,7 +301,7 @@ socket.on('enemyHit', (d) => {
     if (attacker) sfx.hit(squeaky, mine ? 1 : 0.35);
     if (d.by && d.by.startsWith('police')) {
         firePoliceTracerAt(d.by, mesh.position);
-        popAt(mesh.position, `🚓 POLICE SHOT -${d.damage}`, '#60a5fa', 3.4);
+        popAt(mesh.position, `-${d.damage}`, '#60a5fa', 3.2);
     } else {
         popAt(mesh.position, `-${d.damage}`, mine ? '#ffd84a' : '#ffffff', 3);
     }
@@ -849,6 +849,13 @@ const mageGrab = {
     cooldownUntil: 0,
 };
 
+// Helmet 05 (Combat, AI & Encounter Designer): Telegraph -> Window -> Punish State (0.85s wind-up before enemy strikes)
+const enemyTelegraphs = {
+    whiteGuy: { windup: 0, duration: 0.85, staggerUntil: 0 },
+    mudAlien: { windup: 0, duration: 0.85, staggerUntil: 0 },
+    longWorm: { windup: 0, duration: 0.65, staggerUntil: 0 },
+};
+
 socket.on('playerThrown', (data) => {
     if (data.id === socket.id && myRaft?.craft && !isDead) {
         if (!mageGrab.active) {
@@ -860,8 +867,7 @@ socket.on('playerThrown', (data) => {
             myRaft.craft.velocity.set(0, 0, 0);
             splash(myRaft.craft.position.x, myRaft.craft.position.z, 0.9);
             sfx.wave?.();
-            hud.toast('🧙‍♂️ THE WHITE GUY GRABBED YOUR RAFT! SPINNING TO THROW YOU BEHIND...', 1800);
-            popAt(myRaft.craft.position, '🧙‍♂️ GRABBED & SPINNING!', '#f8fafc', 3.4);
+            // Helmet 03 (Pacing, Narrative & Essence): Show, Never Explain — zero all-caps tutorial or emoji toast spam
         }
     }
 });
@@ -874,12 +880,12 @@ socket.on('gameWon', () => {
     feverDirector.onGameWon();
 });
 
-// --- Short Race-Car Grid Camera Pan over the Staggered Lineup (skippable on any movement input) ---
+// --- Short Low Over-the-Shoulder Race-Car Grid Camera Pan (Helmet 01: low horizon angle, skippable on any movement input) ---
 let inIntroSequence = true;
 let introTime = 0;
-const introDuration = 1800;
-const introCameraStartOffset = new THREE.Vector3(9, 11, -18);
-const introCameraEndOffset = new THREE.Vector3(0, 18, 22);
+const introDuration = 750;
+const introCameraStartOffset = new THREE.Vector3(3.2, 3.6, -6.5);
+const introCameraEndOffset = new THREE.Vector3(0, 4.3, 10.5);
 
 document.addEventListener('click', (e) => {
     if (e.target?.closest?.('#start-btn')) {
@@ -893,8 +899,9 @@ const keys = { w: false, a: false, s: false, d: false, space: false };
 let isAttacking = false;
 let isBlocking = false;
 
-// High-Angle Tactical Co-Op Diorama Camera (~45° overhead angle, wide river visibility, scroll-wheel zoom & dynamic crew framing)
-const CAM = { pitch: 0.78, minPitch: 0.25, maxPitch: 1.32, distance: 26, minDistance: 14, maxDistance: 48, stiffness: 9, follow: 3.5, recenterDelayMs: 1400, recenter: 2.2 };
+// Helmet 01 (Camera & Game-Feel Pilot):
+// Low, Close, Over-the-Shoulder Chase Camera (pitch ~0.25 rad / 14.3°, distance ~10.5m, looking 15m forward down the river, 0% bot centroid drift)
+const CAM = { pitch: 0.25, minPitch: 0.14, maxPitch: 0.65, distance: 10.5, minDistance: 7.5, maxDistance: 22, stiffness: 13, follow: 6.5, recenterDelayMs: 1200, recenter: 3.2 };
 const cam = {
     yaw: 0, orbit: 0, pitch: CAM.pitch, lastInput: -Infinity, live: false,
     vel: new THREE.Vector3(), look: new THREE.Vector3(), fov: camera.fov,
@@ -930,16 +937,31 @@ function triggerAttack() {
     myRaft.vis.anim.swing = SWING_S;
     feverDirector.onPlayerAttack();
     if (enemiesData) {
+        const myPos = myRaft.vis.group.position;
         for (const key in enemiesData) {
-            if (enemiesData[key].health > 0 && myRaft.vis.group.position.distanceTo(enemyMeshes[key].position) < PLAYER.attackRange + 1.2) {
+            const eMesh = enemyMeshes[key];
+            if (enemiesData[key].health > 0 && eMesh && myPos.distanceTo(eMesh.position) < PLAYER.attackRange + 1.4) {
                 socket.emit('playerHitEnemy', { enemyId: key });
+                // Helmet 05 (Physical Impact Juice): Push the enemy physically away on melee strike + flash mesh + camera punch
+                const dx = eMesh.position.x - myPos.x;
+                const dz = eMesh.position.z - myPos.z;
+                const dLen = Math.hypot(dx, dz) || 1;
+                const kbDist = performance.now() < (enemyTelegraphs[key]?.staggerUntil || 0) ? 3.2 : 2.1;
+                eMesh.position.x += (dx / dLen) * kbDist;
+                eMesh.position.z += (dz / dLen) * kbDist;
+                enemiesData[key].position.x = eMesh.position.x;
+                enemiesData[key].position.z = eMesh.position.z;
+                hitPulse[key] = 1.0;
+                cameraShake = Math.max(cameraShake, 0.14);
+                if (enemyTelegraphs[key]) enemyTelegraphs[key].windup = 0;
+
                 // 2v1 Co-Op Bonus: if a teammate raft is nearby when you hit the White Guy, they strike right alongside you!
                 if (key === 'whiteGuy') {
                     const mate = Object.values(otherPlayers).find((v) => v?.group?.visible && v.group.position.distanceTo(enemyMeshes.whiteGuy.position) < 14);
                     if (mate) {
                         mate.anim.swing = SWING_S;
                         socket.emit('playerHitEnemy', { enemyId: 'whiteGuy' });
-                        popAt(enemyMeshes.whiteGuy.position, '🤝 2v1 CO-OP HIT!', '#4ade80', 3.8);
+                        popAt(enemyMeshes.whiteGuy.position, '2v1', '#4ade80', 3.4);
                     }
                 }
             }
@@ -1033,15 +1055,28 @@ function fixedStep() {
         craft.angularVelocity.y = 0;
     }
     const live = !isDead && !inIntroSequence;
-    // Deliberate Expedition Pacing:
-    // - Harbor City Calm Basin (z = -135..-275) & Sanctuary Platforms (onSolid) have 0 m/s passive drift so you can chill, shop, and think!
-    // - Holding [S] drops anchor (0 drift); open river has gentle 0.28x current so co-op positioning matters more than frantic reflexes.
+    // Helmet 01 (Camera & Game-Feel Pilot):
+    // - Open river moves with real visceral momentum (0.85x current) and snappy paddle/turn bite.
+    // - Docking on solid `Costado` vegetation/planks (onSolid), pulling over to the Harbor City pier (inCalmHarbor && x > 10), or holding [S] gives 0 drift so you can chill & shop.
     const inCalmHarbor = craft.position.z < -135 && craft.position.z > -275;
-    const currentScale = inCalmHarbor || onSolid || keys.s || shopOpen ? 0 : 0.28;
+    const dockedAtHarborPier = inCalmHarbor && craft.position.x > 10;
+    const currentScale = dockedAtHarborPier || onSolid || keys.s || shopOpen ? 0 : 0.85;
     const input = live
         ? { ...keys, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
         : { onSolid, currentScale: 0 };
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
+    // Extra responsive steering & forward paddle bite on water (Helmet 01: never feel like swimming in glue)
+    if (live && !onSolid && !mageGrab.active) {
+        if (keys.a || keys.d) {
+            const steerSign = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
+            craft.yaw += steerSign * 0.55 * FIXED_DT;
+        }
+        if (keys.w) {
+            const f = headingOf(craft.yaw);
+            craft.velocity.x += f.x * 4.2 * FIXED_DT;
+            craft.velocity.z += f.z * 4.2 * FIXED_DT;
+        }
+    }
     const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
     onSolid = col.onSolid;
 
@@ -1098,14 +1133,13 @@ function fixedStep() {
             splash(craft.position.x, craft.position.z, 1.5);
             sfx.splash(1.2);
             cameraShake = Math.max(cameraShake, 0.35);
-            popAt(craft.position, '🧙‍♂️ THROWN BEHIND BY THE WHITE GUY!', '#f8fafc', 3.8);
+            // Helmet 03: Show, Never Explain — physical throw speaks for itself
         }
     }
 
     craft.quaternion.setFromAxisAngle(yAxis, craft.yaw);
 
-    // City Pedestrian + Police Gun Strategy vs. The 3-Legged Mud Alien:
-    // "if you stand close to a pedestrian and let him attack you, the aoe damage will hit the pedestrian, and some police men will go to him and take him out with guns"
+    // City Pedestrian + Police Gun Strategy vs. The 3-Legged Mud Alien (Helmet 03: Diegetic police tracers & gunfire, zero emoji banner spam)
     if (live && enemiesData?.mudAlien?.health > 0 && enemyMeshes.mudAlien?.visible) {
         const mudPos = enemyMeshes.mudAlien.position;
         for (const npc of npcStateList) {
@@ -1118,8 +1152,6 @@ function fixedStep() {
                 if (!pedMesh.userData.aoeTriggeredAt || performance.now() - pedMesh.userData.aoeTriggeredAt > 1200) {
                     pedMesh.userData.aoeTriggeredAt = performance.now();
                     socket.emit('enemyHitNPC', { npcId: npc.id, enemyId: 'mudAlien', damage: 5 });
-                    popAt(pedMesh.position, '😱 AHH! POLICE! HELP!', '#fca5a5', 3.2);
-                    hud.toast('🚓 MUD ALIEN AOE HIT A PEDESTRIAN — POLICE OPENING FIRE WITH GUNS!', 3400);
                 }
             }
         }
@@ -1136,12 +1168,17 @@ function fixedStep() {
         }
     }
 
-    // Keep AI companion bots from abandoning the player when the human stops at a Sanctuary Platform or the Harbor City
-    if (live && (onSolid || inCalmHarbor || !keys.w)) {
-        for (const vis of Object.values(otherPlayers)) {
-            if (vis?.target && vis.target.z < craft.position.z - 10) {
-                vis.target.z = THREE.MathUtils.lerp(vis.target.z, craft.position.z - 4, FIXED_DT * 3.5);
-                vis.target.x = THREE.MathUtils.lerp(vis.target.x, craft.position.x + (vis === Object.values(otherPlayers)[0] ? -6 : 6), FIXED_DT * 2.5);
+    // Helmet 05 (Wingman Bots): Keep AI companions in clean wingman formation slightly behind/beside the player, matching the player's tempo
+    if (live) {
+        const mates = Object.values(otherPlayers);
+        for (let i = 0; i < mates.length; i++) {
+            const vis = mates[i];
+            if (!vis?.target) continue;
+            const wingX = craft.position.x + (i % 2 === 0 ? -4.8 : 4.8);
+            const wingZ = craft.position.z - (onSolid || dockedAtHarborPier ? 2.5 : 4.2 + i * 2.5);
+            if (onSolid || dockedAtHarborPier || !keys.w || Math.abs(vis.target.z - craft.position.z) > 16) {
+                vis.target.z = THREE.MathUtils.lerp(vis.target.z, wingZ, FIXED_DT * 3.8);
+                vis.target.x = THREE.MathUtils.lerp(vis.target.x, THREE.MathUtils.clamp(wingX, -playableHalfWidth + 6, playableHalfWidth - 6), FIXED_DT * 3.0);
             }
         }
     }
@@ -1177,17 +1214,71 @@ function updateLocalRaft(dt, now) {
 
     if (isDead || inIntroSequence) return;
 
-    if (enemiesData && now - lastEnemyHit > PLAYER.hitCooldownMs && !mageGrab.active && performance.now() > mageGrab.cooldownUntil) {
+    if (enemiesData && !mageGrab.active && performance.now() > mageGrab.cooldownUntil) {
+        const pNow = performance.now();
         for (const key in enemiesData) {
             const enemy = enemiesData[key];
-            // Give the River Mage (whiteGuy) an 8.5m telekinetic staff grab reach at water level
+            const eMesh = enemyMeshes[key];
+            const tel = enemyTelegraphs[key];
+            if (!eMesh || !tel) continue;
+
+            const isStaggered = pNow < tel.staggerUntil;
+            eMesh.userData.staggered = isStaggered;
+            if (isStaggered || enemy.health <= 0) {
+                tel.windup = 0;
+                eMesh.userData.windupProgress = 0;
+                continue;
+            }
+
+            // Safe on high-ground side vegetation borders or wooden planks from the White Guy!
+            if (key === 'whiteGuy' && (onSolid || craft.position.y > PLAYER.safeHeight)) {
+                tel.windup = Math.max(0, tel.windup - dt * 2.5);
+                eMesh.userData.windupProgress = tel.windup / tel.duration;
+                continue;
+            }
+
             const reach = key === 'whiteGuy' ? 8.5 : ENEMY_TYPES[key].hitRadius;
-            if (enemy.health > 0 && vis.group.position.distanceTo(enemyMeshes[key].position) < reach) {
-                const parryCheck = feverDirector.resolvePlayerHit(enemy.damage, enemy.type, performance.now());
-                if (!parryCheck.parried) {
-                    socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking });
+            const dist = vis.group.position.distanceTo(eMesh.position);
+
+            if (dist < reach + 2.2) {
+                // Helmet 05 (Telegraph -> Window -> Punish): 0.85s visual posture wind-up before the strike lands!
+                tel.windup += dt;
+                eMesh.userData.windupProgress = Math.min(1, tel.windup / tel.duration);
+                // While winding up in the river current, the White Guy glides with the downstream current unless the player dodges laterally (A/D) or jumps onto a plank
+                if (key === 'whiteGuy' && !keys.a && !keys.d && !onSolid) {
+                    eMesh.position.z = THREE.MathUtils.lerp(eMesh.position.z, craft.position.z - 2.0, dt * 4.5);
+                    enemy.position.z = eMesh.position.z;
                 }
-                lastEnemyHit = now;
+
+                if (tel.windup >= tel.duration && now - lastEnemyHit > PLAYER.hitCooldownMs) {
+                    tel.windup = 0;
+                    eMesh.userData.windupProgress = 0;
+                    if (dist < reach) {
+                        const parryCheck = feverDirector.resolvePlayerHit(enemy.damage, enemy.type, pNow);
+                        if (parryCheck.parried || isBlocking) {
+                            // Blocked/Parried during the window -> Stagger the enemy for 1.1s so the player can punish!
+                            tel.staggerUntil = pNow + 1100;
+                            eMesh.userData.staggered = true;
+                            const dx = eMesh.position.x - craft.position.x;
+                            const dz = eMesh.position.z - craft.position.z;
+                            const dLen = Math.hypot(dx, dz) || 1;
+                            eMesh.position.x += (dx / dLen) * 3.0;
+                            eMesh.position.z += (dz / dLen) * 3.0;
+                            if (!parryCheck.parried) {
+                                socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking: true });
+                            }
+                        } else {
+                            socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking: false });
+                        }
+                        lastEnemyHit = now;
+                    } else {
+                        // Player dodged out of reach before wind-up completed -> Whiff & brief recovery window!
+                        tel.staggerUntil = pNow + 650;
+                    }
+                }
+            } else {
+                tel.windup = Math.max(0, tel.windup - dt * 2.0);
+                eMesh.userData.windupProgress = tel.windup / tel.duration;
             }
         }
     }
@@ -1253,37 +1344,18 @@ function updateCamera(dt) {
             cam.pitch = CAM.pitch + (cam.pitch - CAM.pitch) * k;
         }
         const yaw = cam.yaw + cam.orbit;
-        // Dynamic Co-Op Crew Framing: expand camera height/distance and shift look centroid toward visible teammates
-        // so you can see the wide river, side Sanctuary Platforms, and feel your crew sailing together!
-        let crewCentroidX = target.x;
-        let crewCentroidZ = target.z;
-        let maxCrewSpread = 0;
-        let visibleCrewCount = 0;
-        for (const vis of Object.values(otherPlayers)) {
-            if (!vis?.group?.visible) continue;
-            const d = Math.hypot(vis.group.position.x - target.x, vis.group.position.z - target.z);
-            if (d < 65) {
-                crewCentroidX += vis.group.position.x;
-                crewCentroidZ += vis.group.position.z;
-                visibleCrewCount++;
-                if (d > maxCrewSpread) maxCrewSpread = d;
-            }
-        }
-        if (visibleCrewCount > 0) {
-            crewCentroidX /= (visibleCrewCount + 1);
-            crewCentroidZ /= (visibleCrewCount + 1);
-        }
-        const focusX = THREE.MathUtils.lerp(target.x, crewCentroidX, 0.32);
-        const focusZ = THREE.MathUtils.lerp(target.z, crewCentroidZ, 0.28);
-        const coopZoomBonus = Math.min(16, maxCrewSpread * 0.35);
-        const dist = CAM.distance + coopZoomBonus + speed * 0.18;
+        // Helmet 01 (Camera & Game-Feel Pilot):
+        // 1. Low, Close, Over-the-Shoulder Chase Camera (pitch ~0.25 rad / 14°, distance ~10.5m, looking 15m ahead down the river)
+        // 2. 100% Player-Centered Lock (0% bot centroid drift — never pull my eyes sideways because a bot moved!)
+        const dist = CAM.distance + Math.min(2.2, speed * 0.08);
+        const boostLift = myRaft.vis.anim.airborne ? 0.55 : 0;
         desired.set(
-            focusX + dist * Math.cos(cam.pitch) * Math.sin(yaw),
-            target.y + 3.0 + dist * Math.sin(cam.pitch),
-            focusZ + dist * Math.cos(cam.pitch) * Math.cos(yaw),
+            target.x + dist * Math.cos(cam.pitch) * Math.sin(yaw),
+            target.y + 1.85 + boostLift + dist * Math.sin(cam.pitch),
+            target.z + dist * Math.cos(cam.pitch) * Math.cos(yaw),
         );
         const f = headingOf(myRaft.vis.anim.yaw);
-        look.set(focusX + f.x * 5, target.y + 0.8, focusZ + f.z * 5);
+        look.set(target.x + f.x * 15, target.y + 1.15, target.z + f.z * 15);
     }
 
     if (!cam.live) { camera.position.copy(desired); cam.vel.set(0, 0, 0); cam.look.copy(look); cam.live = true; }

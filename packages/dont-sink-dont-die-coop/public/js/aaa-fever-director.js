@@ -404,7 +404,7 @@ export function createAAAFeverDirector({
                 musicEngine.unlock();
                 musicEngine.start();
                 applyCrewCosmetics(cfg.crewClass || 'bruiser');
-                hud.toast('🏁 STAGGERED START — THE WHITE ENTITY IN THE WIZARD HAT HUNTS LAST PLACE! JUMP ON SIDE VEGETATION OR PLANKS FOR SAFETY!', 4600);
+                // Helmet 03 (Pacing, Narrative & Essence): Show, Never Explain — zero all-caps tutorial banner spam at start
             },
             onSettingsChanged: (newSettings) => {
                 if (newSettings.fov) {
@@ -435,14 +435,7 @@ export function createAAAFeverDirector({
     }
 
     function ensureGadgetMeshes() {
-        const raft = getMyRaft();
-        if (!raft?.vis?.raft || typeof raft.vis.raft.add !== 'function') return;
-        try {
-            if (!gadgetMeshesHandle || gadgetMeshesHandle.parentRaft !== raft.vis.raft) {
-                gadgetMeshesHandle = buildRaftGadgetMeshes(THREE, raft.vis.raft);
-                gadgetMeshesHandle.parentRaft = raft.vis.raft;
-            }
-        } catch (_e) { /* ignore */ }
+        // Helmet 03 & 04: Keep 1-person inflatable raft silhouette pure (no floating sci-fi drone ring or clutter)
     }
 
     // Keyboard shortcuts for Tactical Bot Orders, Photo Mode, Armory, and Settings
@@ -620,7 +613,7 @@ export function createAAAFeverDirector({
             if (!raft?.craft || getIsDead()) return;
             const { craft, vis } = raft;
 
-            // 1. River Hazards (Rapids boost, Whirlpool pull + spin + core slingshot, Launch Ramp, Mine Barrels)
+            // 1. River Hazards (Rapids boost, Whirlpool pull + spin + core slingshot, Launch Ramp) — physical feedback only, zero noisy emoji popups
             const hazardRes = stepCraftWithRiverHazards(craft, hazardsLayout, fixedDt, nowMs);
             if (hazardRes.inWhirlpool) {
                 if (craft.quaternion?.setFromAxisAngle) {
@@ -629,27 +622,23 @@ export function createAAAFeverDirector({
                 if (hazardRes.whirlpoolLaunched) {
                     splash(craft.position.x, craft.position.z, 1.5);
                     sfx.splash?.(1.1);
-                    popAt(craft.position, '🌀 VORTEX SLINGSHOT!', '#38bdf8', 3.4);
                     lastHazardFeedbackMs = nowMs;
                 } else if (nowMs - lastHazardFeedbackMs > 950) {
                     splash(craft.position.x, craft.position.z, 0.75);
-                    popAt(craft.position, '🌀 WHIRLPOOL SPIN!', '#5eead4', 2.6);
                     lastHazardFeedbackMs = nowMs;
                 }
             } else if (hazardRes.inRapids && nowMs - lastHazardFeedbackMs > 1200) {
                 splash(craft.position.x, craft.position.z, 0.65);
-                popAt(craft.position, '🌊 RAPIDS SURGE +45%!', '#7df9ff', 2.5);
                 lastHazardFeedbackMs = nowMs;
             } else if (hazardRes.rampInteraction?.launched && nowMs - lastHazardFeedbackMs > 800) {
                 splash(craft.position.x, craft.position.z, 1.2);
-                popAt(craft.position, '🚀 RAMP LAUNCH!', '#facc15', 3.2);
                 lastHazardFeedbackMs = nowMs;
             }
             const ringRes = collectCoinRings(craft.position, hazardsLayout.coinRings, 3.2);
             if (ringRes.collectedCount > 0) {
                 const earned = Number(ringRes.earnedCoins ?? ringRes.coinsEarned ?? ringRes.collectedCount * 10) || 10;
                 onGrantCoins(earned);
-                popAt(craft.position, `+${earned} 🪙 RING!`, '#fde047', 2.4);
+                popAt(craft.position, `+${earned}`, '#fde047', 2.2);
             }
 
             // 2. Pocket-Raft Mid-Air Stunt Tricks (360 Kickflip, Bellyflop Shockwave, Wizard Head-Bounce)
@@ -898,22 +887,13 @@ export function createAAAFeverDirector({
                 animateShorelineLandmarks(shorelineHandle, raft?.craft?.position, elapsedSec);
             });
             breakerRegistry.step('water_wake', () => {
-                if (raft?.craft) {
-                    const vel = raft.craft.velocity || { x: 0, z: 0 };
-                    const airborne = Boolean(raft.vis?.anim?.airborne);
-                    waterWakeSystem.update(dt, raft.craft.position, vel, airborne, false);
-                }
+                // Helmet 04: Keep flat polygon wake ribbons hidden so only the natural foam droplet wake renders
+                if (waterWakeSystem?.group) waterWakeSystem.group.visible = false;
+                if (waterWakeSystem?.leftMesh) waterWakeSystem.leftMesh.visible = false;
+                if (waterWakeSystem?.rightMesh) waterWakeSystem.rightMesh.visible = false;
             });
             breakerRegistry.step('raft_evolution', () => {
-                if (raft?.vis?.raftHull && !raftEvolutionHandle) {
-                    raftEvolutionHandle = buildRaftEvolutionAttachments(THREE);
-                    if (raftEvolutionHandle?.group) {
-                        raft.vis.raftHull.add(raftEvolutionHandle.group);
-                    }
-                }
-                if (raftEvolutionHandle) {
-                    updateRaftEvolutionVis(raftEvolutionHandle, getMyStats()?.upgrades || [], dt);
-                }
+                // Helmet 03 & 04: Keep 1-person plastic inflatable raft silhouette pure (no floating side drones)
             });
             breakerRegistry.step('diegetic_arcs', () => {
                 if (raft?.craft) {
@@ -934,19 +914,7 @@ export function createAAAFeverDirector({
                 }
             });
 
-            // Dream Essence Stage Callouts
-            if (raft?.craft && !getIsDead()) {
-                if (z < -58 && z > -92 && !onboardingStagesShown.has('stage2_whirlpool')) {
-                    onboardingStagesShown.add('stage2_whirlpool');
-                    hud.toast('🌀 WHIRLPOOLS & RAPIDS AHEAD — JUMP ON SIDE VEGETATION BORDERS OR PLANKS TO STAY SAFE FROM THE WHITE GUY!', 4200);
-                } else if (z < -138 && z > -245 && !onboardingStagesShown.has('stage4_harbor')) {
-                    onboardingStagesShown.add('stage4_harbor');
-                    hud.toast('🏙️ RIVERSIDE CITY: LURE THE 3-LEGGED MUD ALIEN NEAR A PEDESTRIAN SO ITS AOE TRIGGERS THE POLICE GUNS!', 5200);
-                } else if (z < -275 && z > -350 && !onboardingStagesShown.has('stage5_worm')) {
-                    onboardingStagesShown.add('stage5_worm');
-                    hud.toast('🐍 THE LONG WORM: STRIKES IN STRAIGHT VECTORS LIKE NOKIA SNAKE — WATCH ITS HEAD & SIDESTEP!', 4800);
-                }
-            }
+            // Helmet 03 (Pacing, Narrative & Essence): Show, Never Explain — zero all-caps tutorial banner popups
             breakerRegistry.step('boss_telegraphs', () => {
                 if (krakenState.isSpawned && !krakenState.isDefeated) {
                     bossTelegraphs.update(dt, krakenState, elapsedSec);

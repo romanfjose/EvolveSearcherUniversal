@@ -112,17 +112,23 @@ export function createHud() {
 export function createSfx() {
     let ctx = null;
     let muted = false;
-    const tone = ({ from, to = from, dur = 0.12, type = 'square', gain = 0.12, delay = 0 }) => {
+    // Helmet 02 (Sound & Atmosphere Engineer):
+    // Warm low-pass-filtered (< 850 Hz) physical impacts with pitch randomization (0.88x - 1.12x) — zero harsh square-wave beeps!
+    const tone = ({ from, to = from, dur = 0.12, type = 'triangle', gain = 0.12, delay = 0, lpFreq = 780 }) => {
         if (muted || !ctx) return;
+        const pitchJitter = 0.9 + Math.random() * 0.2;
         const t = ctx.currentTime + delay;
         const osc = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
         const g = ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(from, t);
-        osc.frequency.exponentialRampToValueAtTime(to, t + dur);
-        g.gain.setValueAtTime(gain, t);
+        osc.type = type === 'square' || type === 'sawtooth' ? 'triangle' : type;
+        osc.frequency.setValueAtTime(Math.max(40, from * pitchJitter), t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(32, to * pitchJitter), t + dur);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(lpFreq, t);
+        g.gain.setValueAtTime(Math.min(0.22, gain), t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        osc.connect(g).connect(ctx.destination);
+        osc.connect(filter).connect(g).connect(ctx.destination);
         osc.start(t);
         osc.stop(t + dur);
     };
@@ -130,13 +136,21 @@ export function createSfx() {
         unlock() { ctx ??= new AudioContext(); if (ctx.state === 'suspended') ctx.resume(); },
         toggle() { muted = !muted; return muted; },
         hit(squeaky, volume = 1) {
-            if (squeaky) { tone({ from: 900, to: 1700, dur: 0.09, gain: 0.1 * volume }); tone({ from: 1700, to: 1100, dur: 0.07, gain: 0.08 * volume, delay: 0.08 }); }
-            else tone({ from: 240, to: 90, dur: 0.12, type: 'triangle', gain: 0.25 * volume });
+            if (squeaky) {
+                tone({ from: 420, to: 580, dur: 0.08, type: 'sine', gain: 0.09 * volume, lpFreq: 850 });
+                tone({ from: 580, to: 380, dur: 0.07, type: 'sine', gain: 0.07 * volume, delay: 0.06, lpFreq: 750 });
+            } else {
+                tone({ from: 190, to: 68, dur: 0.11, type: 'triangle', gain: 0.18 * volume, lpFreq: 520 });
+            }
         },
-        hurt(blocked) { tone(blocked ? { from: 600, to: 400, dur: 0.08, gain: 0.1 } : { from: 170, to: 50, dur: 0.25, type: 'sawtooth', gain: 0.18 }); },
-        kill() { [523, 659, 784].forEach((f, i) => tone({ from: f, dur: 0.1, gain: 0.1, delay: i * 0.07 })); },
-        wave() { tone({ from: 220, to: 330, dur: 0.35, type: 'sawtooth', gain: 0.1 }); tone({ from: 330, to: 440, dur: 0.4, type: 'sawtooth', gain: 0.1, delay: 0.3 }); },
-        splash(strength = 1) { tone({ from: 700, to: 140, dur: 0.22, type: 'triangle', gain: 0.07 * Math.min(1.5, strength) }); },
-        down() { tone({ from: 400, to: 60, dur: 0.7, type: 'sawtooth', gain: 0.15 }); },
+        hurt(blocked) {
+            tone(blocked
+                ? { from: 320, to: 180, dur: 0.08, type: 'triangle', gain: 0.12, lpFreq: 620 }
+                : { from: 145, to: 48, dur: 0.22, type: 'triangle', gain: 0.16, lpFreq: 420 });
+        },
+        kill() { [293, 370, 440].forEach((f, i) => tone({ from: f, dur: 0.12, type: 'sine', gain: 0.08, delay: i * 0.07, lpFreq: 720 })); },
+        wave() { tone({ from: 130, to: 98, dur: 0.45, type: 'sine', gain: 0.09, lpFreq: 380 }); },
+        splash(strength = 1) { tone({ from: 360, to: 95, dur: 0.18, type: 'sine', gain: 0.06 * Math.min(1.4, strength), lpFreq: 540 }); },
+        down() { tone({ from: 180, to: 52, dur: 0.55, type: 'triangle', gain: 0.12, lpFreq: 360 }); },
     };
 }

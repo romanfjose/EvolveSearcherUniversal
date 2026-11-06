@@ -30,6 +30,10 @@ export const KRAKEN_CONFIG = {
         slamTelegraphDuration: 1.5, // warning ring duration before slam lands
         slamDamage: 35,
         slamRadius: 5.5,
+        slamShockwaveMaxRadius: 14.0, // Water shockwave expansion radius
+        slamShockwaveDuration: 1.25, // Expansion & decay duration
+        slamRadialPushStrength: 26.0, // Radial impulse pushed onto nearby crafts
+        slamRockingImpulse: 0.38, // Wave pitch/roll rocking angle (radians)
     },
     // Phase 2: Ink Cloud Blind Wave + Whirlpool Suction Pull + Glowing Barnacle Weak-points
     phase2: {
@@ -202,6 +206,25 @@ export function createKrakenState({ seed = 1337, customMaxHp = null } = {}) {
 
         // Articulated tentacles
         tentacles,
+
+        // Helmet 06 World-Believability: Shockwaves, Recoil & Bioluminescent Vein Flashing
+        shockwaves: [], // array of { id, position: {x,y,z}, radius, maxRadius, duration, elapsed, pushStrength, rockingImpulse }
+        recoil: {
+            pitch: 0,
+            yaw: 0,
+            roll: 0,
+            offsetY: 0,
+            offsetZ: 0,
+            velocityPitch: 0,
+            velocityY: 0,
+            velocityZ: 0,
+        },
+        veinFlash: {
+            intensity: 0.0, // 0.0 (subtle idle pulse) to 1.0 (searing bioluminescent shock)
+            color: 0x00ffcc, // cyan normally, flashes violet/crimson on damage
+            decayRate: 2.8,
+        },
+        thrashTimer: 0, // Thrashing agitation timer after taking heavy hits / phase shifts
     };
 }
 
@@ -230,6 +253,58 @@ export function spawnKraken(krakenState) {
             phase: krakenState.phase,
         },
     }];
+}
+
+/**
+ * Calculate shockwave radial push and rocking impulse from active tentacle slams on nearby rafts
+ */
+export function calculateKrakenShockwaveForce(raftPos, krakenState) {
+    if (!krakenState.isSpawned || !krakenState.shockwaves || krakenState.shockwaves.length === 0) {
+        return { x: 0, y: 0, z: 0, rockingPitch: 0, rockingRoll: 0, inRange: false };
+    }
+
+    let netPushX = 0;
+    let netPushY = 0;
+    let netPushZ = 0;
+    let netRockingPitch = 0;
+    let netRockingRoll = 0;
+    let inRange = false;
+
+    for (let i = 0; i < krakenState.shockwaves.length; i++) {
+        const sw = krakenState.shockwaves[i];
+        const dx = raftPos.x - sw.position.x;
+        const dz = raftPos.z - sw.position.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist <= sw.radius && dist >= 0.001) {
+            inRange = true;
+            // Radial push falls off with distance and remaining lifetime
+            const proximity = 1.0 - (dist / Math.max(0.1, sw.radius));
+            const lifeRatio = 1.0 - clamp(sw.elapsed / Math.max(0.01, sw.duration), 0, 1);
+            const forceMag = (sw.pushStrength || 20.0) * proximity * lifeRatio;
+
+            const nx = dx / dist;
+            const nz = dz / dist;
+
+            netPushX += nx * forceMag;
+            netPushZ += nz * forceMag;
+            netPushY += Math.sin(sw.elapsed * 12.0) * (sw.rockingImpulse || 0.3) * forceMag * 0.15;
+
+            // Compute wave-slope pitch and roll impulse based on wave direction
+            // Pitch tilts along Z displacement, Roll tilts along X displacement
+            netRockingPitch += -nz * (sw.rockingImpulse || 0.35) * proximity * lifeRatio;
+            netRockingRoll += nx * (sw.rockingImpulse || 0.35) * proximity * lifeRatio;
+        }
+    }
+
+    return {
+        x: netPushX,
+        y: netPushY,
+        z: netPushZ,
+        rockingPitch: netRockingPitch,
+        rockingRoll: netRockingRoll,
+        inRange,
+    };
 }
 
 /**
@@ -334,6 +409,40 @@ export function damageKraken(krakenState, damage, hitTarget = null) {
         });
     }
 
+    // Helmet 06: Apply physical boss recoil, agitation thrash & bioluminescent vein flash
+    if (damageDealt > 0) {
+        if (!krakenState.recoil) {
+            krakenState.recoil = { pitch: 0, yaw: 0, roll: 0, offsetY: 0, offsetZ: 0, velocityPitch: 0, velocityY: 0, velocityZ: 0 };
+        }
+        if (!krakenState.veinFlash) {
+            krakenState.veinFlash = { intensity: 0, color: 0x00ffcc, decayRate: 2.8 };
+        }
+
+        // Damage impulse pushes Kraken back slightly (+Z) and down (-Y), with head recoil pitch
+        const intensity = clamp(damageDealt / 60, 0.25, 1.5);
+        krakenState.recoil.velocityPitch += 1.8 * intensity;
+        krakenState.recoil.velocityZ += 3.2 * intensity; // flinch backward
+        krakenState.recoil.velocityY -= 1.6 * intensity;
+        krakenState.recoil.yaw += (krakenState.rng() - 0.5) * 0.4 * intensity;
+
+        // Flash bioluminescent veins in violet/amber on damage
+        krakenState.veinFlash.intensity = Math.min(1.0, krakenState.veinFlash.intensity + 0.85 * intensity);
+        krakenState.veinFlash.color = (krakenState.phase === 3 ? 0xff0044 : (krakenState.phase === 2 ? 0xa855f7 : 0xf59e0b));
+
+        // Agitate thrash timer
+        krakenState.thrashTimer = Math.max(krakenState.thrashTimer || 0, 0.65 * intensity);
+
+        // Agitate nearby tentacles
+        if (krakenState.tentacles) {
+            for (let t = 0; t < krakenState.tentacles.length; t++) {
+                const tentacle = krakenState.tentacles[t];
+                if (tentacle.state === 'idle') {
+                    tentacle.curlFactor = (krakenState.rng() - 0.5) * 0.8;
+                }
+            }
+        }
+    }
+
     // Evaluate Phase Transitions
     const hpFraction = krakenState.health / krakenState.maxHealth;
 
@@ -352,6 +461,16 @@ export function damageKraken(krakenState, damage, hitTarget = null) {
                 b.glowingIntensity = 1.0;
             }
         });
+        // Violent roar recoil & vein surge
+        if (krakenState.recoil) {
+            krakenState.recoil.velocityPitch -= 2.4; // roar upward
+            krakenState.recoil.velocityY += 2.0;
+        }
+        if (krakenState.veinFlash) {
+            krakenState.veinFlash.intensity = 1.0;
+            krakenState.veinFlash.color = 0xa855f7; // Abyssal purple surge
+        }
+        krakenState.thrashTimer = 1.8;
         events.push({
             event: 'kraken:phase_change',
             data: {
@@ -369,6 +488,16 @@ export function damageKraken(krakenState, damage, hitTarget = null) {
         krakenState.stunTimer = 0;
         // Deactivate remaining barnacles
         krakenState.barnacles.forEach((b) => { b.active = false; });
+        // Enraged frenzy thrash & crimson vein overload
+        if (krakenState.recoil) {
+            krakenState.recoil.velocityPitch += 2.8;
+            krakenState.recoil.velocityY -= 2.5;
+        }
+        if (krakenState.veinFlash) {
+            krakenState.veinFlash.intensity = 1.0;
+            krakenState.veinFlash.color = 0xff0044; // Blood Crimson overload
+        }
+        krakenState.thrashTimer = 2.4;
         events.push({
             event: 'kraken:phase_change',
             data: {
@@ -448,6 +577,78 @@ export function tickKraken(krakenState, dt, targetPlayers = []) {
     krakenState.headBobOffset = Math.sin(krakenState.time * 1.8) * 0.6;
     krakenState.eyeGlow = 0.75 + Math.sin(krakenState.time * 3.5) * 0.25;
 
+    // Helmet 06: Step boss physical recoil, vein glow flash & thrash timers
+    if (krakenState.recoil) {
+        const spring = 24.0;
+        const damp = 6.0;
+
+        // Standard semi-implicit Euler integration: position first or velocity first with natural spring
+        krakenState.recoil.pitch += krakenState.recoil.velocityPitch * dt;
+        krakenState.recoil.offsetY += krakenState.recoil.velocityY * dt;
+        krakenState.recoil.offsetZ += krakenState.recoil.velocityZ * dt;
+
+        const accPitch = -spring * krakenState.recoil.pitch - damp * krakenState.recoil.velocityPitch;
+        const accY = -spring * krakenState.recoil.offsetY - damp * krakenState.recoil.velocityY;
+        const accZ = -spring * krakenState.recoil.offsetZ - damp * krakenState.recoil.velocityZ;
+
+        krakenState.recoil.velocityPitch += accPitch * dt;
+        krakenState.recoil.velocityY += accY * dt;
+        krakenState.recoil.velocityZ += accZ * dt;
+
+        // Dampen yaw and roll
+        krakenState.recoil.yaw *= Math.max(0, 1.0 - dt * 6.0);
+        krakenState.recoil.roll *= Math.max(0, 1.0 - dt * 6.0);
+    }
+
+    // Step bioluminescent vein flash decay
+    if (krakenState.veinFlash) {
+        krakenState.veinFlash.intensity = Math.max(0, krakenState.veinFlash.intensity - dt * (krakenState.veinFlash.decayRate || 2.8));
+    }
+
+    // Step thrash timer
+    if (krakenState.thrashTimer > 0) {
+        krakenState.thrashTimer = Math.max(0, krakenState.thrashTimer - dt);
+    }
+
+    // Update expanding water shockwaves and apply radial push to players
+    if (krakenState.shockwaves && krakenState.shockwaves.length > 0) {
+        for (let i = krakenState.shockwaves.length - 1; i >= 0; i--) {
+            const sw = krakenState.shockwaves[i];
+            sw.elapsed += dt;
+            const progress = clamp(sw.elapsed / Math.max(0.01, sw.duration), 0, 1);
+            sw.radius = sw.maxRadius * progress;
+
+            // Push players caught in expanding shockwave wave crest
+            if (targetPlayers && targetPlayers.length > 0) {
+                for (const player of targetPlayers) {
+                    if (player.isDead || !player.position) continue;
+                    const dx = player.position.x - sw.position.x;
+                    const dz = player.position.z - sw.position.z;
+                    const dist = Math.hypot(dx, dz);
+                    if (dist <= sw.radius && dist >= 0.001) {
+                        const pushFactor = (1.0 - (dist / Math.max(0.1, sw.radius))) * (1.0 - progress);
+                        const pushMag = (sw.pushStrength || 20.0) * pushFactor * dt;
+                        const nx = dx / dist;
+                        const nz = dz / dist;
+
+                        if (player.velocity) {
+                            player.velocity.x = (player.velocity.x || 0) + nx * pushMag;
+                            player.velocity.z = (player.velocity.z || 0) + nz * pushMag;
+                        } else {
+                            // Direct position push if velocity not present
+                            player.position.x += nx * pushMag * 0.25;
+                            player.position.z += nz * pushMag * 0.25;
+                        }
+                    }
+                }
+            }
+
+            if (sw.elapsed >= sw.duration) {
+                krakenState.shockwaves.splice(i, 1);
+            }
+        }
+    }
+
     // Handle Defeat state animation & coin fountain physics
     if (krakenState.isDefeated) {
         krakenState.deathTimer += dt;
@@ -522,6 +723,32 @@ export function tickKraken(krakenState, dt, targetPlayers = []) {
                     position: ring.position,
                     radius: ring.maxRadius,
                     hitPlayers,
+                },
+            });
+
+            // Helmet 06: Generate visible expanding water shockwave and emit shockwave event
+            const shockwave = {
+                id: `sw_${ring.id || krakenState.tickCount}_${ring.tentacleIndex}`,
+                position: { ...ring.position },
+                radius: 0.1,
+                maxRadius: KRAKEN_CONFIG.phase1.slamShockwaveMaxRadius || 14.0,
+                duration: KRAKEN_CONFIG.phase1.slamShockwaveDuration || 1.25,
+                elapsed: 0,
+                pushStrength: KRAKEN_CONFIG.phase1.slamRadialPushStrength || 26.0,
+                rockingImpulse: KRAKEN_CONFIG.phase1.slamRockingImpulse || 0.38,
+            };
+            if (!krakenState.shockwaves) krakenState.shockwaves = [];
+            krakenState.shockwaves.push(shockwave);
+
+            events.push({
+                event: 'kraken:shockwave',
+                data: {
+                    id: shockwave.id,
+                    position: shockwave.position,
+                    maxRadius: shockwave.maxRadius,
+                    duration: shockwave.duration,
+                    pushStrength: shockwave.pushStrength,
+                    rockingImpulse: shockwave.rockingImpulse,
                 },
             });
 

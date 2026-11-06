@@ -18,8 +18,20 @@ import {
     createAAAEnemyMeshes,
     animateAAAEnemies,
     createAAANpcMesh,
+    updateAAANpcDynamics,
 } from './aaa-visuals.js';
+import { initTreePhysics, applyTreeImpulse, stepTreePhysics, checkTreeEntityBrush } from './world/biomes-mesh.js';
+import { initPlankPhysics, triggerPlankDip, stepPlankPhysics } from './world/island-mesh.js';
 import { createAAAFeverDirector } from './aaa-fever-director.js';
+import {
+    createBotAlivenessState,
+    stepBotExpressiveAliveness,
+    triggerVictoryHop,
+    triggerBotSwing,
+} from '../../shared/ai-bots.js';
+import { createRiverParticleSystem, FOAM_Y } from './particles.js';
+import { stepBuoyantRebound } from './world/water-shader.js';
+
 
 // Real Socket.io server when reachable, otherwise the in-browser loopback with AI bots.
 const socket = createNetSocket();
@@ -148,6 +160,9 @@ for (let zPos = -18; zPos > -(riverLength - 120); zPos -= 28) {
     if (Math.abs(zPos - -46) < 12) {
         const tutMesh = createAAAObstacleMesh(true, 10.5, 0.55, 9.5, 0, woodMaterial, vegetationMaterial);
         tutMesh.position.set(-12, 1.05, -42);
+        tutMesh.userData = tutMesh.userData || {};
+        tutMesh.userData.baseY = 1.05;
+        initPlankPhysics(tutMesh);
         scene.add(tutMesh);
         obstacles.push({
             type: 'plank',
@@ -185,6 +200,9 @@ for (let zPos = -18; zPos > -(riverLength - 120); zPos -= 28) {
             vegetationMaterial
         );
         mesh.position.set(xPos, yPos, zPos);
+        mesh.userData = mesh.userData || {};
+        mesh.userData.baseY = yPos;
+        initPlankPhysics(mesh);
         scene.add(mesh);
         obstacles.push({
             type: 'plank',
@@ -212,6 +230,7 @@ for (let i = 0; i < 140; i++) {
     const size = 2.4 + (i % 4) * 0.65;
     const mesh = createAAAObstacleMesh(false, 0, 0, 0, size, woodMaterial, vegetationMaterial);
     mesh.position.set(bankSpread, 0, zPos);
+    initTreePhysics(mesh);
     scene.add(mesh);
     obstacles.push({
         type: 'tree',
@@ -295,7 +314,12 @@ socket.on('enemyHit', (d) => {
     hitPulse[d.id] = 1;
     const mine = d.by === socket.id;
     const attacker = mine ? myRaft?.vis : otherPlayers[d.by];
-    if (attacker && !mine) attacker.anim.swing = SWING_S;
+    if (attacker && !mine) {
+        attacker.anim.swing = SWING_S;
+        if (d.by && botAlivenessStates[d.by]) {
+            triggerBotSwing(botAlivenessStates[d.by]);
+        }
+    }
     if (mesh.position.y < 2) splash(mesh.position.x, mesh.position.z, mine ? 0.7 : 0.4);
     const squeaky = mine ? myStats.upgrades.includes('weapon') : d.damage > PLAYER.baseDamage;
     if (attacker) sfx.hit(squeaky, mine ? 1 : 0.35);
@@ -310,6 +334,10 @@ socket.on('enemyHit', (d) => {
 socket.on('enemyKilled', (d) => {
     if (enemyMeshes[d.id]) popAt(enemyMeshes[d.id].position, 'KO!', '#ff9d3c', 4);
     if (d.by === socket.id) sfx.kill();
+    // Videogame Helmet 06: AI companion bots celebrate enemy kill with a jubilant victory hop!
+    for (const bState of Object.values(botAlivenessStates)) {
+        triggerVictoryHop(bState, 'enemy_killed');
+    }
 });
 
 socket.on('waveChanged', (d) => {
@@ -345,6 +373,8 @@ function firePoliceTracerAt(policeId, targetPos) {
     const pMesh = npcMeshes[policeId];
     if (!pMesh || !pMesh.visible) return;
     pMesh.lookAt(targetPos.x, pMesh.position.y, targetPos.z);
+    // Helmet 06: Muzzle-flash recoil kick & visible tactical firing stance
+    updateAAANpcDynamics(pMesh, { type: 'police', recoilTrigger: true, dt: 0.016, time: clock.elapsedTime });
     if (pMesh.userData?.muzzleFlash) {
         pMesh.userData.muzzleFlash.visible = true;
         setTimeout(() => {
@@ -385,134 +415,16 @@ socket.on('npcsUpdate', (data) => {
 });
 
 
-// --- Watercraft FX: V-shaped foam wake, splash droplets and splash rings (visual only) ---
-const FOAM_Y = RIVER.waterLevel + 0.03;
-const FOAM_MAX = 2000;
-const foam = {
-    pos: new Float32Array(FOAM_MAX * 3), vel: new Float32Array(FOAM_MAX * 3),
-    alpha: new Float32Array(FOAM_MAX), size: new Float32Array(FOAM_MAX),
-    base: new Float32Array(FOAM_MAX), life: new Float32Array(FOAM_MAX), maxLife: new Float32Array(FOAM_MAX).fill(1),
-    next: 0,
-};
-const foamGeo = new THREE.BufferGeometry();
-foamGeo.setAttribute('position', new THREE.BufferAttribute(foam.pos, 3).setUsage(THREE.DynamicDrawUsage));
-foamGeo.setAttribute('alpha', new THREE.BufferAttribute(foam.alpha, 1).setUsage(THREE.DynamicDrawUsage));
-foamGeo.setAttribute('size', new THREE.BufferAttribute(foam.size, 1).setUsage(THREE.DynamicDrawUsage));
-const foamMaterial = new THREE.ShaderMaterial({
-    uniforms: { scale: { value: window.innerHeight / 2 } },
-    vertexShader: `attribute float alpha; attribute float size; uniform float scale; varying float vAlpha;
-        void main() { vAlpha = alpha; vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = size * scale / -mv.z;
-            mv.xyz *= max(0.0, 1.0 - 3.0 * size / length(mv.xyz)); // depth bias: the sprite's lower half must not sink into the water plane
-            gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `varying float vAlpha;
-        void main() { vec2 c = gl_PointCoord - 0.5; float d = dot(c, c); if (d > 0.25) discard;
-            gl_FragColor = vec4(0.94, 0.98, 1.0, vAlpha * smoothstep(0.25, 0.04, d)); }`,
-    transparent: true, depthWrite: false,
-});
-const foamPoints = new THREE.Points(foamGeo, foamMaterial);
-foamPoints.frustumCulled = false;
-scene.add(foamPoints);
-
-function emitFoam(x, y, z, vx, vy, vz, life, size) {
-    const i = foam.next;
-    foam.next = (i + 1) % FOAM_MAX;
-    const k = i * 3;
-    foam.pos[k] = x;
-    foam.pos[k + 1] = y;
-    foam.pos[k + 2] = z;
-    foam.vel[k] = vx;
-    foam.vel[k + 1] = vy;
-    foam.vel[k + 2] = vz;
-    foam.life[i] = foam.maxLife[i] = life;
-    foam.base[i] = size;
-}
-
-function updateFoam(dt) {
-    const drag = Math.exp(-1.8 * dt);
-    for (let i = 0; i < FOAM_MAX; i++) {
-        if (foam.life[i] <= 0) { foam.alpha[i] = 0; continue; }
-        foam.life[i] -= dt;
-        const k = i * 3;
-        const p = foam.pos, v = foam.vel;
-        if (p[k + 1] > FOAM_Y) v[k + 1] -= PHYSICS.gravity * dt; // airborne droplet
-        p[k] += v[k] * dt; p[k + 1] += v[k + 1] * dt; p[k + 2] += v[k + 2] * dt;
-        if (p[k + 1] < FOAM_Y) { p[k + 1] = FOAM_Y; v[k + 1] = 0; } // droplets settle into surface foam
-        v[k] *= drag; v[k + 2] *= drag;
-        const age = 1 - Math.max(0, foam.life[i]) / foam.maxLife[i];
-        foam.alpha[i] = 0.6 * (1 - age) * Math.min(1, age * 12);
-        foam.size[i] = foam.base[i] * (1 + 1.6 * age);
-    }
-    for (const name of ['position', 'alpha', 'size']) foamGeo.attributes[name].needsUpdate = true;
-}
-
-const RING_COUNT = 24;
-const ringGeo = new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2);
-const rings = Array.from({ length: RING_COUNT }, () => {
-    const mesh = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xf2fbff, transparent: true, opacity: 0, depthWrite: false }));
-    mesh.visible = false;
-    scene.add(mesh);
-    return { mesh, t: 0, dur: 1, grow: 1 };
-});
-let nextRing = 0;
-
-/** Splash at (x, z): an expanding ring (two for big hits) plus a burst of droplets. strength ≈ 0.3–1.5. */
-function splash(x, z, strength = 1) {
-    for (let n = 0; n < (strength > 0.8 ? 2 : 1); n++) {
-        const r = rings[nextRing];
-        nextRing = (nextRing + 1) % RING_COUNT;
-        Object.assign(r, { t: -n * 0.12, dur: 0.9 + 0.4 * strength, grow: 2.5 + 3 * strength });
-        r.mesh.position.set(x, FOAM_Y + 0.01, z);
-        r.mesh.visible = true;
-    }
-    const drops = Math.round(14 * strength);
-    for (let i = 0; i < drops; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const out = (1.5 + Math.random() * 3) * strength;
-        emitFoam(x + Math.cos(a) * 0.6, FOAM_Y + 0.1, z + Math.sin(a) * 0.6,
-            Math.cos(a) * out, (4 + Math.random() * 5) * strength, Math.sin(a) * out, 0.9 + Math.random() * 0.5, 0.22);
-    }
-}
-
-function updateRings(dt) {
-    for (const r of rings) {
-        if (!r.mesh.visible) continue;
-        r.t += dt;
-        const u = Math.max(0, r.t) / r.dur;
-        if (u >= 1) { r.mesh.visible = false; continue; }
-        r.mesh.scale.setScalar(0.4 + r.grow * (1 - (1 - u) ** 2));
-        r.mesh.material.opacity = r.t < 0 ? 0 : 0.85 * (1 - u) ** 1.5;
-    }
-}
-
-/** Foam shed from both stern corners spreads outward: the raft sails on and the trail opens into a V. */
+// --- Watercraft FX: River Particle System (Foam wake, proportional splash rings, enemy wake emitters) ---
+const riverParticles = createRiverParticleSystem({ scene });
+const { splash, updateFoam, updateRings, emitFoam } = riverParticles;
 function emitWake(vis, dt) {
-    const { x, y, z } = vis.group.position;
-    const speed = Math.abs(vis.anim.speed);
-    if (y > WATER_SURFACE_Y + 0.3 || speed < 1) return;
-    const f = headingOf(vis.anim.yaw);
-    const dir = Math.sign(vis.anim.speed) || 1;
-    vis.anim.wakeAcc += dt * (8 + speed * 4);
-    const n = Math.floor(vis.anim.wakeAcc);
-    for (let j = 0; j < n; j++) {
-        vis.anim.wakeAcc -= 1;
-        const back = 1.5 + speed * dt * (j / n) + Math.random() * 0.2; // spread a frame's worth along the track
-        for (const side of [-1, 1]) {
-            const sx = x - f.x * back * dir + -f.z * side * 0.95;
-            const sz = z - f.z * back * dir + f.x * side * 0.95;
-            const spread = speed * (0.22 + Math.random() * 0.08);
-            emitFoam(sx, FOAM_Y, sz, -f.z * side * spread, 0, f.x * side * spread, 1.4 + speed * 0.06, 0.28 + speed * 0.012);
-        }
-        if (speed > 8 && Math.random() < 0.5) { // bow spray when planing
-            const side = Math.random() < 0.5 ? -1 : 1;
-            emitFoam(x + f.x * 1.6 * dir, FOAM_Y + 0.15, z + f.z * 1.6 * dir,
-                -f.z * side * 2.5 + f.x * speed * 0.4, 2 + Math.random() * 2, f.x * side * 2.5 + f.z * speed * 0.4, 0.6, 0.18);
-        }
-    }
+    riverParticles.emitRaftWake(vis, dt);
 }
 
 // --- Players ---
 const otherPlayers = {};
+const botAlivenessStates = {};
 let myRaft = null; // { vis, body }
 let isDead = false;
 let myHealth = 100;
@@ -767,8 +679,12 @@ function createRemote(p) {
     vis.group.position.set(p.position.x, p.position.y, p.position.z);
     vis.anim.yaw = yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 });
     vis.group.visible = !p.isDead;
+    vis.isBot = Boolean(p.isBot || p.id?.startsWith('bot'));
     setRemoteTarget(vis, p);
     otherPlayers[p.id] = vis;
+    if (vis.isBot) {
+        botAlivenessStates[p.id] = createBotAlivenessState(p.id);
+    }
     return vis;
 }
 
@@ -823,6 +739,7 @@ socket.on('playerDisconnected', (id) => {
         scene.remove(otherPlayers[id].group);
         disposeObject3DTree(otherPlayers[id].group);
         delete otherPlayers[id];
+        delete botAlivenessStates[id];
     }
 });
 
@@ -1185,13 +1102,53 @@ function fixedStep() {
         }
     }
     const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
+    const previouslySolid = onSolid;
     onSolid = col.onSolid;
+
+    // Helmet 06: Physical Plank & Dock flex/dip & creak when stepping or landing onto wooden safe platforms
+    if (onSolid) {
+        const pNowMs = performance.now();
+        for (let i = 0; i < obstacles.length; i++) {
+            const obs = obstacles[i];
+            if (obs.type !== 'plank' || !obs.mesh) continue;
+            const dx = craft.position.x - obs.x;
+            const dz = craft.position.z - obs.z;
+            if (Math.abs(dx) <= obs.halfW + 0.9 && Math.abs(dz) <= obs.halfD + 1.1) {
+                const justLanded = !previouslySolid || wasAirborne;
+                const isStepping = Math.hypot(craft.velocity.x, craft.velocity.z) > 0.45;
+                if (justLanded || isStepping) {
+                    triggerPlankDip(
+                        obs.mesh,
+                        { relX: dx, relZ: dz, impactSpeed: justLanded ? Math.abs(craft.velocity.y) + 2.5 : 1.0, isMonster: false },
+                        pNowMs,
+                        (vol) => sfx.creak(vol)
+                    );
+                }
+                break;
+            }
+        }
+    }
+
     if (col.hitImpact > 2.2) {
         const hitStr = Math.min(1.2, col.hitImpact / 10);
         splash(craft.position.x, craft.position.z, hitStr * 0.75);
         cameraShake = Math.max(cameraShake, 0.14 * hitStr);
         if (myRaft?.vis?.anim) {
             myRaft.vis.anim.pitch -= 0.14 * hitStr;
+        }
+    }
+
+    // Helmet 06: Tree & Foliage physical brush/collision pushback (shudder & sway)
+    const pNowBrush = performance.now();
+    for (let i = 0; i < obstacles.length; i++) {
+        const obs = obstacles[i];
+        if (obs.type !== 'tree') continue;
+        checkTreeEntityBrush(obs, craft, pNowBrush);
+        if (enemyMeshes.whiteGuy?.visible) {
+            checkTreeEntityBrush(obs, enemyMeshes.whiteGuy, pNowBrush);
+        }
+        if (enemyMeshes.mudAlien?.visible) {
+            checkTreeEntityBrush(obs, enemyMeshes.mudAlien, pNowBrush);
         }
     }
 
@@ -1257,17 +1214,38 @@ function fixedStep() {
     // City Pedestrian + Police Gun Strategy vs. The 3-Legged Mud Alien (Helmet 03: Diegetic police tracers & gunfire, zero emoji banner spam)
     if (live && enemiesData?.mudAlien?.health > 0 && enemyMeshes.mudAlien?.visible) {
         const mudPos = enemyMeshes.mudAlien.position;
+        const pNowNpc = performance.now();
         for (const npc of npcStateList) {
-            if (npc.type !== 'pedestrian' || npc.isDead) continue;
             const pedMesh = npcMeshes[npc.id];
             if (!pedMesh || !pedMesh.visible) continue;
             const dMudToPed = Math.hypot(mudPos.x - pedMesh.position.x, mudPos.z - pedMesh.position.z);
-            const dPlayerToPed = Math.hypot(craft.position.x - pedMesh.position.x, craft.position.z - pedMesh.position.z);
-            if (dMudToPed < 8.5 || (dPlayerToPed < 8.5 && Math.hypot(mudPos.x - craft.position.x, mudPos.z - craft.position.z) < 9.5)) {
-                if (!pedMesh.userData.aoeTriggeredAt || performance.now() - pedMesh.userData.aoeTriggeredAt > 1200) {
-                    pedMesh.userData.aoeTriggeredAt = performance.now();
-                    socket.emit('enemyHitNPC', { npcId: npc.id, enemyId: 'mudAlien', damage: 5 });
+            const isNearMud = dMudToPed < 16.0;
+
+            if (npc.type === 'pedestrian') {
+                if (npc.isDead) continue;
+                // Helmet 06: Pedestrians visibly flinch, cower, and panic scatter when the Mud Alien attacks nearby
+                const dPlayerToPed = Math.hypot(craft.position.x - pedMesh.position.x, craft.position.z - pedMesh.position.z);
+                const panic = isNearMud || (dPlayerToPed < 8.5 && Math.hypot(mudPos.x - craft.position.x, mudPos.z - craft.position.z) < 9.5);
+                updateAAANpcDynamics(pedMesh, { type: 'pedestrian', isPanic: panic, dt: FIXED_DT, time: clock.elapsedTime });
+
+                if (panic && (dMudToPed < 8.5 || (dPlayerToPed < 8.5 && Math.hypot(mudPos.x - craft.position.x, mudPos.z - craft.position.z) < 9.5))) {
+                    if (!pedMesh.userData.aoeTriggeredAt || pNowNpc - pedMesh.userData.aoeTriggeredAt > 1200) {
+                        pedMesh.userData.aoeTriggeredAt = pNowNpc;
+                        socket.emit('enemyHitNPC', { npcId: npc.id, enemyId: 'mudAlien', damage: 5 });
+                    }
                 }
+            } else if (npc.type === 'police' && isNearMud) {
+                // Aim dynamically at the Mud Alien
+                pedMesh.lookAt(mudPos.x, pedMesh.position.y, mudPos.z);
+                updateAAANpcDynamics(pedMesh, { type: 'police', recoilTrigger: false, dt: FIXED_DT, time: clock.elapsedTime });
+            }
+        }
+    } else {
+        // Smoothly settle NPCs to neutral posture when no alien threat is active
+        for (const npc of npcStateList) {
+            const mesh = npcMeshes[npc.id];
+            if (mesh?.visible) {
+                updateAAANpcDynamics(mesh, { type: npc.type, isPanic: false, dt: FIXED_DT, time: clock.elapsedTime });
             }
         }
     }
@@ -1409,6 +1387,10 @@ function updateLocalRaft(dt, now) {
             cp.gate?.markCrossed();
             socket.emit('checkpointCrossed', { checkpointZ: cp.z });
             feverDirector.onCheckpointCrossed(cp.z, idx);
+            // Videogame Helmet 06: AI companion bots celebrate passing a checkpoint with a victory hop!
+            for (const bState of Object.values(botAlivenessStates)) {
+                triggerVictoryHop(bState, 'checkpoint');
+            }
         }
     }
     if (!gameWon && craft.position.z < finishLineZ) {
@@ -1555,6 +1537,17 @@ function animate() {
     }
 
     animateAAAEnemies(enemyMeshes, enemiesData, t);
+
+    // Helmet 06: Update physical spring-damper steps for wooden docks and foliage trees
+    for (let i = 0; i < obstacles.length; i++) {
+        const obs = obstacles[i];
+        if (obs.type === 'plank') {
+            stepPlankPhysics(obs.mesh, delta);
+        } else if (obs.type === 'tree') {
+            stepTreePhysics(obs.mesh, delta, t);
+        }
+    }
+
     const pNowTracer = performance.now();
     for (let i = 0; i < TRACER_POOL_SIZE; i++) {
         if (policeTracers[i].line.visible && pNowTracer >= policeTracers[i].expireAt) {
@@ -1578,7 +1571,7 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    foamMaterial.uniforms.scale.value = window.innerHeight / 2;
+    riverParticles.setScale(window.innerHeight / 2);
 });
 
 if (typeof window !== 'undefined') {

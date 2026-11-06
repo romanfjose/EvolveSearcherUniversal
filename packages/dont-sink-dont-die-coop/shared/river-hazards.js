@@ -13,6 +13,7 @@ export const HAZARD_CONSTANTS = {
         DEFAULT_WIDTH: 10,
         CHEVRON_COUNT: 5,
         SURGE_ACCEL: 35.0, // m/s^2 forward boost acceleration applied to crafts
+        PULSE_DURATION_S: 0.65, // boosted chevron glow & scale pulse duration
     },
 
     // 2. Pulling Whirlpools
@@ -46,6 +47,38 @@ export const HAZARD_CONSTANTS = {
         MAX_KNOCKBACK_FORCE: 800, // impulse force
         BOB_AMPLITUDE: 0.25,
         BOB_FREQUENCY: 2.0,
+        SHOCKWAVE_DURATION_S: 0.85, // visual shockwave expansion time
+        SHOCKWAVE_MAX_RADIUS: 14.0, // expanding ring extent
+        SHRAPNEL_COUNT: 12, // number of flying shrapnel chunks
+        PLUME_HEIGHT: 6.5, // height of vertical detonation water plume
+    },
+
+    // 5. River Log Jams / Timber Barricades
+    LOG_JAM: {
+        DEFAULT_WIDTH: 12.0,
+        DEFAULT_DEPTH: 3.0,
+        DEFAULT_HP: 60,
+        SHUDDER_DURATION_S: 0.45,
+        SPLINTER_COUNT: 8,
+        COLLISION_RADIUS: 2.5,
+    },
+
+    // 6. Hydrothermal River Geysers
+    GEYSER: {
+        DEFAULT_RADIUS: 7.5,
+        BOIL_DURATION_S: 1.2, // pressurized boiling dome telegraph
+        ERUPT_DURATION_S: 1.4, // violent vertical steam eruption
+        REST_DURATION_S: 2.5, // dormant reset period
+        MAX_UPDRAFT: 38.0,
+        LATERAL_DISPERSAL: 11.0,
+        PLUME_MAX_HEIGHT: 12.0,
+    },
+
+    // 7. Airborne Coin Ring Radial Burst
+    COIN_RING_BURST: {
+        DURATION_S: 0.65,
+        EXPANSION_SCALE: 2.8,
+        SPARKLE_COUNT: 10,
     },
 };
 
@@ -306,6 +339,8 @@ export function collectCoinRings(craftPosition, coinRings, collectRadius = 2.0) 
         const effectiveRadius = (ring.radius || 1.5) + collectRadius;
         if (distSq <= effectiveRadius * effectiveRadius) {
             ring.collected = true;
+            ring.burstTriggered = true;
+            ring.burstTimeS = 0;
             collectedCount++;
             earnedCoins += ring.value;
             collectedIds.push(ring.id);
@@ -417,6 +452,21 @@ export function updateMineBarrel(mine, craftPositions = [], dtMs = 50, now = 0) 
                 }
             }
 
+                // Generate physical explosion payload with expanding shockwave ring and shrapnel chunks
+                const shrapnel = [];
+                for (let s = 0; s < HAZARD_CONSTANTS.MINE.SHRAPNEL_COUNT; s++) {
+                    const ang = (s / HAZARD_CONSTANTS.MINE.SHRAPNEL_COUNT) * Math.PI * 2;
+                    shrapnel.push({
+                        id: `mine_shrap_${mine.id}_${s}`,
+                        x: mine.x,
+                        y: mine.y + 0.3,
+                        z: mine.z,
+                        vx: Math.cos(ang) * (8.0 + (s % 4) * 2.5),
+                        vy: 6.0 + (s % 3) * 3.0,
+                        vz: Math.sin(ang) * (8.0 + (s % 4) * 2.5),
+                    });
+                }
+
             events.push({
                 type: 'mineDetonated',
                 mineId: mine.id,
@@ -424,6 +474,12 @@ export function updateMineBarrel(mine, craftPositions = [], dtMs = 50, now = 0) 
                 y: mine.y,
                 z: mine.z,
                 hits: blastHits,
+                    shockwave: {
+                        durationS: HAZARD_CONSTANTS.MINE.SHOCKWAVE_DURATION_S,
+                        maxRadius: HAZARD_CONSTANTS.MINE.SHOCKWAVE_MAX_RADIUS,
+                    },
+                    shrapnel,
+                    plumeHeight: HAZARD_CONSTANTS.MINE.PLUME_HEIGHT,
             });
         }
     }
@@ -436,7 +492,161 @@ export function updateMineBarrel(mine, craftPositions = [], dtMs = 50, now = 0) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. Unified River Hazards Environment & Simulation Step
+// 5. River Log Jams & Hydrothermal Geysers Math
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Creates a river log jam barricade structure that shudders and splinters on collision.
+ */
+export function createLogJam(id, x, z, options = {}) {
+    return {
+        id,
+        x,
+        y: options.y ?? 0.4,
+        z,
+        width: options.width || HAZARD_CONSTANTS.LOG_JAM.DEFAULT_WIDTH,
+        depth: options.depth || HAZARD_CONSTANTS.LOG_JAM.DEFAULT_DEPTH,
+        hp: options.hp || HAZARD_CONSTANTS.LOG_JAM.DEFAULT_HP,
+        maxHp: options.hp || HAZARD_CONSTANTS.LOG_JAM.DEFAULT_HP,
+        state: 'intact', // 'intact' | 'shuddering' | 'splintered'
+        shudderTimerS: 0,
+        splinters: [],
+        impactCount: 0,
+    };
+}
+
+/**
+ * Checks craft collision against a log jam and computes physical reaction (shudder, splinters, rebound).
+ */
+export function evaluateLogJamCollision(craft, logJam, dt = 0.05) {
+    const halfW = logJam.width * 0.5;
+    const halfD = logJam.depth * 0.5;
+    const p = craft.position || craft;
+    const dx = p.x - logJam.x;
+    const dz = p.z - logJam.z;
+
+    const insideX = Math.abs(dx) <= halfW + HAZARD_CONSTANTS.LOG_JAM.COLLISION_RADIUS;
+    const insideZ = Math.abs(dz) <= halfD + HAZARD_CONSTANTS.LOG_JAM.COLLISION_RADIUS;
+
+    if (!insideX || !insideZ || logJam.state === 'splintered') {
+        return { collided: false, logJam };
+    }
+
+    // Impact confirmed! Apply physical reaction
+    logJam.impactCount++;
+    logJam.shudderTimerS = HAZARD_CONSTANTS.LOG_JAM.SHUDDER_DURATION_S;
+    logJam.state = 'shuddering';
+
+    const craftSpeed = Math.hypot(craft.velocity?.x || 0, craft.velocity?.z || 0);
+    const impactDmg = Math.max(15, Math.round(craftSpeed * 3.5));
+    logJam.hp = Math.max(0, logJam.hp - impactDmg);
+
+    // Spawn flying wood splinters
+    const splinters = [];
+    const count = HAZARD_CONSTANTS.LOG_JAM.SPLINTER_COUNT;
+    for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2;
+        splinters.push({
+            id: `splinter_${logJam.id}_${logJam.impactCount}_${i}`,
+            x: p.x,
+            y: (p.y || 0.4) + 0.3,
+            z: p.z,
+            vx: Math.cos(angle) * (3.0 + (i % 3) * 1.5),
+            vy: 4.0 + (i % 4) * 1.5,
+            vz: Math.sin(angle) * (3.0 + (i % 2) * 1.5) - 2.0,
+            rotation: { x: i * 0.5, y: i * 0.8, z: i * 0.3 },
+            scale: 0.6 + (i % 3) * 0.2,
+            lifetimeS: 0.75,
+        });
+    }
+    logJam.splinters.push(...splinters);
+
+    if (logJam.hp <= 0) {
+        logJam.state = 'splintered';
+    }
+
+    return {
+        collided: true,
+        damageDealt: impactDmg,
+        remainingHp: logJam.hp,
+        state: logJam.state,
+        splinters,
+        reboundForce: {
+            x: dx === 0 ? 0 : (dx / Math.abs(dx)) * 12.0,
+            z: 14.0, // rebound backwards against downriver momentum
+        },
+    };
+}
+
+/**
+ * Creates a hydrothermal river geyser with pressurized boiling dome telegraph.
+ */
+export function createRiverGeyser(id, x, z, options = {}) {
+    return {
+        id,
+        x,
+        y: options.y ?? 0.2,
+        z,
+        radius: options.radius || HAZARD_CONSTANTS.GEYSER.DEFAULT_RADIUS,
+        state: 'dormant', // 'dormant' | 'boiling' | 'erupting'
+        boilDurationS: options.boilDurationS || HAZARD_CONSTANTS.GEYSER.BOIL_DURATION_S,
+        eruptDurationS: options.eruptDurationS || HAZARD_CONSTANTS.GEYSER.ERUPT_DURATION_S,
+        restDurationS: options.restDurationS || HAZARD_CONSTANTS.GEYSER.REST_DURATION_S,
+        phaseTimerS: 0,
+        cyclePeriodS: (options.boilDurationS || HAZARD_CONSTANTS.GEYSER.BOIL_DURATION_S) +
+                      (options.eruptDurationS || HAZARD_CONSTANTS.GEYSER.ERUPT_DURATION_S) +
+                      (options.restDurationS || HAZARD_CONSTANTS.GEYSER.REST_DURATION_S),
+    };
+}
+
+/**
+ * Evaluates geyser cycle phase (dormant -> boiling dome telegraph -> vertical steam eruption)
+ * at a given time or step.
+ */
+export function evaluateGeyserState(geyser, timeSec) {
+    const period = geyser.cyclePeriodS;
+    const cycleTime = ((timeSec + (Math.abs(geyser.x) * 0.4)) % period + period) % period;
+
+    const boilEnd = geyser.boilDurationS;
+    const eruptEnd = boilEnd + geyser.eruptDurationS;
+
+    let state = 'dormant';
+    let telegraphProgress = 0; // 0..1 during boiling
+    let eruptionProgress = 0;  // 0..1 during erupting
+    let updraftForce = 0;
+    let domeHeight = 0;
+    let plumeHeight = 0;
+
+    if (cycleTime < boilEnd) {
+        // Phase 1: Pressurized boiling dome telegraph
+        state = 'boiling';
+        telegraphProgress = cycleTime / boilEnd;
+        // Boiling water dome rises, expands, and bubbles
+        domeHeight = Math.sin(telegraphProgress * Math.PI * 0.5) * 1.4;
+    } else if (cycleTime < eruptEnd) {
+        // Phase 2: Explosive steam eruption
+        state = 'erupting';
+        eruptionProgress = (cycleTime - boilEnd) / geyser.eruptDurationS;
+        const surgeCurve = Math.sin(eruptionProgress * Math.PI);
+        updraftForce = HAZARD_CONSTANTS.GEYSER.MAX_UPDRAFT * surgeCurve;
+        plumeHeight = HAZARD_CONSTANTS.GEYSER.PLUME_MAX_HEIGHT * surgeCurve;
+    } else {
+        // Phase 3: Dormant
+        state = 'dormant';
+    }
+
+    return {
+        state,
+        telegraphProgress,
+        eruptionProgress,
+        updraftForce,
+        domeHeight,
+        plumeHeight,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Unified River Hazards Environment & Simulation Step
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -564,6 +774,8 @@ export function stepCraftWithRiverHazards(craft, hazards, dt, now = 0) {
         const rap = hazards.rapids[i];
         if (isInsideRapids(pos, rap)) {
             result.inRapids = true;
+            rap.boostPulseTimerS = HAZARD_CONSTANTS.RAPIDS.PULSE_DURATION_S;
+            rap.isBoostingRaft = true;
             const boost = calculateRapidsBoost(vel, rap);
             result.rapidsBoostFactor = boost.multiplier; // 1.45
             // Apply forward surge boost acceleration + direct displacement so keel drag cannot cancel it
@@ -654,6 +866,46 @@ export function stepCraftWithRiverHazards(craft, hazards, dt, now = 0) {
                             vel.z += hit.knockback.z / (craft.mass || 5);
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // F. Update Log Jams (Barricades)
+    if (hazards.logJams && hazards.logJams.length > 0) {
+        result.logJamCollisions = [];
+        for (let i = 0; i < hazards.logJams.length; i++) {
+            const lj = hazards.logJams[i];
+            const col = evaluateLogJamCollision(craft, lj, dt);
+            if (col.collided) {
+                result.logJamCollisions.push(col);
+                vel.x += col.reboundForce.x;
+                vel.z += col.reboundForce.z;
+            }
+            if (lj.shudderTimerS > 0) {
+                lj.shudderTimerS = Math.max(0, lj.shudderTimerS - dt);
+                if (lj.shudderTimerS === 0 && lj.state === 'shuddering') {
+                    lj.state = lj.hp <= 0 ? 'splintered' : 'intact';
+                }
+            }
+        }
+    }
+
+    // G. Update River Geysers
+    if (hazards.geysers && hazards.geysers.length > 0) {
+        result.activeGeysers = [];
+        const timeSec = typeof now === 'number' ? (now > 10000 ? now * 0.001 : now) : 0;
+        for (let i = 0; i < hazards.geysers.length; i++) {
+            const g = hazards.geysers[i];
+            const gState = evaluateGeyserState(g, timeSec);
+            const dx = pos.x - g.x;
+            const dz = pos.z - g.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq <= g.radius * g.radius) {
+                result.activeGeysers.push({ geyserId: g.id, ...gState });
+                if (gState.state === 'erupting' && gState.updraftForce > 0) {
+                    const prox = 1.0 - Math.sqrt(distSq) / g.radius;
+                    vel.y += gState.updraftForce * prox * dt;
                 }
             }
         }

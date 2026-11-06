@@ -67,6 +67,19 @@ export function createKrakenMesh(THREE_INSTANCE) {
         transparent: true,
         opacity: 0.75,
     });
+    // Helmet 06: Water Shockwave Expanding Ring Material
+    const shockwaveMat = new THREE.MeshBasicMaterial({
+        color: 0x00f5d4, // bright turquoise water crest
+        wireframe: false,
+        transparent: true,
+        opacity: 0.85,
+    });
+    // Helmet 06: Bioluminescent Vein Flashing Material
+    const veinGlowMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffcc,
+        transparent: true,
+        opacity: 0.0,
+    });
 
     // ─── 1. Articulated Kraken Head & Mantle ────────────────────────────────
     const headGroup = new THREE.Group();
@@ -79,6 +92,16 @@ export function createKrakenMesh(THREE_INSTANCE) {
     mantleMesh.scale.set(1.15, 1.85, 1.25);
     mantleMesh.position.set(0, 5.0, -1.5);
     mantleMesh.rotation.x = -0.22; // angled back slightly
+
+    // Helmet 06: Bioluminescent Vein Overlay on Mantle
+    const mantleVeinGeo = new THREE.SphereGeometry(4.25, 12, 12);
+    const mantleVeinMesh = new THREE.Mesh(mantleVeinGeo, veinGlowMat);
+    mantleVeinMesh.name = 'MantleVeins';
+    mantleVeinMesh.scale.set(1.16, 1.86, 1.26);
+    mantleVeinMesh.position.set(0, 5.0, -1.5);
+    mantleVeinMesh.rotation.x = -0.22;
+    headGroup.add(mantleVeinMesh);
+
     headGroup.add(mantleMesh);
 
     // Lateral Mantle Fins / Hood ridges
@@ -261,10 +284,25 @@ export function createKrakenMesh(THREE_INSTANCE) {
         telegraphPool.push({ mesh: ringMesh, inUse: false, id: null });
     }
 
+    // ─── 5. Helmet 06: Water Shockwave Expanding Rings Pool ────────────────
+    const shockwavePool = [];
+    const maxShockwaves = 6;
+    for (let i = 0; i < maxShockwaves; i++) {
+        const swGeo = new THREE.RingGeometry(0.65, 1.0, 32);
+        const swMesh = new THREE.Mesh(swGeo, shockwaveMat);
+        swMesh.name = `KrakenShockwaveRing_${i}`;
+        swMesh.rotation.x = -Math.PI / 2;
+        swMesh.position.y = 0.16; // Slightly above water & danger rings
+        swMesh.visible = false;
+        krakenGroup.add(swMesh);
+        shockwavePool.push({ mesh: swMesh, inUse: false, id: null });
+    }
+
     // Store references in userData for programmatic updates
     krakenGroup.userData = {
         headGroup,
         mantleMesh,
+        mantleVeinMesh,
         eyes,
         beakGroup,
         upperJaw,
@@ -272,6 +310,7 @@ export function createKrakenMesh(THREE_INSTANCE) {
         barnacleMeshes,
         tentacles,
         telegraphPool,
+        shockwavePool,
         materials: {
             skinMat,
             underbellyMat,
@@ -282,6 +321,8 @@ export function createKrakenMesh(THREE_INSTANCE) {
             barnacleGlowMat,
             suctionMat,
             telegraphMat,
+            shockwaveMat,
+            veinGlowMat,
         },
     };
 
@@ -293,30 +334,60 @@ export function createKrakenMesh(THREE_INSTANCE) {
  */
 export function updateKrakenMesh(krakenMesh, krakenState, dt = 0.016, totalTime = 0) {
     if (!krakenMesh || !krakenMesh.userData || !krakenState) return;
-    const { headGroup, eyes, beakGroup, upperJaw, lowerJaw, barnacleMeshes, tentacles, telegraphPool } = krakenMesh.userData;
+    const {
+        headGroup,
+        mantleVeinMesh,
+        eyes,
+        beakGroup,
+        upperJaw,
+        lowerJaw,
+        barnacleMeshes,
+        tentacles,
+        telegraphPool,
+        shockwavePool,
+        materials,
+    } = krakenMesh.userData;
 
     const time = totalTime || krakenState.time;
+    const recoil = krakenState.recoil || { pitch: 0, yaw: 0, roll: 0, offsetY: 0, offsetZ: 0 };
+    const thrash = krakenState.thrashTimer || 0;
 
-    // 1. Overall Root Position & Menacing Head Tracking toward Lead Raft
+    // 1. Overall Root Position with Physical Recoil Offsets
     krakenMesh.position.x = krakenState.position.x;
-    krakenMesh.position.y = krakenState.position.y + (krakenState.headBobOffset || 0);
-    krakenMesh.position.z = krakenState.position.z;
-    if (headGroup && krakenState.targetPosition) {
-        const dx = krakenState.targetPosition.x - krakenState.position.x;
-        const dz = krakenState.targetPosition.z - krakenState.position.z;
-        if (Math.hypot(dx, dz) > 0.5) {
-            const targetYaw = Math.atan2(dx, dz);
-            const safeDt = Math.max(0.001, Math.min(0.1, dt || 0.016));
-            headGroup.rotation.y += (targetYaw - headGroup.rotation.y) * Math.min(1.0, safeDt * 4.5);
+    krakenMesh.position.y = krakenState.position.y + (krakenState.headBobOffset || 0) + (recoil.offsetY || 0);
+    krakenMesh.position.z = krakenState.position.z + (recoil.offsetZ || 0);
+
+    // Physical Recoil & Head Tracking toward Lead Raft
+    if (headGroup) {
+        let targetYaw = 0;
+        if (krakenState.targetPosition) {
+            const dx = krakenState.targetPosition.x - krakenState.position.x;
+            const dz = krakenState.targetPosition.z - krakenState.position.z;
+            if (Math.hypot(dx, dz) > 0.5) {
+                targetYaw = Math.atan2(dx, dz);
+            }
         }
+        const safeDt = Math.max(0.001, Math.min(0.1, dt || 0.016));
+        const smoothYaw = headGroup.rotation.y + (targetYaw - headGroup.rotation.y) * Math.min(1.0, safeDt * 4.5);
+
+        // Apply physical recoil pitch, yaw roll & thrash tremor
+        const thrashTremor = thrash > 0 ? Math.sin(time * 28.0) * thrash * 0.08 : 0;
+        headGroup.rotation.x = (recoil.pitch || 0) + thrashTremor;
+        headGroup.rotation.y = smoothYaw + (recoil.yaw || 0);
+        headGroup.rotation.z = (recoil.roll || 0) + (thrash > 0 ? Math.cos(time * 24.0) * thrash * 0.06 : 0);
     }
 
-    // 2. Eye Bioluminescence Pulse
+    // 2. Eye Bioluminescence Pulse & Vein Flashing
     const eyeIntensity = (krakenState.isStunned ? 0.2 : krakenState.eyeGlow || 1.0);
+    const veinState = krakenState.veinFlash || { intensity: 0, color: 0x00ffcc };
+
     for (const e of eyes) {
         if (e.mesh.material && e.mesh.material.color) {
             if (krakenState.isStunned) {
                 e.mesh.material.color.setHex(0x334455);
+            } else if (veinState.intensity > 0.3) {
+                // Flash eye color to match surging vein bioluminescence
+                e.mesh.material.color.setHex(veinState.color);
             } else if (krakenState.phase === 3) {
                 e.mesh.material.color.setHex(0xff0044); // Angry Crimson in Phase 3
             } else {
@@ -325,11 +396,23 @@ export function updateKrakenMesh(krakenMesh, krakenState, dt = 0.016, totalTime 
         }
     }
 
-    // 3. Beak Snapping animation
+    // Update Mantle Bioluminescent Veins
+    if (mantleVeinMesh && materials && materials.veinGlowMat) {
+        const baseVeinPulse = 0.15 + Math.sin(time * 3.0) * 0.1;
+        const totalIntensity = Math.min(1.0, baseVeinPulse + (veinState.intensity || 0));
+        mantleVeinMesh.visible = totalIntensity > 0.05;
+        if (materials.veinGlowMat.color) {
+            materials.veinGlowMat.color.setHex(veinState.color || 0x00ffcc);
+        }
+        materials.veinGlowMat.opacity = totalIntensity * 0.85;
+    }
+
+    // 3. Beak Snapping animation with Violent Recoil Thrashing
     if (beakGroup && upperJaw && lowerJaw) {
-        const snap = Math.sin(time * 6.0) * (krakenState.phase === 3 ? 0.35 : 0.15);
-        upperJaw.rotation.x = Math.PI * 0.45 + snap;
-        lowerJaw.rotation.x = Math.PI * 0.75 - snap;
+        const snapBase = Math.sin(time * 6.0) * (krakenState.phase === 3 ? 0.35 : 0.15);
+        const snapThrash = thrash > 0 ? Math.sin(time * 32.0) * thrash * 0.45 : 0;
+        upperJaw.rotation.x = Math.PI * 0.45 + snapBase + snapThrash;
+        lowerJaw.rotation.x = Math.PI * 0.75 - snapBase - snapThrash;
     }
 
     // 4. Barnacle Weak-point Visibility & Glow
@@ -360,23 +443,26 @@ export function updateKrakenMesh(krakenMesh, krakenState, dt = 0.016, totalTime 
             const joint = joints[j];
             const simAngle = angles[j] || 0;
 
+            const curl = tentacleSim.curlFactor || 0;
+            const thrashFlinch = thrash > 0 ? Math.sin(time * 22.0 + j * 0.8 + t * 1.5) * thrash * 0.25 : 0;
+
             if (tentacleSim.state === 'slamming') {
                 // Downward slam arc
                 const slamAmt = tentacleSim.slamProgress;
-                joint.group.rotation.x = (j === 0 ? 1.2 * slamAmt : 0.25 * slamAmt);
+                joint.group.rotation.x = (j === 0 ? 1.2 * slamAmt : 0.25 * slamAmt) + thrashFlinch;
                 joint.group.rotation.z = Math.sin(time * 2.0 + j * 0.2) * 0.08;
             } else if (tentacleSim.state === 'sweeping') {
                 // Lateral sweeping whip
                 joint.group.rotation.y = (j === 0 ? tentacleSim.sweepAngle : 0.2 * Math.sin(time * 5.0 + j));
-                joint.group.rotation.x = 0.3 + Math.sin(time * 4.0 + j * 0.3) * 0.2;
+                joint.group.rotation.x = 0.3 + Math.sin(time * 4.0 + j * 0.3) * 0.2 + thrashFlinch;
             } else if (tentacleSim.state === 'telegraphing') {
                 // Raised high above water, coiled to strike
                 joint.group.rotation.x = -0.45 + Math.sin(time * 8.0 + j * 0.2) * 0.05;
                 joint.group.rotation.z = Math.sin(time * 4.0 + j * 0.4) * 0.15;
             } else {
-                // Idle swimming / coiling wave
-                joint.group.rotation.x = simAngle * 1.5;
-                joint.group.rotation.z = Math.cos(time * 1.5 + j * 0.5 + t) * 0.2;
+                // Idle swimming / coiling wave with physical damage thrash flinching
+                joint.group.rotation.x = simAngle * 1.5 + curl * 0.4 + thrashFlinch;
+                joint.group.rotation.z = Math.cos(time * 1.5 + j * 0.5 + t) * 0.2 + curl * 0.2;
             }
         }
     }
@@ -395,6 +481,30 @@ export function updateKrakenMesh(krakenMesh, krakenState, dt = 0.016, totalTime 
             slot.mesh.scale.set(scale, scale, 1.0);
         } else {
             slot.mesh.visible = false;
+        }
+    }
+
+    // 7. Helmet 06: Update Expanding Water Shockwave Rings
+    if (shockwavePool) {
+        const activeShockwaves = krakenState.shockwaves || [];
+        for (let i = 0; i < shockwavePool.length; i++) {
+            const slot = shockwavePool[i];
+            if (i < activeShockwaves.length) {
+                const sw = activeShockwaves[i];
+                slot.mesh.visible = true;
+                slot.mesh.position.x = sw.position.x - krakenState.position.x;
+                slot.mesh.position.z = sw.position.z - krakenState.position.z;
+                const r = Math.max(0.2, sw.radius || 1.0);
+                slot.mesh.scale.set(r, r, 1.0);
+
+                // Fade opacity as shockwave expands outward
+                const progress = Math.min(1.0, (sw.elapsed || 0) / Math.max(0.01, sw.duration || 1.0));
+                if (slot.mesh.material) {
+                    slot.mesh.material.opacity = (1.0 - progress) * 0.85;
+                }
+            } else {
+                slot.mesh.visible = false;
+            }
         }
     }
 }

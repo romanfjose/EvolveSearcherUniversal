@@ -66,124 +66,10 @@ export function upgradeRendererAndAtmosphere(renderer, scene) {
 }
 
 // ─── 2. Custom GLSL Gerstner Wave & Per-Pixel Smooth Specular River Surface (Helmet 04: Zero Checkerboard Artifacts) ──────
+import { createRiverWaterMesh } from './world/water-shader.js';
+
 export function createAAARiverMesh(riverWidth, riverLength, waterTex) {
-    const geo = new THREE.PlaneGeometry(riverWidth + 16, riverLength + 200, 96, 480);
-    const mat = new THREE.ShaderMaterial({
-        uniforms: {
-            uTime: { value: 0 },
-            uClarity: { value: 0 },
-            uMudColor: { value: new THREE.Color(0x1e3846) },
-            uClearColor: { value: new THREE.Color(0x0b4f6c) },
-            uDeepColor: { value: new THREE.Color(0x062338) },
-            uSkyColor: { value: new THREE.Color(0x6290b8) },
-            uSunColor: { value: new THREE.Color(0xffdca8) },
-            uSunDir: { value: new THREE.Vector3(0.28, 0.55, -0.78).normalize() },
-            uHalfWidth: { value: riverWidth * 0.5 },
-            uMap: { value: waterTex },
-        },
-        vertexShader: `
-            uniform float uTime;
-            varying vec3 vWorldPos;
-            varying vec2 vUv;
-            varying float vWaveH;
-
-            void main() {
-                vUv = uv;
-                vec4 wp = modelMatrix * vec4(position, 1.0);
-
-                // Smooth Gerstner-style river swell flowing toward -Z
-                float zFlow = wp.z + uTime * 9.5;
-                float w1 = sin(wp.x * 0.32 + zFlow * 0.18) * 0.07;
-                float w2 = cos(wp.x * 0.58 - zFlow * 0.26) * 0.035;
-                float h = w1 + w2;
-
-                wp.y += h;
-                vWaveH = h;
-                vWorldPos = wp.xyz;
-
-                gl_Position = projectionMatrix * viewMatrix * wp;
-            }
-        `,
-        fragmentShader: `
-            uniform float uTime;
-            uniform float uClarity;
-            uniform vec3 uMudColor;
-            uniform vec3 uClearColor;
-            uniform vec3 uDeepColor;
-            uniform vec3 uSkyColor;
-            uniform vec3 uSunColor;
-            uniform vec3 uSunDir;
-            uniform float uHalfWidth;
-            varying vec3 vWorldPos;
-            varying vec2 vUv;
-            varying float vWaveH;
-
-            // Smooth procedural ripple noise (computed per-pixel to eliminate triangle grid checkerboards)
-            float hash(vec2 p) {
-                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-            }
-            float noise(vec2 p) {
-                vec2 i = floor(p);
-                vec2 f = fract(p);
-                f = f * f * (3.0 - 2.0 * f);
-                return mix(
-                    mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
-                    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
-                    f.y
-                );
-            }
-
-            void main() {
-                // Per-pixel continuous analytical wave normal (zero vertex-grid Mach bands or diamond checkerboards)
-                float zFlow = vWorldPos.z + uTime * 9.5;
-                float dx = 0.32 * 0.07 * cos(vWorldPos.x * 0.32 + zFlow * 0.18)
-                         - 0.58 * 0.035 * sin(vWorldPos.x * 0.58 - zFlow * 0.26)
-                         + 0.025 * sin(vWorldPos.x * 1.4 + zFlow * 0.6);
-                float dz = 0.18 * 0.07 * cos(vWorldPos.x * 0.32 + zFlow * 0.18)
-                         + 0.26 * 0.035 * sin(vWorldPos.x * 0.58 - zFlow * 0.26);
-                vec3 N = normalize(vec3(-dx * 1.35, 1.0, -dz * 1.35));
-                vec3 V = normalize(cameraPosition - vWorldPos);
-
-                // Deep readable slate-teal river palette so rafts, planks, and monsters pop in 0.5s squint test
-                float downstream = clamp(-vWorldPos.z / 1500.0, 0.0, 1.0);
-                float clarity = clamp(mix(downstream, uClarity, 0.5), 0.0, 1.0);
-                vec3 shallow = mix(uMudColor, uClearColor, clarity);
-                float centerDepth = 1.0 - clamp(abs(vWorldPos.x) / uHalfWidth, 0.0, 1.0);
-                vec3 baseCol = mix(shallow, uDeepColor, centerDepth * 0.62);
-
-                // Flowing current streaks & subtle caustics
-                vec2 flowUv = vec2(vWorldPos.x * 0.38, vWorldPos.z * 0.15 + uTime * 2.4);
-                float n1 = noise(flowUv * 2.2);
-                float n2 = noise(flowUv * 4.5 - vec2(0.0, uTime * 1.5));
-                float caustic = smoothstep(0.60, 0.88, n1 * 0.6 + n2 * 0.4);
-                baseCol += vec3(0.14, 0.28, 0.35) * caustic * (0.22 + 0.35 * clarity);
-
-                // Shore foam along riverbanks
-                float bankDist = abs(abs(vWorldPos.x) - uHalfWidth);
-                float shoreFoam = smoothstep(2.4, 0.2, bankDist) * (0.45 + 0.55 * n1);
-
-                // Smooth Fresnel sky reflection + soft sunset horizon sheen
-                float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.6);
-                vec3 col = mix(baseCol, uSkyColor, fresnel * 0.38);
-
-                vec3 H = normalize(uSunDir + V);
-                float spec = pow(max(dot(N, H), 0.0), 42.0);
-                col += uSunColor * spec * 0.32;
-
-                // Subtle wave crest highlights & bank foam
-                col += vec3(0.82, 0.92, 0.98) * smoothstep(0.06, 0.11, vWaveH) * 0.18;
-                col = mix(col, vec3(0.90, 0.95, 1.0), clamp(shoreFoam * 0.6, 0.0, 0.75));
-
-                gl_FragColor = vec4(col, 1.0);
-            }
-        `,
-    });
-
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.z = -riverLength / 2 + 50;
-    mesh.receiveShadow = true;
-    return { mesh, mat };
+    return createRiverWaterMesh(riverWidth, riverLength, waterTex);
 }
 
 // ─── 3. Sculpted Canyon Banks & Neon Harbor City Architecture ───────────
@@ -461,12 +347,15 @@ export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodM
         const plankCount = 5;
         const pDepth = depth / plankCount;
         const beaconGoldMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+        const plankBoards = [];
 
         for (let i = 0; i < plankCount; i++) {
             const board = new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.8, pDepth * 0.9), woodMaterial);
             board.position.z = (i - (plankCount - 1) / 2) * pDepth;
             board.castShadow = true;
             board.receiveShadow = true;
+            board.userData = { baseY: board.position.y, localDip: 0 };
+            plankBoards.push(board);
             group.add(board);
         }
         // Heavy timber pilings & corner mooring bollards with glowing safe-haven lanterns
@@ -480,6 +369,7 @@ export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodM
                 group.add(bollardCap);
             }
         }
+        group.userData = { plankBoards };
         return group;
     }
 
@@ -491,6 +381,7 @@ export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodM
     treeGroup.add(trunk);
 
     const tiers = 3;
+    const canopyTiers = [];
     for (let t = 0; t < tiers; t++) {
         const r = size * (1.05 - t * 0.24);
         const h = size * (0.95 - t * 0.15);
@@ -499,8 +390,10 @@ export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodM
         cone.rotation.y = t * 0.7;
         cone.castShadow = true;
         cone.receiveShadow = true;
+        canopyTiers.push(cone);
         treeGroup.add(cone);
     }
+    treeGroup.userData = { trunk, canopyTiers };
     return treeGroup;
 }
 
@@ -865,15 +758,27 @@ export function createAAAEnemyMeshes(woodMaterial) {
     wgMouth.rotation.z = 0.12;
 
     // Crooked Wizard Hat ("a white guy with wizard hat but its not really a wizard")
+    // Grouped into hatSpinGroup so 2v1 double-team hits can spin and wobble it in real-time!
+    const hatSpinGroup = new THREE.Group();
+    hatSpinGroup.name = 'hatSpinGroup';
+    hatSpinGroup.position.set(0, 2.86, 0);
+
     const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 0.08, 14), hatMat);
-    hatBrim.position.y = 2.86;
+    hatBrim.position.y = 0;
     hatBrim.rotation.z = 0.08;
+    hatBrim.name = 'hatBrim';
+
     const hatBand = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.56, 0.14, 12), hatBandMat);
-    hatBand.position.y = 2.94;
+    hatBand.position.y = 0.08;
+    hatBand.name = 'hatBand';
+
     const hatCone = new THREE.Mesh(new THREE.ConeGeometry(0.56, 1.65, 12), hatMat);
-    hatCone.position.set(0.06, 3.68, 0.05);
+    hatCone.position.set(0.06, 0.82, 0.05);
     hatCone.rotation.z = -0.14;
     hatCone.rotation.x = -0.12;
+    hatCone.name = 'hatCone';
+
+    hatSpinGroup.add(hatBrim, hatBand, hatCone);
 
     // Helmet 05 Telegraph Ring: visible 0.85s wind-up ring before the White Guy's grab lunge so players can block/dodge/jump on planks
     const wgTelegraphRing = new THREE.Mesh(
@@ -883,8 +788,12 @@ export function createAAAEnemyMeshes(woodMaterial) {
     wgTelegraphRing.position.y = 0.14;
     wgTelegraphRing.visible = false;
 
-    whiteGuyGroup.add(wgTorso, wgLeftLeg, wgRightLeg, wgLeftArm, wgRightArm, wgHead, wgMouth, hatBrim, hatBand, hatCone, wgTelegraphRing);
-    whiteGuyGroup.userData = { wgLeftArm, wgRightArm, wgLeftLeg, wgRightLeg, wgTorso, wgTelegraphRing, windupProgress: 0, staggered: false };
+    const hatGroup = hatSpinGroup;
+    whiteGuyGroup.add(wgTorso, wgLeftLeg, wgRightLeg, wgLeftArm, wgRightArm, wgHead, wgMouth, hatSpinGroup, wgTelegraphRing);
+    whiteGuyGroup.userData = {
+        wgLeftArm, wgRightArm, wgLeftLeg, wgRightLeg, wgTorso, hatGroup, hatSpinGroup, hatBrim, hatBand, hatCone, wgTelegraphRing,
+        windupProgress: 0, staggered: false, rigOffsets: null,
+    };
 
     // 7B. The 3-Legged Headless Mud Alien (`mudAlien`):
     // "brown green... like mud color, doesn't have a form, maybe is three legged no head, like simple, but weird, with a small mouth"
@@ -949,7 +858,7 @@ export function createAAAEnemyMeshes(woodMaterial) {
     auraDisc.position.y = 0.12;
 
     mudGroup.add(coreBody, auraDisc);
-    mudGroup.userData = { tripodLegs, coreBody, auraDisc };
+    mudGroup.userData = { tripodLegs, coreBody, auraDisc, rigOffsets: null };
 
     // 7C. The Long Monstrous Nokia-Vector Worm (`longWorm`):
     // "similar to the second alien too, like a just long like snake, but not snake moving, more like it only has one vector.
@@ -995,7 +904,7 @@ export function createAAAEnemyMeshes(woodMaterial) {
         wormGroup.add(seg);
         segments.push(seg);
     }
-    wormGroup.userData = { segments, pathHistory: [] };
+    wormGroup.userData = { segments, pathHistory: [], rigOffsets: null };
 
     return {
         whiteGuy: whiteGuyGroup,
@@ -1005,15 +914,34 @@ export function createAAAEnemyMeshes(woodMaterial) {
 }
 
 export function animateAAAEnemies(enemyMeshes, enemiesData, t) {
-    // 1. White Guy in Wizard Hat: wading stride + 0.85s overhead wind-up telegraph before grab + stagger slump on block/dodge
+    // 1. White Guy in Wizard Hat: wading stride + 0.85s overhead wind-up telegraph before grab + stagger slump on block/dodge + rig recoil
     const wiz = enemyMeshes.whiteGuy;
     if (wiz?.visible && wiz.userData.wgLeftArm) {
         const wp = wiz.userData.windupProgress || 0;
         const stag = wiz.userData.staggered || false;
-        if (stag) {
-            wiz.userData.wgLeftArm.rotation.x = 0.65;
-            wiz.userData.wgRightArm.rotation.x = 0.65;
-            wiz.userData.wgTorso.position.y = 1.05;
+        const r = wiz.userData.rigOffsets;
+
+        if (r && (r.hatTiltX !== 0 || r.hatTiltZ !== 0 || r.armFlail !== 0 || r.dizzySpin !== 0)) {
+            if (wiz.userData.hatGroup) {
+                wiz.userData.hatGroup.rotation.x = r.hatTiltX;
+                wiz.userData.hatGroup.rotation.z = r.hatTiltZ;
+            }
+            wiz.userData.wgTorso.rotation.x = r.torsoTiltX;
+            wiz.userData.wgTorso.rotation.z = r.torsoTiltZ;
+            wiz.userData.wgLeftArm.rotation.x = 0.85 + r.armFlail;
+            wiz.userData.wgRightArm.rotation.x = 0.85 + r.armFlail;
+            wiz.userData.wgLeftArm.rotation.z = -r.armFlail * 0.5;
+            wiz.userData.wgRightArm.rotation.z = r.armFlail * 0.5;
+            if (r.dizzySpin !== 0) {
+                wiz.rotation.y += r.dizzySpin * 0.016;
+            }
+            if (wiz.userData.wgTelegraphRing) wiz.userData.wgTelegraphRing.visible = false;
+        } else if (stag) {
+            wiz.userData.wgLeftArm.rotation.x = 0.65 + Math.sin(t * 18.0) * 0.12;
+            wiz.userData.wgRightArm.rotation.x = 0.65 - Math.sin(t * 18.0) * 0.12;
+            wiz.userData.wgTorso.position.y = 1.05 + Math.abs(Math.sin(t * 14.0)) * 0.08;
+            wiz.userData.wgTorso.rotation.set(0, 0, Math.sin(t * 12.0) * 0.15);
+            if (wiz.userData.hatGroup) wiz.userData.hatGroup.rotation.set(0, 0, 0);
             if (wiz.userData.wgTelegraphRing) wiz.userData.wgTelegraphRing.visible = false;
         } else if (wp > 0.01) {
             // Unmistakable 0.85s wind-up: raises both stark-white arms high overhead before lunging!
@@ -1022,6 +950,8 @@ export function animateAAAEnemies(enemyMeshes, enemiesData, t) {
             wiz.userData.wgLeftArm.rotation.y = -0.35 * wp;
             wiz.userData.wgRightArm.rotation.y = 0.35 * wp;
             wiz.userData.wgTorso.position.y = 1.35 + wp * 0.42;
+            wiz.userData.wgTorso.rotation.set(0, 0, 0);
+            if (wiz.userData.hatGroup) wiz.userData.hatGroup.rotation.set(0, 0, 0);
             if (wiz.userData.wgTelegraphRing) {
                 wiz.userData.wgTelegraphRing.visible = true;
                 wiz.userData.wgTelegraphRing.scale.setScalar(1.35 - wp * 0.55);
@@ -1036,22 +966,35 @@ export function animateAAAEnemies(enemyMeshes, enemiesData, t) {
             wiz.userData.wgLeftLeg.rotation.x = -reach * 1.2;
             wiz.userData.wgRightLeg.rotation.x = reach * 1.2;
             wiz.userData.wgTorso.position.y = 1.35 + Math.abs(Math.sin(t * 7.5)) * 0.12;
+            wiz.userData.wgTorso.rotation.set(0, 0, 0);
+            if (wiz.userData.hatGroup) wiz.userData.hatGroup.rotation.set(0, 0, 0);
             if (wiz.userData.wgTelegraphRing) wiz.userData.wgTelegraphRing.visible = false;
         }
     }
 
-    // 2. 3-Legged Headless Mud Alien: heavy tripod gait + 0.85s rearing slam wind-up telegraph + pulsing mud AoE ring
+    // 2. 3-Legged Headless Mud Alien: heavy tripod gait + 0.85s rearing slam wind-up telegraph + pulsing mud AoE ring + jelly flinch
     const mud = enemyMeshes.mudAlien;
     if (mud?.visible && mud.userData.tripodLegs) {
         const wp = mud.userData.windupProgress || 0;
         const legs = mud.userData.tripodLegs;
+        const r = mud.userData.rigOffsets;
+
         for (let i = 0; i < legs.length; i++) {
             const phase = t * 4.5 + (i * Math.PI * 2) / 3;
-            legs[i].rotation.x = wp > 0.01 ? -0.45 * wp : Math.sin(phase) * 0.38;
-            legs[i].rotation.z = Math.cos(phase) * 0.18;
+            const stumble = r ? r.legStumble[i] || 0 : 0;
+            legs[i].rotation.x = wp > 0.01 ? -0.45 * wp : Math.sin(phase) * 0.38 + stumble;
+            legs[i].rotation.z = Math.cos(phase) * 0.18 + stumble * 0.5;
         }
-        mud.userData.coreBody.position.y = 2.05 + wp * 0.85 + Math.sin(t * 4.5) * 0.14;
-        mud.userData.coreBody.rotation.z = Math.cos(t * 2.2) * 0.08;
+
+        const squash = r ? r.bodySquash || 0 : 0;
+        const tiltX = r ? r.bodyTiltX || 0 : 0;
+        const tiltZ = r ? r.bodyTiltZ || 0 : 0;
+
+        mud.userData.coreBody.scale.set(1 + squash * 0.4, 1 - squash * 0.6, 1 + squash * 0.4);
+        mud.userData.coreBody.rotation.x = tiltX;
+        mud.userData.coreBody.rotation.z = Math.cos(t * 2.2) * 0.08 + tiltZ;
+        mud.userData.coreBody.position.y = 2.05 + wp * 0.85 + Math.sin(t * 4.5) * 0.14 - squash * 0.3;
+
         if (mud.userData.auraDisc) {
             const pulse = wp > 0.01 ? 1.15 - wp * 0.25 : 1.0 + Math.sin(t * 5.0) * 0.06;
             mud.userData.auraDisc.scale.setScalar(pulse);
@@ -1087,17 +1030,28 @@ export function animateAAAEnemies(enemyMeshes, enemiesData, t) {
         const spacing = 0.88;
         let pathIdx = 0;
         let accumDist = 0;
+        const r = worm.userData.rigOffsets;
 
         for (let s = 0; s < segs.length; s++) {
-            const targetDist = s * spacing;
+            // Apply accordion compression on recoil
+            const compress = r ? (1 - r.accordionFactor * 0.4) : 1.0;
+            const targetDist = s * spacing * compress;
             while (pathIdx < hist.length - 1) {
                 const p0 = hist[pathIdx];
                 const p1 = hist[pathIdx + 1];
                 const segLen = Math.hypot(p1.x - p0.x, p1.z - p0.z);
                 if (accumDist + segLen >= targetDist || segLen < 1e-5) {
                     const frac = segLen > 1e-5 ? (targetDist - accumDist) / segLen : 0;
-                    const wx = p0.x + (p1.x - p0.x) * frac;
-                    const wz = p0.z + (p1.z - p0.z) * frac;
+                    let wx = p0.x + (p1.x - p0.x) * frac;
+                    let wz = p0.z + (p1.z - p0.z) * frac;
+
+                    if (s === 0 && r && r.headRecoilZ) {
+                        wz += r.headRecoilZ;
+                    }
+                    if (r && r.shudderWave) {
+                        wx += Math.sin(s * 0.8) * r.shudderWave;
+                    }
+
                     segs[s].position.set(wx - headX, 0.38, wz - headZ);
                     if (s === 0) {
                         const targetPos = enemiesData?.longWorm?.targetPos;
@@ -1154,6 +1108,12 @@ export function createAAANpcMesh(type) {
         const gunArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.45, 4, 8), suitMat);
         gunArm.rotation.x = Math.PI / 2;
         gunArm.position.set(0.42, 0.42, -0.35);
+
+        // Supporting left arm bracing the handgun for tactical firing posture
+        const supportArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.4, 4, 8), suitMat);
+        supportArm.rotation.set(Math.PI / 2.3, -0.32, 0.25);
+        supportArm.position.set(0.18, 0.38, -0.3);
+
         const pistol = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.38), darkMat);
         pistol.position.set(0.42, 0.46, -0.68);
         const muzzleFlash = new THREE.Mesh(
@@ -1163,9 +1123,118 @@ export function createAAANpcMesh(type) {
         muzzleFlash.position.set(0.42, 0.46, -1.02);
         muzzleFlash.visible = false;
 
-        group.add(cap, badge, gunArm, pistol, muzzleFlash);
-        group.userData = { muzzleFlash };
+        group.add(cap, badge, gunArm, supportArm, pistol, muzzleFlash);
+        group.userData = {
+            type: 'police',
+            torso,
+            head,
+            legs,
+            gunArm,
+            supportArm,
+            pistol,
+            muzzleFlash,
+            recoilKick: 0,
+            aimPitch: 0,
+            baseGunArmRotX: Math.PI / 2,
+            basePistolY: 0.46,
+            basePistolZ: -0.68,
+        };
+    } else {
+        // Pedestrian flinch/panic articulated arms
+        const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.45, 4, 8), suitMat);
+        leftArm.position.set(-0.44, 0.32, 0);
+        const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.45, 4, 8), suitMat);
+        rightArm.position.set(0.44, 0.32, 0);
+        group.add(leftArm, rightArm);
+
+        group.userData = {
+            type: 'pedestrian',
+            torso,
+            head,
+            legs,
+            leftArm,
+            rightArm,
+            panicLevel: 0,
+            flinchAngle: 0,
+            scatterOffset: 0,
+            baseHeadY: 0.92,
+            baseTorsoY: 0.25,
+        };
     }
 
     return group;
+}
+
+/**
+ * Updates dynamic behavior of harbor NPCs (pedestrian flinch/panic scatter and police recoil/aiming).
+ * @param {object} npcMesh - Group returned by createAAANpcMesh
+ * @param {object} state - { type, isPanic, isFiring, targetPos, dt, time }
+ */
+export function updateAAANpcDynamics(npcMesh, state = {}) {
+    if (!npcMesh || !npcMesh.userData) return;
+    const u = npcMesh.userData;
+    const dt = Math.min(state.dt || 0.016, 0.066);
+    const time = state.time || 0;
+
+    if (u.type === 'pedestrian') {
+        const isPanic = Boolean(state.isPanic);
+        const targetPanic = isPanic ? 1.0 : 0.0;
+        u.panicLevel = THREE_LERP(u.panicLevel || 0, targetPanic, dt * 6.0);
+
+        if (u.panicLevel > 0.02) {
+            // Duck head and hunch torso
+            if (u.head) {
+                u.head.position.y = u.baseHeadY - u.panicLevel * 0.18;
+                u.head.rotation.x = u.panicLevel * 0.35 + Math.sin(time * 16.0) * 0.08 * u.panicLevel;
+            }
+            if (u.torso) {
+                u.torso.rotation.x = u.panicLevel * 0.22;
+                u.torso.position.y = u.baseTorsoY - u.panicLevel * 0.08;
+            }
+            // Throw hands overhead / cower
+            if (u.leftArm && u.rightArm) {
+                const armWave = Math.sin(time * 14.0) * 0.25 * u.panicLevel;
+                u.leftArm.rotation.x = THREE_LERP(0, -2.2, u.panicLevel) + armWave;
+                u.rightArm.rotation.x = THREE_LERP(0, -2.4, u.panicLevel) - armWave;
+                u.leftArm.rotation.z = THREE_LERP(0, 0.45, u.panicLevel);
+                u.rightArm.rotation.z = THREE_LERP(0, -0.45, u.panicLevel);
+            }
+            // Shiver / tremble legs
+            if (u.legs) {
+                u.legs.rotation.z = Math.sin(time * 24.0) * 0.05 * u.panicLevel;
+            }
+        } else {
+            // Restore neutral posture
+            if (u.head) { u.head.position.y = u.baseHeadY; u.head.rotation.set(0, 0, 0); }
+            if (u.torso) { u.torso.position.y = u.baseTorsoY; u.torso.rotation.set(0, 0, 0); }
+            if (u.leftArm) u.leftArm.rotation.set(0, 0, 0);
+            if (u.rightArm) u.rightArm.rotation.set(0, 0, 0);
+            if (u.legs) u.legs.rotation.set(0, 0, 0);
+        }
+    } else if (u.type === 'police') {
+        // Aiming stance & muzzle-flash recoil kick
+        if (state.recoilTrigger) {
+            u.recoilKick = 1.0;
+        } else {
+            u.recoilKick = Math.max(0, (u.recoilKick || 0) - dt * 8.5);
+        }
+
+        if (u.gunArm && u.pistol) {
+            // Recoil pushes arm up and back, torso absorbs shock
+            const kickAngle = (u.recoilKick || 0) * 0.32;
+            u.gunArm.rotation.x = u.baseGunArmRotX - kickAngle;
+            u.pistol.position.z = u.basePistolZ + (u.recoilKick || 0) * 0.12;
+            u.pistol.position.y = u.basePistolY + (u.recoilKick || 0) * 0.06;
+            if (u.torso) {
+                u.torso.rotation.x = -(u.recoilKick || 0) * 0.08;
+            }
+            if (u.supportArm) {
+                u.supportArm.rotation.x = Math.PI / 2.3 - kickAngle * 0.8;
+            }
+        }
+    }
+}
+
+function THREE_LERP(a, b, t) {
+    return a + (b - a) * Math.max(0, Math.min(1, t));
 }

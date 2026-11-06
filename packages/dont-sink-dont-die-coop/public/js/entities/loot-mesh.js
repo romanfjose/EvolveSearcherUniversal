@@ -2,19 +2,31 @@
  * Don't Sink, Don't Die — Glowing 3D Loot Pickup Meshes & Rotating Aura Rings
  * Procedural Three.js mesh builder for floating Treasure Chests, Gold Coin Streams,
  * Repair Kits, and Temporary Power-Weapons (Lightning Oar, Explosive Barrel, Frost Warhammer).
+ *
+ * Videogame Helmet 06 (Synthetic José World-Believability & Immersion Director):
+ * Physical consequence for river pickups: crates and coins pop and arc dynamically
+ * toward the collecting survivor before exploding into physical splinter & spark bursts.
  */
 
 import { PICKUP_TYPES, PICKUP_DEFINITIONS } from '../../../shared/loot-pickups.js';
 
 /**
- * Creates a glowing, bobbing 3D pickup mesh with rotating aura rings for the specified pickup type.
+ * Creates a glowing, bobbing 3D pickup mesh with rotating aura rings for the specified pickup type or item object.
  *
  * @param {object} THREE - Three.js library instance.
- * @param {string} pickupType - One of PICKUP_TYPES.
+ * @param {string|object} pickupTypeOrItem - One of PICKUP_TYPES or a pickup entity object ({ type, position }).
  * @param {object} [customParams={}] - Optional overrides.
  * @returns {THREE.Group} Root Group containing the model, aura ring, glow beacons, and animation metadata.
  */
-export function createLootPickupMesh(THREE, pickupType, customParams = {}) {
+export function createLootPickupMesh(THREE, pickupTypeOrItem, customParams = {}) {
+    let pickupType = pickupTypeOrItem;
+    let params = customParams;
+
+    if (typeof pickupTypeOrItem === 'object' && pickupTypeOrItem !== null) {
+        pickupType = pickupTypeOrItem.type || pickupTypeOrItem.pickupType;
+        params = Object.assign({}, pickupTypeOrItem, customParams);
+    }
+
     const def = PICKUP_DEFINITIONS[pickupType];
     if (!def) {
         throw new Error(`Unsupported pickupType: ${pickupType}`);
@@ -22,6 +34,13 @@ export function createLootPickupMesh(THREE, pickupType, customParams = {}) {
 
     const root = new THREE.Group();
     root.name = `Pickup_${pickupType}`;
+
+    // Apply initial position if supplied in item or params
+    if (params.position && typeof params.position.x === 'number') {
+        root.position.set(params.position.x, params.position.y ?? 0, params.position.z);
+    } else if (typeof params.x === 'number' || typeof params.z === 'number') {
+        root.position.set(params.x ?? 0, params.y ?? 0, params.z ?? 0);
+    }
 
     // Core bobbing pivot that holds visual geometry
     const bobGroup = new THREE.Group();
@@ -32,7 +51,7 @@ export function createLootPickupMesh(THREE, pickupType, customParams = {}) {
     const auraRadius = 1.35;
     const auraGeo = new THREE.TorusGeometry(auraRadius, 0.08, 12, 32);
     const auraMat = new THREE.MeshBasicMaterial({
-        color: customParams.auraColor || def.auraColorHex,
+        color: params.auraColor || def.auraColorHex,
         transparent: true,
         opacity: 0.65,
         wireframe: false,
@@ -59,7 +78,7 @@ export function createLootPickupMesh(THREE, pickupType, customParams = {}) {
     // Central beacon point light or glowing beacon core
     const beaconGeo = new THREE.SphereGeometry(0.18, 12, 12);
     const beaconMat = new THREE.MeshBasicMaterial({
-        color: customParams.color || def.colorHex,
+        color: params.color || def.colorHex,
     });
     const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
     beaconMesh.name = 'BeaconCore';
@@ -97,10 +116,16 @@ export function createLootPickupMesh(THREE, pickupType, customParams = {}) {
         bobGroup.add(model);
     }
 
+    // Container for bursting splinters and spark fragments
+    const burstGroup = new THREE.Group();
+    burstGroup.name = 'BurstGroup';
+    burstGroup.visible = false;
+    root.add(burstGroup);
+
     // Attach animation state container
     root.userData = {
         pickupType,
-        baseY: 0,
+        baseY: root.position.y,
         bobSpeed: 2.4,
         bobHeight: 0.16,
         rotationSpeed: 1.5,
@@ -108,6 +133,11 @@ export function createLootPickupMesh(THREE, pickupType, customParams = {}) {
         phase: Math.random() * Math.PI * 2,
         isCollected: false,
         collectAnimTime: 0,
+        collectDuration: 0.45,
+        startPos: null,
+        targetPos: null,
+        hasBurst: false,
+        THREE,
     };
 
     return root;
@@ -420,28 +450,158 @@ function buildDefaultPickupModel(THREE, def) {
 }
 
 /**
+ * Spawns explosive physical splinters and golden/cyan spark shards inside burstGroup.
+ */
+function findByName(obj, name) {
+    if (!obj) return null;
+    if (typeof obj.getObjectByName === 'function') return obj.getObjectByName(name);
+    if (obj.name === name) return obj;
+    if (Array.isArray(obj.children)) {
+        for (const c of obj.children) {
+            const f = findByName(c, name);
+            if (f) return f;
+        }
+    }
+    return null;
+}
+
+function spawnBurstFragments(meshGroup) {
+    const u = meshGroup?.userData;
+    const THREE = u?.THREE;
+    if (!THREE) return;
+
+    const burstGroup = findByName(meshGroup, 'BurstGroup');
+    if (!burstGroup) return;
+
+    burstGroup.visible = true;
+
+    const splinterMat = new THREE.MeshStandardMaterial({
+        color: u.pickupType === PICKUP_TYPES.CHEST ? 0x78350f : 0xf59e0b,
+        roughness: 0.7,
+        metalness: 0.1,
+    });
+    const sparkMat = new THREE.MeshBasicMaterial({
+        color: u.pickupType === PICKUP_TYPES.WEAPON_LIGHTNING_OAR ? 0x38bdf8 : 0xfde047,
+    });
+
+    // 6 Wooden / crate splinter fragments
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const speed = 2.5 + Math.random() * 3.5;
+        const splinter = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08 + Math.random() * 0.1, 0.05 + Math.random() * 0.06, 0.18 + Math.random() * 0.12),
+            splinterMat
+        );
+        splinter.position.set(0, 0.5, 0);
+        splinter.userData = {
+            vx: Math.cos(angle) * speed,
+            vy: 2.5 + Math.random() * 3.0,
+            vz: Math.sin(angle) * speed,
+            rx: (Math.random() - 0.5) * 20,
+            ry: (Math.random() - 0.5) * 20,
+        };
+        burstGroup.add(splinter);
+    }
+
+    // 6 Glowing radiant spark fragments
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        const speed = 4.0 + Math.random() * 4.0;
+        const spark = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.08 + Math.random() * 0.06, 0),
+            sparkMat
+        );
+        spark.position.set(0, 0.5, 0);
+        spark.userData = {
+            vx: Math.cos(angle) * speed,
+            vy: 3.5 + Math.random() * 3.5,
+            vz: Math.sin(angle) * speed,
+            rx: (Math.random() - 0.5) * 25,
+            ry: (Math.random() - 0.5) * 25,
+        };
+        burstGroup.add(spark);
+    }
+}
+
+/**
  * Updates animations for a loot pickup mesh instance:
- * Handles vertical wave bobbing, slow yaw rotation, aura spin, and collection poof animation.
+ * - Uncollected: Harmonic wave bobbing, slow yaw rotation, aura spin.
+ * - Collected: Pops and arcs toward the collecting survivor before exploding into splinters & sparks!
  *
  * @param {THREE.Group} meshGroup - Root pickup mesh created via createLootPickupMesh.
- * @param {number} delta - Frame delta time in seconds.
- * @param {number} totalTime - Total elapsed time in seconds.
+ * @param {number} arg2 - Frame delta time in seconds, or total time if inverted.
+ * @param {number} arg3 - Total elapsed time in seconds, or delta if inverted.
  */
-export function animateLootPickupMesh(meshGroup, delta, totalTime) {
+export function animateLootPickupMesh(meshGroup, arg2, arg3) {
     if (!meshGroup || !meshGroup.userData) return;
 
+    let delta = Number(arg2) || 0.016;
+    let totalTime = Number(arg3) || 0;
+
+    // Robust parameter order auto-detection: if caller passes (meshGroup, elapsedSec, dt)
+    if (arg2 > 1.0 && typeof arg3 === 'number' && arg3 >= 0 && arg3 < 1.0) {
+        totalTime = arg2;
+        delta = arg3;
+    }
+
     const u = meshGroup.userData;
-    const bobGroup = meshGroup.getObjectByName('BobGroup');
+    const bobGroup = findByName(meshGroup, 'BobGroup');
     if (!bobGroup) return;
 
-    // Handle collection burst animation
+    // Handle physical collection Pop/Arc & Splinter burst
     if (u.isCollected) {
         u.collectAnimTime += delta;
-        const progress = Math.min(1.0, u.collectAnimTime / 0.35); // 350ms poof
+        const duration = u.collectDuration || 0.45;
+        const progress = Math.min(1.0, u.collectAnimTime / duration);
 
-        // Fly upwards and scale down
-        bobGroup.position.y += delta * 4.5;
-        bobGroup.scale.setScalar(Math.max(0.001, 1.0 - progress));
+        if (u.targetPos && u.startPos) {
+            // Smooth horizontal trajectory from start to survivor collector
+            const easeP = progress * progress * (3 - 2 * progress);
+            const curX = u.startPos.x + (u.targetPos.x - u.startPos.x) * easeP;
+            const curZ = u.startPos.z + (u.targetPos.z - u.startPos.z) * easeP;
+
+            // Parabolic vertical pop arc
+            const arcHeight = 2.6;
+            const arcY = Math.sin(progress * Math.PI) * arcHeight;
+            const baseY = u.startPos.y + (u.targetPos.y - u.startPos.y) * progress;
+            meshGroup.position.set(curX, baseY + arcY, curZ);
+
+            // Rapid tumbling rotation while arcing
+            bobGroup.rotation.x += delta * 14.0;
+            bobGroup.rotation.y += delta * 18.0;
+            bobGroup.rotation.z += delta * 10.0;
+
+            // Scale punch: expands on pop, then collapses on impact
+            const scalePunch = progress < 0.3 ? 1.0 + progress * 1.2 : Math.max(0.001, (1.0 - progress) * 1.4);
+            bobGroup.scale.setScalar(scalePunch);
+        } else {
+            // Upward vertical pop fallback (original behavior)
+            bobGroup.position.y += delta * 4.5;
+            bobGroup.scale.setScalar(Math.max(0.001, 1.0 - progress));
+        }
+
+        // Spawn explosive splinter & spark fragments around peak impact
+        if (progress >= 0.75 && !u.hasBurst) {
+            u.hasBurst = true;
+            spawnBurstFragments(meshGroup);
+        }
+
+        // Step burst splinter/spark physical trajectories
+        const burstGroup = findByName(meshGroup, 'BurstGroup');
+        if (burstGroup && burstGroup.visible) {
+            for (let i = burstGroup.children.length - 1; i >= 0; i--) {
+                const frag = burstGroup.children[i];
+                if (frag.userData) {
+                    frag.position.x += (frag.userData.vx || 0) * delta;
+                    frag.position.y += (frag.userData.vy || 0) * delta;
+                    frag.userData.vy -= 14.0 * delta; // gravity
+                    frag.position.z += (frag.userData.vz || 0) * delta;
+                    frag.rotation.x += (frag.userData.rx || 0) * delta;
+                    frag.rotation.y += (frag.userData.ry || 0) * delta;
+                    { const _sf = Math.max(0.001, 1.0 - delta * 3.0); if (typeof frag.scale?.multiplyScalar === 'function') frag.scale.multiplyScalar(_sf); else if (typeof frag.scale?.setScalar === 'function') frag.scale.setScalar((frag.scale.x || 1) * _sf); }
+                }
+            }
+        }
 
         if (progress >= 1.0) {
             meshGroup.visible = false;
@@ -457,21 +617,20 @@ export function animateLootPickupMesh(meshGroup, delta, totalTime) {
     bobGroup.rotation.y += delta * u.rotationSpeed;
 
     // 3. Aura Ring counter-rotations
-    const aura = bobGroup.getObjectByName('AuraRing');
+    const aura = findByName(bobGroup, 'AuraRing');
     if (aura) {
         aura.rotation.z += delta * u.auraRotationSpeed;
-        // Subtle pulsing scale
         const pulse = 1.0 + Math.sin(totalTime * 3.5 + u.phase) * 0.08;
         aura.scale.set(pulse, pulse, 1.0);
     }
 
-    const innerAura = bobGroup.getObjectByName('InnerAuraRing');
+    const innerAura = findByName(bobGroup, 'InnerAuraRing');
     if (innerAura) {
         innerAura.rotation.z -= delta * (u.auraRotationSpeed * 1.5);
     }
 
     // 4. Beacon glow pulse
-    const beacon = bobGroup.getObjectByName('BeaconCore');
+    const beacon = findByName(bobGroup, 'BeaconCore');
     if (beacon) {
         const beaconPulse = 0.9 + Math.cos(totalTime * 4.0 + u.phase) * 0.15;
         beacon.scale.setScalar(beaconPulse);
@@ -479,10 +638,34 @@ export function animateLootPickupMesh(meshGroup, delta, totalTime) {
 }
 
 /**
- * Triggers collection sequence on the mesh group (causes it to burst and despawn).
+ * Triggers physical pop/arc collection sequence on the mesh group:
+ * If a targetPosition is supplied (e.g. collecting survivor raft), arcs directly to the raft
+ * before detonating into splinters and sparks.
+ *
+ * @param {THREE.Group} meshGroup - Root pickup mesh created via createLootPickupMesh.
+ * @param {object} [targetPosition=null] - 3D coordinates ({ x, y, z }) of collecting survivor.
  */
-export function triggerLootPickupCollection(meshGroup) {
+export function triggerLootPickupCollection(meshGroup, targetPosition = null) {
     if (!meshGroup || !meshGroup.userData) return;
-    meshGroup.userData.isCollected = true;
-    meshGroup.userData.collectAnimTime = 0;
+    const u = meshGroup.userData;
+    u.isCollected = true;
+    u.collectAnimTime = 0;
+    u.collectDuration = 0.45;
+    u.hasBurst = false;
+
+    u.startPos = {
+        x: meshGroup.position.x,
+        y: meshGroup.position.y,
+        z: meshGroup.position.z,
+    };
+
+    if (targetPosition && typeof targetPosition.x === 'number') {
+        u.targetPos = {
+            x: targetPosition.x,
+            y: (targetPosition.y !== undefined ? targetPosition.y : 0.5) + 0.4,
+            z: targetPosition.z,
+        };
+    } else {
+        u.targetPos = null;
+    }
 }

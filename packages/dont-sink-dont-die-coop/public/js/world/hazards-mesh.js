@@ -80,6 +80,11 @@ export function createRapidsMesh(THREE, rapidsConfig) {
         transparent: true,
         opacity: 0.85,
     });
+    const boostedChevronMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1.0,
+    });
 
     const chevronArrows = [];
     for (let i = 0; i < chevronCount; i++) {
@@ -110,6 +115,8 @@ export function createRapidsMesh(THREE, rapidsConfig) {
         type: 'rapids',
         shaderMat: planeMat,
         chevronArrows,
+        chevronMat,
+        boostedChevronMat,
         config: rapidsConfig,
         boostDirectionZ: -1,
     };
@@ -363,11 +370,40 @@ export function createCoinRingMesh(THREE, coinData) {
     const coinMesh = new THREE.Mesh(coinGeo, goldMat);
     group.add(coinMesh);
 
+    // Expanding Burst Shockwave Ring (revealed on collection)
+    const burstMat = new THREE.MeshBasicMaterial({
+        color: 0xffea00,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+    });
+    const burstRingGeo = new THREE.RingGeometry(radius * 0.9, radius * 1.15, 32);
+    const burstRing = new THREE.Mesh(burstRingGeo, burstMat);
+    burstRing.visible = false;
+    group.add(burstRing);
+
+    // Radial sparkle fragments
+    const sparkles = [];
+    const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xfffae6 });
+    for (let s = 0; s < 8; s++) {
+        const ang = (s / 8) * Math.PI * 2;
+        const spMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), sparkleMat);
+        spMesh.position.set(Math.cos(ang) * radius * 0.5, Math.sin(ang) * radius * 0.5, 0);
+        spMesh.visible = false;
+        group.add(spMesh);
+        sparkles.push(spMesh);
+    }
+
     group.userData = {
         type: 'coinRing',
         coinData,
         torusMesh,
+        discMesh,
         coinMesh,
+        burstRing,
+        burstMat,
+        sparkles,
+        burstProgress: 0,
     };
     return group;
 }
@@ -463,6 +499,46 @@ export function createMineMesh(THREE, mineConfig) {
     auraRing.position.y = 0.04;
     group.add(auraRing);
 
+    // F. Detonation Shockwave Ring (revealed when detonated)
+    const shockwaveMat = new THREE.MeshBasicMaterial({
+        color: 0xff5511,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+    });
+    const shockwaveRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.0, 1.8, 32),
+        shockwaveMat
+    );
+    shockwaveRing.rotation.x = -Math.PI / 2;
+    shockwaveRing.position.y = 0.08;
+    shockwaveRing.visible = false;
+    group.add(shockwaveRing);
+
+    // G. Vertical Water & Smoke Explosion Plume
+    const plumeMat = new THREE.MeshBasicMaterial({
+        color: 0xe0f2fe,
+        transparent: true,
+        opacity: 0.8,
+    });
+    const plumeMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 2.2, 5.0, 12),
+        plumeMat
+    );
+    plumeMesh.position.y = 2.5;
+    plumeMesh.visible = false;
+    group.add(plumeMesh);
+
+    // H. Shrapnel debris chunks
+    const shrapnelPieces = [];
+    const shrapnelMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+    for (let s = 0; s < 6; s++) {
+        const sh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), shrapnelMat);
+        sh.visible = false;
+        group.add(sh);
+        shrapnelPieces.push(sh);
+    }
+
     group.userData = {
         type: 'mine',
         mineConfig,
@@ -470,12 +546,152 @@ export function createMineMesh(THREE, mineConfig) {
         beaconMat,
         auraRing,
         auraMat,
+        shockwaveRing,
+        shockwaveMat,
+        plumeMesh,
+        plumeMat,
+        shrapnelPieces,
+        barrelBody,
+        stripe,
+        antennaStem,
+        detonationProgress: 0,
         baseY: mineConfig.y ?? 0.25,
     };
     return group;
 }
 
-// ─── 5. Unified Hazards Scene Builder & Animation System ─────────────────
+// ─── 5. River Log Jam & Hydrothermal Geyser Mesh Builders ────────────────
+/**
+ * Creates a rustic river log jam obstacle with jagged angled timber logs,
+ * splinter debris chunks, and shudder displacement pivot.
+ */
+export function createLogJamMesh(THREE, logJamConfig) {
+    const width = logJamConfig.width || 12.0;
+    const depth = logJamConfig.depth || 3.0;
+
+    const group = new THREE.Group();
+    group.position.set(logJamConfig.x || 0, logJamConfig.y ?? 0.4, logJamConfig.z || 0);
+
+    const timberMat = new THREE.MeshStandardMaterial({
+        color: 0x4a2e1b,
+        roughness: 0.9,
+        metalness: 0.1,
+    });
+    const splinterMat = new THREE.MeshStandardMaterial({
+        color: 0x78350f,
+        roughness: 0.8,
+        metalness: 0.1,
+    });
+
+    const logsGroup = new THREE.Group();
+    const logMeshes = [];
+    const logCount = 6;
+    for (let i = 0; i < logCount; i++) {
+        const lx = -width * 0.4 + (i / (logCount - 1)) * (width * 0.8);
+        const lz = ((i % 3) - 1) * 0.8;
+        const log = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.38, 0.45, 4.5, 8),
+            timberMat
+        );
+        log.position.set(lx, 0.2, lz);
+        log.rotation.z = Math.PI * 0.5 + ((i % 2) - 0.5) * 0.25;
+        log.rotation.y = ((i * 1.3) % 0.8) - 0.4;
+        log.castShadow = true;
+        log.receiveShadow = true;
+        logsGroup.add(log);
+        logMeshes.push(log);
+    }
+    group.add(logsGroup);
+
+    // Splinter debris pool
+    const splinterMeshes = [];
+    for (let s = 0; s < 8; s++) {
+        const sp = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.8), splinterMat);
+        sp.visible = false;
+        group.add(sp);
+        splinterMeshes.push(sp);
+    }
+
+    group.userData = {
+        type: 'logJam',
+        config: logJamConfig,
+        logsGroup,
+        logMeshes,
+        splinterMeshes,
+        shudderTimerS: 0,
+        splinterProgress: 0,
+    };
+    return group;
+}
+
+/**
+ * Creates a hydrothermal river geyser with pressurized boiling water dome
+ * and towering vertical steam eruption plume.
+ */
+export function createGeyserMesh(THREE, geyserConfig) {
+    const radius = geyserConfig.radius || 7.5;
+
+    const group = new THREE.Group();
+    group.position.set(geyserConfig.x || 0, geyserConfig.y ?? 0.2, geyserConfig.z || 0);
+
+    // Vent vent stone ring
+    const stoneMat = new THREE.MeshStandardMaterial({
+        color: 0x27272a,
+        roughness: 0.95,
+        metalness: 0.1,
+    });
+    const ventRing = new THREE.Mesh(
+        new THREE.RingGeometry(radius * 0.7, radius * 1.05, 24),
+        stoneMat
+    );
+    ventRing.rotation.x = -Math.PI / 2;
+    ventRing.position.y = 0.04;
+    group.add(ventRing);
+
+    // Pressurized boiling water dome (telegraph)
+    const boilingDomeMat = new THREE.MeshBasicMaterial({
+        color: 0x67e8f9,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+    });
+    const boilingDome = new THREE.Mesh(
+        new THREE.SphereGeometry(radius * 0.65, 16, 12),
+        boilingDomeMat
+    );
+    boilingDome.scale.set(1.0, 0.05, 1.0);
+    boilingDome.position.y = 0.1;
+    boilingDome.visible = false;
+    group.add(boilingDome);
+
+    // Towering vertical steam eruption plume
+    const plumeMat = new THREE.MeshBasicMaterial({
+        color: 0xf0fdfa,
+        transparent: true,
+        opacity: 0.85,
+    });
+    const eruptionPlume = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * 0.35, radius * 0.75, 12.0, 16),
+        plumeMat
+    );
+    eruptionPlume.position.y = 6.0;
+    eruptionPlume.scale.set(0.01, 0.01, 0.01);
+    eruptionPlume.visible = false;
+    group.add(eruptionPlume);
+
+    group.userData = {
+        type: 'geyser',
+        config: geyserConfig,
+        boilingDome,
+        boilingDomeMat,
+        eruptionPlume,
+        plumeMat,
+        radius,
+    };
+    return group;
+}
+
+// ─── 6. Unified Hazards Scene Builder & Animation System ─────────────────
 /**
  * Assembles all hazards and returns an aggregate group ready for the Three.js scene.
  */
@@ -518,6 +734,20 @@ export function buildRiverHazardsGroup(THREE, hazardsLayout) {
         mineMeshes.push(m);
     }
 
+    const logJamMeshes = [];
+    for (const ljData of (hazardsLayout.logJams || [])) {
+        const m = createLogJamMesh(THREE, ljData);
+        rootGroup.add(m);
+        logJamMeshes.push(m);
+    }
+
+    const geyserMeshes = [];
+    for (const gData of (hazardsLayout.geysers || [])) {
+        const m = createGeyserMesh(THREE, gData);
+        rootGroup.add(m);
+        geyserMeshes.push(m);
+    }
+
     return {
         rootGroup,
         rapidsMeshes,
@@ -525,6 +755,8 @@ export function buildRiverHazardsGroup(THREE, hazardsLayout) {
         rampMeshes,
         coinRingMeshes,
         mineMeshes,
+        logJamMeshes,
+        geyserMeshes,
     };
 }
 
@@ -542,12 +774,28 @@ export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016, player
         if (rMesh.userData.shaderMat) {
             rMesh.userData.shaderMat.uniforms.uTime.value = time;
         }
+        const cfg = rMesh.userData.config;
+        const isBoosting = Boolean(cfg?.isBoostingRaft || cfg?.boostPulseTimerS > 0);
+        if (cfg?.boostPulseTimerS > 0) {
+            cfg.boostPulseTimerS = Math.max(0, cfg.boostPulseTimerS - dt);
+            if (cfg.boostPulseTimerS === 0) cfg.isBoostingRaft = false;
+        }
+
         // Chevron arrows pulse sequentially from +Z (entry, i=0) toward -Z (exit, i=4)
+        // Point strictly toward -Z (downriver) and pulse intensely when boosting a raft
         const arrows = rMesh.userData.chevronArrows || [];
         for (let i = 0; i < arrows.length; i++) {
             const arr = arrows[i];
-            const phase = ((time * 3.0 - i * 0.25) % 1.0 + 1.0) % 1.0;
-            arr.scale.setScalar(0.95 + 0.12 * Math.sin(phase * Math.PI));
+            const phase = ((time * (isBoosting ? 6.5 : 3.0) - i * 0.25) % 1.0 + 1.0) % 1.0;
+            const boostScale = isBoosting ? 1.35 : 1.0;
+            arr.scale.setScalar((0.95 + 0.18 * Math.sin(phase * Math.PI)) * boostScale);
+            if (arr.userData.leftWing && arr.userData.rightWing) {
+                const targetMat = isBoosting ? rMesh.userData.boostedChevronMat : rMesh.userData.chevronMat;
+                if (targetMat) {
+                    arr.userData.leftWing.material = targetMat;
+                    arr.userData.rightWing.material = targetMat;
+                }
+            }
         }
     }
 
@@ -564,12 +812,46 @@ export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016, player
         }
     }
 
-    // 3. Animate Coin Rings
+    // 3. Animate Coin Rings (burst with golden radial ring expansion when collected mid-air)
     for (const cMesh of hazardsGroupHandle.coinRingMeshes || []) {
-        if (cMesh.userData.coinData?.collected) {
-            cMesh.visible = false;
+        const coinData = cMesh.userData.coinData;
+        if (coinData?.collected) {
+            // Check if radial burst expansion is still active
+            if (cMesh.userData.burstProgress < 1.0) {
+                cMesh.userData.burstProgress = Math.min(1.0, cMesh.userData.burstProgress + dt * 2.2);
+                const p = cMesh.userData.burstProgress;
+
+                // Hide core coin and torus
+                if (cMesh.userData.torusMesh) cMesh.userData.torusMesh.visible = false;
+                if (cMesh.userData.discMesh) cMesh.userData.discMesh.visible = false;
+                if (cMesh.userData.coinMesh) cMesh.userData.coinMesh.visible = false;
+
+                // Expand radial burst ring
+                if (cMesh.userData.burstRing) {
+                    cMesh.userData.burstRing.visible = true;
+                    const burstScale = 1.0 + p * 2.6;
+                    cMesh.userData.burstRing.scale.set(burstScale, burstScale, burstScale);
+                    if (cMesh.userData.burstMat) {
+                        cMesh.userData.burstMat.opacity = Math.max(0, 1.0 - p);
+                    }
+                }
+
+                // Scatter radial sparkles
+                const sparkles = cMesh.userData.sparkles || [];
+                for (let s = 0; s < sparkles.length; s++) {
+                    const sp = sparkles[s];
+                    sp.visible = true;
+                    const ang = (s / sparkles.length) * Math.PI * 2;
+                    const rad = (coinData.radius || 1.5) * (1.0 + p * 2.2);
+                    sp.position.set(Math.cos(ang) * rad, Math.sin(ang) * rad, (s % 2 === 0 ? 1 : -1) * p * 1.5);
+                    sp.scale.setScalar(Math.max(0.1, 1.0 - p));
+                }
+            } else {
+                cMesh.visible = false;
+            }
             continue;
         }
+
         if (hasCullZ && Math.abs(cMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
         // Keep hoop facing the river lane (+Z/-Z) with gentle yaw sway while spinning inner gold coin
         cMesh.rotation.y = Math.sin(time * 1.6) * 0.18;
@@ -578,13 +860,60 @@ export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016, player
         }
     }
 
-    // 4. Animate Mines
+    // 4. Animate Mines (detonate with expanding shockwave ring and flying shrapnel/water plume)
     for (const mMesh of hazardsGroupHandle.mineMeshes || []) {
         const cfg = mMesh.userData.mineConfig;
         if (cfg?.state === 'detonated') {
-            mMesh.visible = false;
+            // Animate detonation reaction rather than silently vanishing
+            if (mMesh.userData.detonationProgress < 1.0) {
+                mMesh.userData.detonationProgress = Math.min(1.0, mMesh.userData.detonationProgress + dt * 1.4);
+                const p = mMesh.userData.detonationProgress;
+
+                // Hide mine barrel body
+                if (mMesh.userData.barrelBody) mMesh.userData.barrelBody.visible = false;
+                if (mMesh.userData.stripe) mMesh.userData.stripe.visible = false;
+                if (mMesh.userData.antennaStem) mMesh.userData.antennaStem.visible = false;
+                if (mMesh.userData.beaconLight) mMesh.userData.beaconLight.visible = false;
+                if (mMesh.userData.auraRing) mMesh.userData.auraRing.visible = false;
+
+                // Expand shockwave ring on water
+                if (mMesh.userData.shockwaveRing) {
+                    mMesh.userData.shockwaveRing.visible = true;
+                    const swScale = 1.0 + p * 8.5;
+                    mMesh.userData.shockwaveRing.scale.set(swScale, swScale, swScale);
+                    if (mMesh.userData.shockwaveMat) {
+                        mMesh.userData.shockwaveMat.opacity = Math.max(0, 1.0 - p * 1.2);
+                    }
+                }
+
+                // Vertical water & smoke plume eruption
+                if (mMesh.userData.plumeMesh) {
+                    mMesh.userData.plumeMesh.visible = true;
+                    const plumeH = Math.sin(p * Math.PI) * 1.6;
+                    mMesh.userData.plumeMesh.scale.set(1.0 + p * 2.0, plumeH, 1.0 + p * 2.0);
+                    mMesh.userData.plumeMesh.position.y = plumeH * 2.5;
+                    if (mMesh.userData.plumeMat) {
+                        mMesh.userData.plumeMat.opacity = Math.max(0, 0.85 * (1.0 - p));
+                    }
+                }
+
+                // Shrapnel pieces flying outward
+                const shrapnel = mMesh.userData.shrapnelPieces || [];
+                for (let s = 0; s < shrapnel.length; s++) {
+                    const sh = shrapnel[s];
+                    sh.visible = true;
+                    const ang = (s / shrapnel.length) * Math.PI * 2;
+                    const dist = p * 9.0;
+                    sh.position.set(Math.cos(ang) * dist, Math.sin(p * Math.PI) * 3.5, Math.sin(ang) * dist);
+                    sh.rotation.x += dt * 8.0;
+                    sh.rotation.y += dt * 6.0;
+                }
+            } else {
+                mMesh.visible = false;
+            }
             continue;
         }
+
         if (hasCullZ && Math.abs(mMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
 
         // Bob up and down on water
@@ -601,6 +930,85 @@ export function animateRiverHazards(hazardsGroupHandle, time, dt = 0.016, player
         }
         if (mMesh.userData.auraRing) {
             mMesh.userData.auraRing.visible = cfg?.state === 'triggered';
+        }
+    }
+
+    // 5. Animate River Log Jams (shudder and splinter visibly on impact)
+    for (const ljMesh of hazardsGroupHandle.logJamMeshes || []) {
+        const cfg = ljMesh.userData.config;
+        if (hasCullZ && Math.abs(ljMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
+
+        if (cfg?.state === 'splintered') {
+            // Shattered barricade debris
+            if (ljMesh.userData.splinterProgress < 1.0) {
+                ljMesh.userData.splinterProgress = Math.min(1.0, ljMesh.userData.splinterProgress + dt * 1.5);
+                const p = ljMesh.userData.splinterProgress;
+                for (let s = 0; s < (ljMesh.userData.splinterMeshes || []).length; s++) {
+                    const sp = ljMesh.userData.splinterMeshes[s];
+                    sp.visible = true;
+                    const ang = (s / 8) * Math.PI * 2;
+                    sp.position.set(Math.cos(ang) * p * 5.0, Math.sin(p * Math.PI) * 2.5, Math.sin(ang) * p * 4.0);
+                    sp.rotation.x += dt * 5.0;
+                }
+                if (ljMesh.userData.logsGroup) {
+                    ljMesh.userData.logsGroup.scale.setScalar(Math.max(0.1, 1.0 - p));
+                }
+            } else {
+                ljMesh.visible = false;
+            }
+        } else if (cfg?.state === 'shuddering' || cfg?.shudderTimerS > 0) {
+            // Visibly shudder and vibrate
+            const shudderAmount = Math.sin(time * 45.0) * 0.12;
+            ljMesh.position.x = (cfg.x || 0) + shudderAmount;
+            ljMesh.position.y = (cfg.y || 0.4) + Math.abs(shudderAmount) * 0.5;
+        } else {
+            ljMesh.position.x = cfg?.x || 0;
+            ljMesh.position.y = cfg?.y || 0.4;
+        }
+    }
+
+    // 6. Animate Hydrothermal River Geysers (pressurized boiling dome telegraph before steam eruption)
+    for (const gMesh of hazardsGroupHandle.geyserMeshes || []) {
+        const cfg = gMesh.userData.config;
+        if (hasCullZ && Math.abs(gMesh.position.z - playerZ) > MAX_CULL_DIST) continue;
+
+        const period = (cfg?.boilDurationS || 1.2) + (cfg?.eruptDurationS || 1.4) + (cfg?.restDurationS || 2.5);
+        const cycleTime = ((time + Math.abs(gMesh.position.x) * 0.4) % period + period) % period;
+        const boilDuration = cfg?.boilDurationS || 1.2;
+        const eruptDuration = cfg?.eruptDurationS || 1.4;
+
+        if (cycleTime < boilDuration) {
+            // Telegraph: pressurized boiling water dome
+            const progress = cycleTime / boilDuration;
+            if (gMesh.userData.boilingDome) {
+                gMesh.userData.boilingDome.visible = true;
+                const domeScaleY = 0.1 + Math.sin(progress * Math.PI * 0.5) * (0.8 + Math.sin(time * 25.0) * 0.08);
+                const domeScaleXZ = 0.8 + progress * 0.4;
+                gMesh.userData.boilingDome.scale.set(domeScaleXZ, domeScaleY, domeScaleXZ);
+            }
+            if (gMesh.userData.eruptionPlume) {
+                gMesh.userData.eruptionPlume.visible = false;
+            }
+        } else if (cycleTime < boilDuration + eruptDuration) {
+            // Erupting: towering steam plume and splash
+            const progress = (cycleTime - boilDuration) / eruptDuration;
+            const eruptCurve = Math.sin(progress * Math.PI);
+            if (gMesh.userData.boilingDome) {
+                gMesh.userData.boilingDome.visible = false;
+            }
+            if (gMesh.userData.eruptionPlume) {
+                gMesh.userData.eruptionPlume.visible = true;
+                const plumeH = Math.max(0.01, eruptCurve);
+                gMesh.userData.eruptionPlume.scale.set(1.0 + eruptCurve * 0.5, plumeH, 1.0 + eruptCurve * 0.5);
+                gMesh.userData.eruptionPlume.position.y = plumeH * 6.0;
+                if (gMesh.userData.plumeMat) {
+                    gMesh.userData.plumeMat.opacity = Math.max(0, 0.9 * eruptCurve);
+                }
+            }
+        } else {
+            // Dormant
+            if (gMesh.userData.boilingDome) gMesh.userData.boilingDome.visible = false;
+            if (gMesh.userData.eruptionPlume) gMesh.userData.eruptionPlume.visible = false;
         }
     }
 }

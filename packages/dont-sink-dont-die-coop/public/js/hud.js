@@ -152,5 +152,10 @@ export function createSfx() {
         wave() { tone({ from: 130, to: 98, dur: 0.45, type: 'sine', gain: 0.09, lpFreq: 380 }); },
         splash(strength = 1) { tone({ from: 360, to: 95, dur: 0.18, type: 'sine', gain: 0.06 * Math.min(1.4, strength), lpFreq: 540 }); },
         down() { tone({ from: 180, to: 52, dur: 0.55, type: 'triangle', gain: 0.12, lpFreq: 360 }); },
+        // Helmet 06: Diegetic wood groan/creak when stepping or landing onto wooden docks/planks (< 420 Hz, subtle pitch jitter)
+        creak(volume = 1) {
+            tone({ from: 220, to: 140, dur: 0.16, type: 'triangle', gain: 0.11 * Math.min(1.5, volume), lpFreq: 420 });
+            tone({ from: 165, to: 90, dur: 0.22, type: 'sine', gain: 0.08 * Math.min(1.5, volume), delay: 0.05, lpFreq: 340 });
+        },
     };
 }

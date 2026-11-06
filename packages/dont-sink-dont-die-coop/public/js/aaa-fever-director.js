@@ -156,7 +156,8 @@ export function createAAAFeverDirector({
         if (act4ArchGroup) biomeGroup.add(act4ArchGroup);
     } catch (_e) { /* ignore mock fallback */ }
     try {
-        nauticalBuoysGroup = buildNauticalBuoyLanes(THREE, { riverWidth, zStart: 0, zEnd: -1500, platforms: obstacles });
+        const dockPlatforms = (obstacles || []).filter((o) => o.isSanctuary && o.z < -95).slice(0, 8);
+        nauticalBuoysGroup = buildNauticalBuoyLanes(THREE, { riverWidth, zStart: -95, zEnd: -1500, platforms: dockPlatforms });
         if (nauticalBuoysGroup && typeof nauticalBuoysGroup.add === 'function') biomeGroup.add(nauticalBuoysGroup);
     } catch (_e) { /* ignore mock fallback */ }
     try {
@@ -170,22 +171,45 @@ export function createAAAFeverDirector({
     const weatherSystem = createWeatherSystem(THREE, scene);
 
     // 3. Seeded 3D River Hazards (Rapids, Whirlpools, Launch Ramps, Coin Rings, Naval Mines)
-    const hazardsLayout = generateRiverHazardsLayout(seed, -1500, riverWidth);
+    // Progressive onboarding: keep the first 68m (spawn lagoon) completely free of hazards,
+    // then introduce a prominent centreline Whirlpool at z = -76 and Whitewater Rapids at z = -112!
+    const rawHazards = generateRiverHazardsLayout(seed, -1500, riverWidth);
+    const hazardsLayout = {
+        rapids: [
+            { id: 'intro_rapids_1', x: 0, z: -112, width: 14, length: 24, angle: 0, direction: { x: 0, z: -1 } },
+            ...(rawHazards.rapids || []).filter((h) => h.z < -130),
+        ],
+        whirlpools: [
+            { id: 'intro_whirlpool_1', x: 0, z: -76, radius: 11.5, coreRadius: 2.0, clockwise: true, maxPull: 22, maxSwirl: 28, depth: 2.2 },
+            ...(rawHazards.whirlpools || []).filter((h) => h.z < -130),
+        ],
+        ramps: (rawHazards.ramps || []).filter((h) => h.z < -150),
+        mines: (rawHazards.mines || []).filter((h) => h.z < -260),
+        coinRings: (rawHazards.coinRings || []).filter((h) => h.z < -150),
+    };
     const hazardsHandle = buildRiverHazardsGroup(THREE, hazardsLayout);
     scene.add(hazardsHandle.rootGroup || hazardsHandle.group);
 
-    // 4. Destructible Wooden Barricades, Suspension Bridges & Cliff Rockslides
-    const destructiblesState = generateDestructiblesLayout(seed + 7, -1500, riverWidth);
+    // 4. Destructible Wooden Barricades, Suspension Bridges & Cliff Rockslides (introduced in Act II/III at z < -280)
+    const rawDestructibles = generateDestructiblesLayout(seed + 7, -1500, riverWidth);
+    const destructiblesState = {
+        barricades: (rawDestructibles.barricades || []).filter((b) => b.z < -280),
+        bridges: (rawDestructibles.bridges || []).filter((b) => b.z < -290),
+        rockslides: (rawDestructibles.rockslides || []).filter((r) => r.z < -310),
+        debris: [],
+    };
     const destructiblesHandle = buildDestructiblesGroup(THREE, destructiblesState);
     scene.add(destructiblesHandle.rootGroup || destructiblesHandle.group);
 
-    // 5. Bizarre Fever-Dream Mid-River Encounters (Capybara Hot-Tub Barge, Tax Swan, Rubber Ducky Stampede, Ghost Cart, Crab Rave)
-    const dreamEncounters = generateDreamEncounters(seed + 13, -1500, riverWidth);
+    // 5. Bizarre Fever-Dream Mid-River Encounters (introduced after the Harbor City at z < -320)
+    const dreamEncounters = (generateDreamEncounters(seed + 13, -1500, riverWidth) || []).filter((e) => e.z < -320);
     const dreamEventsHandle = buildDreamEventsGroup(THREE, dreamEncounters);
     scene.add(dreamEventsHandle.root || dreamEventsHandle.rootGroup || dreamEventsHandle.group);
 
-    // 6. Floating River Loot Pickups (Magnet, Giant Mallet, Triple Oar, Gold Chests, Repair Kits)
-    const lootPickups = generateRiverLoot({ seed: seed + 29, obstacles, riverLength: 1500 });
+    // 6. Floating River Loot Pickups (introduced starting at z < -130 near the Harbor approach)
+    const lootPickups = (generateRiverLoot({ seed: seed + 29, obstacles, riverLength: 1500 }) || []).filter(
+        (item) => (item.position?.z ?? item.z ?? 0) < -130
+    );
     const lootMeshes = new Map();
     const lootGroup = new THREE.Group();
     lootGroup.name = 'AAA_Loot_Pickups';
@@ -217,11 +241,11 @@ export function createAAAFeverDirector({
     // 10. Adaptive 4-Stem WebAudio Procedural Soundtrack
     const musicEngine = createMusicEngine();
 
-    // 11. Tactical River Minimap, Threat Radar & Boss Health Bar
+    // 11. Tactical River Minimap, Threat Radar & Boss Health Bar (Canyon strip hidden by default so bottom-right stays clean)
     const hasDOM = typeof document !== 'undefined' && typeof window !== 'undefined';
     const minimap = hasDOM
         ? createMinimapRadar(document.body, {
-            showCanyonMap: true,
+            showCanyonMap: false,
             showRadar: true,
             showBossBar: true,
         })
@@ -373,18 +397,7 @@ export function createAAAFeverDirector({
                 musicEngine.unlock();
                 musicEngine.start();
                 applyCrewCosmetics(cfg.crewClass || 'bruiser');
-                hud.toast(`⚓ SETTING SAIL — MODE: ${(cfg.gameMode || 'coop').toUpperCase()}`, 2400);
-                const raft = getMyRaft();
-                if (raft?.vis) {
-                    banterDirector.spawnBubble({
-                        id: 'start-bark',
-                        speakerName: 'Skipper',
-                        text: "Hold onto your paddles, this river is 100% cursed!",
-                        category: 'crew',
-                        worldPosition: raft.vis.group.position,
-                        durationMs: 4000,
-                    });
-                }
+                hud.toast('⚓ STAGE 1: PADDLE [W/S], STEER [A/D] & JUMP [SPACE] ONTO THE SAFE DOCK', 3800);
             },
             onSettingsChanged: (newSettings) => {
                 if (newSettings.fov) {
@@ -486,6 +499,8 @@ export function createAAAFeverDirector({
     };
 
     let lastBanterCheck = 0;
+    let lastHazardFeedbackMs = 0;
+    const onboardingStagesShown = new Set();
 
     return {
         titleMenu,
@@ -605,8 +620,31 @@ export function createAAAFeverDirector({
             if (!raft?.craft || getIsDead()) return;
             const { craft, vis } = raft;
 
-            // 1. River Hazards (Rapids boost, Whirlpool pull, Launch Ramp, Mine Barrels)
-            stepCraftWithRiverHazards(craft, hazardsLayout, fixedDt, nowMs);
+            // 1. River Hazards (Rapids boost, Whirlpool pull + spin + core slingshot, Launch Ramp, Mine Barrels)
+            const hazardRes = stepCraftWithRiverHazards(craft, hazardsLayout, fixedDt, nowMs);
+            if (hazardRes.inWhirlpool) {
+                if (craft.quaternion?.setFromAxisAngle) {
+                    craft.quaternion.setFromAxisAngle({ x: 0, y: 1, z: 0 }, craft.yaw);
+                }
+                if (hazardRes.whirlpoolLaunched) {
+                    splash(craft.position.x, craft.position.z, 1.5);
+                    sfx.splash?.(1.1);
+                    popAt(craft.position, '🌀 VORTEX SLINGSHOT!', '#38bdf8', 3.4);
+                    lastHazardFeedbackMs = nowMs;
+                } else if (nowMs - lastHazardFeedbackMs > 950) {
+                    splash(craft.position.x, craft.position.z, 0.75);
+                    popAt(craft.position, '🌀 WHIRLPOOL SPIN!', '#5eead4', 2.6);
+                    lastHazardFeedbackMs = nowMs;
+                }
+            } else if (hazardRes.inRapids && nowMs - lastHazardFeedbackMs > 1200) {
+                splash(craft.position.x, craft.position.z, 0.65);
+                popAt(craft.position, '🌊 RAPIDS SURGE +45%!', '#7df9ff', 2.5);
+                lastHazardFeedbackMs = nowMs;
+            } else if (hazardRes.rampInteraction?.launched && nowMs - lastHazardFeedbackMs > 800) {
+                splash(craft.position.x, craft.position.z, 1.2);
+                popAt(craft.position, '🚀 RAMP LAUNCH!', '#facc15', 3.2);
+                lastHazardFeedbackMs = nowMs;
+            }
             const ringRes = collectCoinRings(craft.position, hazardsLayout.coinRings, 3.2);
             if (ringRes.collectedCount > 0) {
                 const earned = Number(ringRes.earnedCoins ?? ringRes.coinsEarned ?? ringRes.collectedCount * 10) || 10;
@@ -892,6 +930,12 @@ export function createAAAFeverDirector({
                         crewPlayers: crewList,
                         time: elapsedSec,
                     });
+                    // Hide flat floor aura rings so players never confuse them with water whirlpools
+                    if (coopTetherGroup._pools?.auraPool) {
+                        for (const a of coopTetherGroup._pools.auraPool) {
+                            if (a.mesh) a.mesh.visible = false;
+                        }
+                    }
                 }
             });
             breakerRegistry.step('shoreline', () => {
@@ -918,23 +962,45 @@ export function createAAAFeverDirector({
             breakerRegistry.step('diegetic_arcs', () => {
                 if (raft?.craft) {
                     const st = getMyStats() || {};
+                    const hp = st.health ?? 100;
+                    const maxHp = st.maxHealth ?? 100;
+                    const isAir = Boolean(raft.vis?.anim?.airborne);
+                    // Only display diegetic water arcs when damaged or airborne so the water around the raft stays clean
+                    diegeticArcs.setVisible(hp < maxHp || isAir);
                     diegeticArcs.update(dt, {
                         position: raft.craft.position,
                         yaw: raft.craft.yaw,
-                        health: st.health ?? 100,
-                        maxHealth: st.maxHealth ?? 100,
-                        stamina: raft.vis?.anim?.airborne ? 0.35 : 1.0,
+                        health: hp,
+                        maxHealth: maxHp,
+                        stamina: isAir ? 0.35 : 1.0,
                         elapsedSec,
                     });
                 }
             });
+
+            // Progressive 4-Stage Mechanic Introduction Banners
+            if (raft?.craft && !getIsDead()) {
+                if (z < -58 && z > -92 && !onboardingStagesShown.has('stage2_whirlpool')) {
+                    onboardingStagesShown.add('stage2_whirlpool');
+                    hud.toast('🌀 STAGE 2: SPINNING WHIRLPOOLS & RAPIDS — FEEL THE VORTEX PULL & SURGE!', 4000);
+                } else if (z < -94 && z > -135 && !onboardingStagesShown.has('stage3_mage')) {
+                    onboardingStagesShown.add('stage3_mage');
+                    hud.toast('🧙‍♂️ STAGE 3: THE RIVER MAGE — BLOCK [RMB] OR GET GRABBED, SPUN & THROWN!', 4200);
+                } else if (z < -142 && z > -245 && !onboardingStagesShown.has('stage4_harbor')) {
+                    onboardingStagesShown.add('stage4_harbor');
+                    hud.toast('🏛️ STAGE 4: WALLED HARBOR CITY — ZERO DRIFT! DOCK & PRESS [E]/[B] TO SHOP', 4500);
+                }
+            }
             breakerRegistry.step('boss_telegraphs', () => {
                 if (krakenState.isSpawned && !krakenState.isDefeated) {
                     bossTelegraphs.update(dt, krakenState, elapsedSec);
                 }
             });
             breakerRegistry.step('cinema_letterbox', () => {
-                cinemaLetterbox.checkTriggers(z, krakenState.isSpawned && !krakenState.isDefeated);
+                // Only show full-screen Act letterbox banners starting at Act II/III/IV (z < -265) so spawn (z = 0) stays completely uncluttered
+                if (z < -265 || (krakenState.isSpawned && !krakenState.isDefeated)) {
+                    cinemaLetterbox.checkTriggers(z, krakenState.isSpawned && !krakenState.isDefeated);
+                }
                 cinemaLetterbox.update(dt);
             });
             breakerRegistry.step('quickbuy_hotbar', () => {

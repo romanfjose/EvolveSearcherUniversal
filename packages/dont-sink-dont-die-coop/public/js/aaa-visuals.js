@@ -475,12 +475,7 @@ export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodM
                 group.add(bollardCap);
             }
         }
-        // Glowing emerald Sanctuary Ward Ring around the dock perimeter
-        const radius = Math.max(width, depth) * 0.58;
-        const wardRing = new THREE.Mesh(new THREE.RingGeometry(radius - 0.25, radius, 32), sanctuaryRingMat);
-        wardRing.rotation.x = -Math.PI / 2;
-        wardRing.position.y = height * 0.45;
-        group.add(wardRing);
+        // Subtle corner lantern glow only (no giant water-surface ring around docks so players never confuse docks with water whirlpools)
         return group;
     }
 

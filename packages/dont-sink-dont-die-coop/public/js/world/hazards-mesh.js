@@ -15,7 +15,7 @@ export function createRapidsMesh(THREE, rapidsConfig) {
     const length = rapidsConfig.length || 24;
 
     const group = new THREE.Group();
-    group.position.set(rapidsConfig.x || 0, 0.05, rapidsConfig.z || 0);
+    group.position.set(rapidsConfig.x || 0, 0.28, rapidsConfig.z || 0);
     if (rapidsConfig.angle) {
         group.rotation.y = rapidsConfig.angle;
     }
@@ -120,7 +120,7 @@ export function createWhirlpoolMesh(THREE, whirlpoolConfig) {
     const clockwise = whirlpoolConfig.clockwise ?? true;
 
     const group = new THREE.Group();
-    group.position.set(whirlpoolConfig.x || 0, 0.0, whirlpoolConfig.z || 0);
+    group.position.set(whirlpoolConfig.x || 0, 0.28, whirlpoolConfig.z || 0);
 
     // A. 3D Vortex Funnel Cylinder/Cone Geometry
     const radialSegments = 40;
@@ -197,19 +197,19 @@ export function createWhirlpoolMesh(THREE, whirlpoolConfig) {
     group.add(funnelMesh);
 
     // B. Outer Swirling Foam Particles / Ring
-    const ringCount = 3;
+    const ringCount = 4;
     const ringGroup = new THREE.Group();
     for (let r = 0; r < ringCount; r++) {
-        const ringRadius = radius * (0.45 + r * 0.25);
-        const ringGeo = new THREE.TorusGeometry(ringRadius, 0.08, 6, 32);
+        const ringRadius = radius * (0.32 + r * 0.22);
+        const ringGeo = new THREE.TorusGeometry(ringRadius, 0.14, 8, 36);
         const ringMat = new THREE.MeshBasicMaterial({
-            color: 0x5eead4,
+            color: r === 0 ? 0xffffff : 0x5eead4,
             transparent: true,
-            opacity: 0.35 - r * 0.08,
+            opacity: 0.72 - r * 0.12,
         });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
         ringMesh.rotation.x = Math.PI / 2;
-        ringMesh.position.y = -0.05 * (r + 1);
+        ringMesh.position.y = 0.03 + r * 0.015;
         ringGroup.add(ringMesh);
     }
     group.add(ringGroup);

@@ -566,9 +566,11 @@ export function stepCraftWithRiverHazards(craft, hazards, dt, now = 0) {
             result.inRapids = true;
             const boost = calculateRapidsBoost(vel, rap);
             result.rapidsBoostFactor = boost.multiplier; // 1.45
-            // Apply forward surge boost acceleration
-            vel.x += boost.boostForce.x * dt;
-            vel.z += boost.boostForce.z * dt;
+            // Apply forward surge boost acceleration + direct displacement so keel drag cannot cancel it
+            vel.x += boost.boostForce.x * dt * 1.6;
+            vel.z += boost.boostForce.z * dt * 1.6;
+            pos.x += boost.boostForce.x * dt * 0.22;
+            pos.z += boost.boostForce.z * dt * 0.22;
             result.appliedForces.x += boost.boostForce.x;
             result.appliedForces.z += boost.boostForce.z;
             break;
@@ -582,11 +584,28 @@ export function stepCraftWithRiverHazards(craft, hazards, dt, now = 0) {
         if (field.inside) {
             result.inWhirlpool = true;
             result.whirlpoolDepth = Math.max(result.whirlpoolDepth, field.vortexDepth);
-            // Apply swirl + radial suction directly to craft velocity
-            vel.x += field.combinedVelocity.x * dt * 2.5;
-            vel.z += field.combinedVelocity.z * dt * 2.5;
-            result.appliedForces.x += field.combinedVelocity.x * 2.5;
-            result.appliedForces.z += field.combinedVelocity.z * 2.5;
+            // Apply strong swirl + radial suction to velocity, direct position displacement, and yaw spin
+            vel.x += field.combinedVelocity.x * dt * 4.2;
+            vel.z += field.combinedVelocity.z * dt * 4.2;
+            pos.x += field.combinedVelocity.x * dt * 0.65;
+            pos.z += field.combinedVelocity.z * dt * 0.65;
+            const spinSign = wp.clockwise !== false ? -1 : 1;
+            const spinRate = 3.4 + (1 - (field.normalizedDist ?? 0.5)) * 6.8;
+            if (typeof craft.yaw === 'number') {
+                craft.yaw += spinSign * spinRate * dt;
+            }
+            if (craft.angularVelocity && typeof craft.angularVelocity.y === 'number') {
+                craft.angularVelocity.y += spinSign * spinRate * 0.5;
+            }
+            // Inner vortex core slingshot surge: reaching the vortex eye flings & pushes the raft outward!
+            if ((field.normalizedDist ?? 1) < 0.28 && (vel.y || 0) <= 1.0) {
+                vel.y = 11.5;
+                vel.x += spinSign * 16.0;
+                vel.z -= 18.0;
+                result.whirlpoolLaunched = true;
+            }
+            result.appliedForces.x += field.combinedVelocity.x * 4.2;
+            result.appliedForces.z += field.combinedVelocity.z * 4.2;
             break;
         }
     }

@@ -525,10 +525,16 @@ export function createWeatherSystem(THREE, scene, options = {}) {
                           currentParams.particleMode === 'mist' ? 1.0 :
                           currentParams.particleMode === 'spore' ? 2.0 : 3.0;
 
+        // Progressive onboarding de-bloat: keep the starting lagoon (z > -180) crystal-clear with minimal dust,
+        // ramping up atmospheric particles only as the crew journeys deeper downriver!
+        const spawnCleanScale = typeof targetStateOrZ === 'number'
+            ? clamp((-targetStateOrZ - 40) / 260, 0.12, 1.0)
+            : 1.0;
+
         particleUniforms.uTime.value = elapsedTime;
         particleUniforms.uColor.value.setHex(currentParams.particleColor);
-        particleUniforms.uSize.value = currentParams.particleSize * (currentParams.particleMode === 'rain' ? 36.0 : 22.0);
-        particleUniforms.uOpacity.value = currentParams.particleOpacity;
+        particleUniforms.uSize.value = currentParams.particleSize * (currentParams.particleMode === 'rain' ? 36.0 : 9.5) * (0.45 + 0.55 * spawnCleanScale);
+        particleUniforms.uOpacity.value = currentParams.particleOpacity * spawnCleanScale;
         particleUniforms.uMode.value = modeIndex;
 
         const count = Math.min(MAX_PARTICLES, currentParams.particleCount);

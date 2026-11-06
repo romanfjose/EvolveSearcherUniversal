@@ -141,13 +141,18 @@ let gameWon = false;
 // --- Sanctuary Platforms, Mid-River Islands & Canyon Pine Obstacles ---
 const obstacles = [];
 
-// 1. Deterministic Tactical Sanctuary Havens (Left, Right & Mid-River Docks every ~45m so crews can always stop, think & regroup)
-for (let zPos = -32; zPos > -(riverLength - 120); zPos -= 42) {
-    // Skip placing mid-river clutter inside the calm Harbor City Marina (z = -145..-260)
+// 1. Deterministic Tactical Sanctuary Havens (Clean Stage 1 Tutorial Dock at z = -42, then Docks every ~45m downriver)
+for (let zPos = -42; zPos > -(riverLength - 120); zPos -= 45) {
+    // Skip placing mid-river clutter inside the calm Harbor City Marina (z = -145..-260) or across the Stage 2 Whirlpool (z = -76)
+    if (Math.abs(zPos - -76) < 22) continue;
     const inHarborBasin = zPos < -145 && zPos > -260;
-    const laneChoices = inHarborBasin ? [-playableHalfWidth + 9, playableHalfWidth - 9] : [-playableHalfWidth + 10, 0, playableHalfWidth - 10];
-    const laneIdx = Math.abs(Math.round(zPos / 42)) % laneChoices.length;
-    const xPos = laneChoices[laneIdx] + (Math.random() - 0.5) * 4;
+    const laneChoices = zPos === -42
+        ? [-12]
+        : inHarborBasin
+            ? [-playableHalfWidth + 9, playableHalfWidth - 9]
+            : [-playableHalfWidth + 10, 0, playableHalfWidth - 10];
+    const laneIdx = Math.abs(Math.round(zPos / 45)) % laneChoices.length;
+    const xPos = laneChoices[laneIdx] + (zPos === -42 ? 0 : (Math.random() - 0.5) * 4);
     const width = 9.5 + Math.random() * 4.5;
     const depth = 8.5 + Math.random() * 4.0;
     const height = 0.55;
@@ -168,11 +173,11 @@ for (let zPos = -32; zPos > -(riverLength - 120); zPos -= 42) {
     });
 }
 
-// 2. Additional Side Docks & Scenic River Trees across the 80m basin
-for (let i = 0; i < 240; i++) {
+// 2. Additional Side Docks & Scenic River Trees across the 80m basin (keep first 105m unbloated for clean onboarding!)
+for (let i = 0; i < 180; i++) {
     const isLeft = Math.random() > 0.5;
-    const zPos = -Math.random() * (riverLength - 100) - 25;
-    const isPlank = Math.random() > 0.55;
+    const zPos = -Math.random() * (riverLength - 160) - 45;
+    const isPlank = zPos < -115 && Math.random() > 0.62;
 
     if (isPlank) {
         const xPos = (Math.random() - 0.5) * (riverWidth - 16);
@@ -194,8 +199,10 @@ for (let i = 0; i < 240; i++) {
             topY: yPos + height / 2 + PLAYER.restY,
         });
     } else {
-        const bankSpread = Math.random() < 0.72
-            ? (isLeft ? -playableHalfWidth + Math.random() * 6 : playableHalfWidth - Math.random() * 6)
+        // In the first 115m, place trees ONLY on the outer riverbanks so the center channel & Stage 2 Whirlpool are crystal-clear
+        const bankOnly = zPos > -115 || Math.random() < 0.78;
+        const bankSpread = bankOnly
+            ? (isLeft ? -playableHalfWidth + Math.random() * 5 : playableHalfWidth - Math.random() * 5)
             : (Math.random() - 0.5) * (riverWidth - 22);
         const size = 2.2 + Math.random() * 3.2;
         const mesh = createAAAObstacleMesh(false, 0, 0, 0, size, woodMaterial, vegetationMaterial);
@@ -729,11 +736,50 @@ socket.on('playerRevived', (p) => {
     }
 });
 
+// --- River Mage (whiteGuy) Telekinetic Grab -> Slow Spin -> Violent Throw State & 3D Arcane Beam ---
+const mageTelekinesisGroup = new THREE.Group();
+mageTelekinesisGroup.visible = false;
+const mageBeamGeo = new THREE.CylinderGeometry(0.18, 0.42, 1.0, 12, 1, true);
+mageBeamGeo.translate(0, 0.5, 0);
+mageBeamGeo.rotateX(Math.PI / 2);
+const mageBeamMat = new THREE.MeshBasicMaterial({
+    color: 0x45f3ff,
+    transparent: true,
+    opacity: 0.75,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+});
+const mageBeamMesh = new THREE.Mesh(mageBeamGeo, mageBeamMat);
+const mageRuneRingMesh = new THREE.Mesh(
+    new THREE.TorusGeometry(2.4, 0.12, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.85 })
+);
+mageRuneRingMesh.rotation.x = Math.PI / 2;
+mageTelekinesisGroup.add(mageBeamMesh, mageRuneRingMesh);
+scene.add(mageTelekinesisGroup);
+
+const mageGrab = {
+    active: false,
+    elapsed: 0,
+    duration: 1.35,
+    force: null,
+    cooldownUntil: 0,
+};
+
 socket.on('playerThrown', (data) => {
     if (data.id === socket.id && myRaft?.craft && !isDead) {
-        const v = throwVelocity(data.force);
-        myRaft.craft.velocity.set(v.x, v.y, v.z);
-        splash(myRaft.craft.position.x, myRaft.craft.position.z, 1.2);
+        if (!mageGrab.active) {
+            mageGrab.active = true;
+            mageGrab.elapsed = 0;
+            mageGrab.duration = 1.35;
+            mageGrab.force = data.force;
+            mageTelekinesisGroup.visible = true;
+            myRaft.craft.velocity.set(0, 0, 0);
+            splash(myRaft.craft.position.x, myRaft.craft.position.z, 0.9);
+            sfx.wave?.();
+            hud.toast('🧙‍♂️ MAGE TELEKINESIS! GRABBED & SPINNING UP...', 1700);
+            popAt(myRaft.craft.position, '🧙‍♂️ TELEKINETIC GRAB!', '#45f3ff', 3.4);
+        }
     }
 });
 
@@ -899,6 +945,65 @@ function fixedStep() {
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
     const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
     onSolid = col.onSolid;
+
+    // River Mage Telekinetic Grab -> Slow Accelerating Spin in Mid-Air -> Violent Hurl!
+    if (live && mageGrab.active) {
+        mageGrab.elapsed += FIXED_DT;
+        const progress = Math.min(1, mageGrab.elapsed / mageGrab.duration);
+        const magePos = enemyMeshes.whiteGuy?.visible ? enemyMeshes.whiteGuy.position : null;
+
+        if (mageGrab.elapsed < mageGrab.duration) {
+            // Phase 1: Lift raft into mid-air, hold in arcane orbit & spin from slow to furious!
+            onSolid = false;
+            const targetY = 2.85 + Math.sin(mageGrab.elapsed * 7.0) * 0.25;
+            craft.position.y = THREE.MathUtils.lerp(craft.position.y, targetY, FIXED_DT * 6.5);
+            if (magePos) {
+                const orbitAngle = mageGrab.elapsed * (1.8 + progress * 2.4);
+                const orbitX = magePos.x + Math.cos(orbitAngle) * 4.8;
+                const orbitZ = magePos.z + Math.sin(orbitAngle) * 4.8;
+                craft.position.x = THREE.MathUtils.lerp(craft.position.x, orbitX, FIXED_DT * 3.8);
+                craft.position.z = THREE.MathUtils.lerp(craft.position.z, orbitZ, FIXED_DT * 3.8);
+            }
+            craft.velocity.set(0, 0, 0);
+            // Starts as a slow telekinetic spin and accelerates into a rapid whirl before release
+            const spinSpeed = 2.4 + progress * progress * 15.0;
+            craft.yaw += spinSpeed * FIXED_DT;
+            craft.angularVelocity.y = spinSpeed;
+            if (myRaft?.vis?.tilt) {
+                myRaft.vis.tilt.rotation.z = Math.sin(mageGrab.elapsed * 10) * 0.28;
+                myRaft.vis.tilt.rotation.x = Math.cos(mageGrab.elapsed * 8) * 0.22;
+            }
+            // Update 3D Arcane Beam & Rune Ring
+            mageTelekinesisGroup.visible = true;
+            mageRuneRingMesh.position.set(craft.position.x, craft.position.y - 0.15, craft.position.z);
+            mageRuneRingMesh.rotation.z = mageGrab.elapsed * 8.0;
+            if (magePos) {
+                const staffTip = new THREE.Vector3(magePos.x, magePos.y + 3.1, magePos.z);
+                const raftCenter = new THREE.Vector3(craft.position.x, craft.position.y + 0.4, craft.position.z);
+                const dist = staffTip.distanceTo(raftCenter);
+                mageBeamMesh.visible = true;
+                mageBeamMesh.position.copy(staffTip);
+                mageBeamMesh.lookAt(raftCenter);
+                mageBeamMesh.scale.set(1, 1, Math.max(0.5, dist));
+            } else {
+                mageBeamMesh.visible = false;
+            }
+        } else {
+            // Phase 2: Release &Violently Hurl the Raft Across the River!
+            mageGrab.active = false;
+            mageGrab.cooldownUntil = performance.now() + 2600;
+            mageTelekinesisGroup.visible = false;
+            const v = throwVelocity(mageGrab.force || { x: 400, y: 800, z: -400 });
+            const dirX = Math.abs(v.x) < 5 ? (craft.position.x >= 0 ? -12 : 12) : v.x * 1.5;
+            const dirZ = Math.abs(v.z) < 5 ? -14 : v.z * 1.5;
+            craft.velocity.set(dirX, Math.max(14.5, v.y * 1.2), dirZ);
+            splash(craft.position.x, craft.position.z, 1.5);
+            sfx.splash(1.2);
+            cameraShake = Math.max(cameraShake, 0.35);
+            popAt(craft.position, '☄️ HURLED BY THE MAGE!', '#c084fc', 3.8);
+        }
+    }
+
     craft.quaternion.setFromAxisAngle(yAxis, craft.yaw);
 
     // Sanctuary Platform & Harbor Haven passive hull repair (+3 HP/sec while resting on a platform or in the Harbor City)
@@ -953,10 +1058,12 @@ function updateLocalRaft(dt, now) {
 
     if (isDead || inIntroSequence) return;
 
-    if (enemiesData && now - lastEnemyHit > PLAYER.hitCooldownMs) {
+    if (enemiesData && now - lastEnemyHit > PLAYER.hitCooldownMs && !mageGrab.active && performance.now() > mageGrab.cooldownUntil) {
         for (const key in enemiesData) {
             const enemy = enemiesData[key];
-            if (enemy.health > 0 && vis.group.position.distanceTo(enemyMeshes[key].position) < ENEMY_TYPES[key].hitRadius) {
+            // Give the River Mage (whiteGuy) an 8.5m telekinetic staff grab reach at water level
+            const reach = key === 'whiteGuy' ? 8.5 : ENEMY_TYPES[key].hitRadius;
+            if (enemy.health > 0 && vis.group.position.distanceTo(enemyMeshes[key].position) < reach) {
                 const parryCheck = feverDirector.resolvePlayerHit(enemy.damage, enemy.type, performance.now());
                 if (!parryCheck.parried) {
                     socket.emit('enemyHitPlayer', { playerId: socket.id, damage: enemy.damage, enemyType: enemy.type, isBlocking });
@@ -1160,6 +1267,7 @@ if (typeof window !== 'undefined') {
         getOtherPlayers: () => otherPlayers,
         getEnemiesData: () => enemiesData,
         getMyStats: () => myStats,
+        getMageGrab: () => mageGrab,
         feverDirector,
     };
 }

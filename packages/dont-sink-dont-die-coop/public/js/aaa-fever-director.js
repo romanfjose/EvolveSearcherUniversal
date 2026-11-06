@@ -141,7 +141,7 @@ export function createAAAFeverDirector({
     let raftAnchorVfxGroup = null;
     try {
         act1ArchGroup = buildRedwoodFlumesBiome(THREE, { riverWidth, zStart: 0, zEnd: -350 });
-        if (act1ArchGroup) biomeGroup.add(act1ArchGroup);
+        if (act1ArchGroup) act1ArchGroup.visible = false;
     } catch (_e) { /* ignore mock fallback */ }
     try {
         act2ArchGroup = buildWalledHarborCityBiome(THREE, { riverWidth, zStart: -140, zEnd: -700 });
@@ -163,7 +163,7 @@ export function createAAAFeverDirector({
     try {
         coopTetherGroup = createCoopTetherVfx(THREE);
         const tetherNode = coopTetherGroup?.group || coopTetherGroup;
-        if (tetherNode && typeof tetherNode.add === 'function') scene.add(tetherNode);
+        if (tetherNode) tetherNode.visible = false;
     } catch (_e) { /* ignore mock fallback */ }
     scene.add(biomeGroup);
 
@@ -190,21 +190,28 @@ export function createAAAFeverDirector({
     const hazardsHandle = buildRiverHazardsGroup(THREE, hazardsLayout);
     scene.add(hazardsHandle.rootGroup || hazardsHandle.group);
 
-    // 4. Destructible Wooden Barricades, Suspension Bridges & Cliff Rockslides (introduced in Act II/III at z < -280)
-    const rawDestructibles = generateDestructiblesLayout(seed + 7, -1500, riverWidth);
+    // 4. Keep the wide river (`ancho`) open & unbloated (no mid-river barricades or floating crystal clutter)
     const destructiblesState = {
-        barricades: (rawDestructibles.barricades || []).filter((b) => b.z < -280),
-        bridges: (rawDestructibles.bridges || []).filter((b) => b.z < -290),
-        rockslides: (rawDestructibles.rockslides || []).filter((r) => r.z < -310),
+        barricades: [],
+        bridges: [],
+        rockslides: [],
         debris: [],
     };
     const destructiblesHandle = buildDestructiblesGroup(THREE, destructiblesState);
-    scene.add(destructiblesHandle.rootGroup || destructiblesHandle.group);
+    const destRoot = destructiblesHandle.rootGroup || destructiblesHandle.group;
+    if (destRoot) {
+        destRoot.visible = false;
+        scene.add(destRoot);
+    }
 
-    // 5. Bizarre Fever-Dream Mid-River Encounters (introduced after the Harbor City at z < -320)
-    const dreamEncounters = (generateDreamEncounters(seed + 13, -1500, riverWidth) || []).filter((e) => e.z < -320);
+    // 5. Keep fever-dream crystal clutter disabled so the 3 Dream Entities & wide river take center stage
+    const dreamEncounters = [];
     const dreamEventsHandle = buildDreamEventsGroup(THREE, dreamEncounters);
-    scene.add(dreamEventsHandle.root || dreamEventsHandle.rootGroup || dreamEventsHandle.group);
+    const dreamRoot = dreamEventsHandle.root || dreamEventsHandle.rootGroup || dreamEventsHandle.group;
+    if (dreamRoot) {
+        dreamRoot.visible = false;
+        scene.add(dreamRoot);
+    }
 
     // 6. Floating River Loot Pickups (introduced starting at z < -130 near the Harbor approach)
     const lootPickups = (generateRiverLoot({ seed: seed + 29, obstacles, riverLength: 1500 }) || []).filter(
@@ -397,7 +404,7 @@ export function createAAAFeverDirector({
                 musicEngine.unlock();
                 musicEngine.start();
                 applyCrewCosmetics(cfg.crewClass || 'bruiser');
-                hud.toast('⚓ STAGE 1: PADDLE [W/S], STEER [A/D] & JUMP [SPACE] ONTO THE SAFE DOCK', 3800);
+                hud.toast('🏁 STAGGERED START — THE WHITE ENTITY IN THE WIZARD HAT HUNTS LAST PLACE! JUMP ON SIDE VEGETATION OR PLANKS FOR SAFETY!', 4600);
             },
             onSettingsChanged: (newSettings) => {
                 if (newSettings.fov) {
@@ -577,21 +584,14 @@ export function createAAAFeverDirector({
             return { parried: false, finalDamage: damage };
         },
 
-        /** Triggered when player crosses a river checkpoint (-300, -600, -900, -1200) */
+        /** Triggered when player crosses a river checkpoint (-150, -300, -450...) */
         onCheckpointCrossed(checkpointZ, checkpointIdx) {
-            activeTarotSession = createTarotDraftSession(checkpointZ, seed + checkpointIdx * 31, performance.now());
-            tarotHUD.showDraft(activeTarotSession);
-            const raft = getMyRaft();
-            if (raft?.vis) {
-                banterDirector.spawnBubble({
-                    id: `cp-banter-${checkpointZ}`,
-                    speakerName: 'River Oracle',
-                    text: 'Choose a Fever-Dream Tarot Blessing before the rapids swallow you!',
-                    category: 'wizard',
-                    worldPosition: raft.vis.group.position,
-                    durationMs: 4200,
-                });
+            const session = createTarotDraftSession(checkpointZ, seed + checkpointIdx * 31, performance.now());
+            const firstCard = session?.offeredCards?.[0];
+            if (firstCard?.id) {
+                applyTarotBlessing(tarotState, firstCard.id);
             }
+            activeTarotSession = null;
         },
 
         /** Triggered when the crew crosses the Finish Arch at z = -1500 */
@@ -858,34 +858,18 @@ export function createAAAFeverDirector({
                 );
             }
 
-            // 7. Comedic 3D Speech Bubbles & Banter
-            if (nowMs - lastBanterCheck > 5500 && raft?.craft) {
-                lastBanterCheck = nowMs;
-                if (enemies.whiteGuy?.health > 0 && Math.abs(enemies.whiteGuy.position.z - z) < 38) {
-                    banterDirector.spawnBubble({
-                        character: BANTER_CHARACTERS.WIZARD,
-                        text: 'Wait, why does a wooden raft have an outboard motor?!',
-                        worldPosition: enemyMeshes.whiteGuy.position,
-                        durationMs: 3800,
-                    });
-                } else if (enemies.mudAlien?.health > 0 && Math.abs(enemies.mudAlien.position.z - z) < 35) {
-                    banterDirector.spawnBubble({
-                        character: BANTER_CHARACTERS.MUD_ALIEN,
-                        text: 'Bro I am literally made of river mud, stop hitting me with a stick!',
-                        worldPosition: enemyMeshes.mudAlien.position,
-                        durationMs: 3800,
-                    });
-                }
-            }
+            // 7. Keep automatic speech bubble popups disabled so the eerie dream entities stay mysterious & uncluttered
             banterDirector.update(dt);
 
             // 8. Tarot Draft Timer Auto-Pick
             if (activeTarotSession && tarotHUD.isVisible()) {
                 const autoPicked = tarotHUD.updateTimer(nowMs);
                 if (autoPicked) {
-                    applyTarotBlessing(tarotState, autoPicked.id);
+                    const pickId = typeof autoPicked === 'string' ? autoPicked : autoPicked.id;
+                    const pickName = autoPicked.name || autoPicked.card?.name || pickId || 'BLESSING';
+                    if (pickId) applyTarotBlessing(tarotState, pickId);
                     tarotHUD.hideDraft();
-                    hud.toast(`🃏 AUTO-DRAFTED TAROT: ${autoPicked.name.toUpperCase()}!`, 2200);
+                    hud.toast(`🃏 AUTO-DRAFTED TAROT: ${String(pickName).toUpperCase()}!`, 2200);
                     activeTarotSession = null;
                 }
             }
@@ -897,46 +881,18 @@ export function createAAAFeverDirector({
 
             // 10. Sovereign Helmet 01-04 Live Updates (Protected by Helmet 02 Circuit Breakers)
             breakerRegistry.step('biomes_3d_arch', () => {
-                if (act1ArchGroup) stepRedwoodFlumesBiome(act1ArchGroup, dt, elapsedSec);
+                if (act1ArchGroup && act1ArchGroup.visible) stepRedwoodFlumesBiome(act1ArchGroup, dt, elapsedSec);
                 if (act2ArchGroup) stepWalledHarborCityBiome(act2ArchGroup, dt, elapsedSec);
                 if (act3ArchGroup) stepSunkenCrystalTemplesBiome(act3ArchGroup, dt, elapsedSec);
                 if (act4ArchGroup) stepVolcanicShipwreckCalderaBiome(act4ArchGroup, dt, elapsedSec);
                 if (nauticalBuoysGroup) stepNauticalBuoys(nauticalBuoysGroup, elapsedSec);
             });
             breakerRegistry.step('raft_anchor_vfx', () => {
-                if (raft?.vis?.raft && !raftAnchorVfxGroup && typeof raft.vis.raft.add === 'function') {
-                    raftAnchorVfxGroup = createRaftAnchorVfx(THREE);
-                    if (raftAnchorVfxGroup) raft.vis.raft.add(raftAnchorVfxGroup);
-                }
-                if (raftAnchorVfxGroup && raft?.craft) {
-                    const vel = raft.craft.velocity || { x: 0, z: 0 };
-                    const spd = Math.hypot(vel.x || 0, vel.z || 0);
-                    const onSolid = raft.craft.position.y > 0.35;
-                    updateRaftAnchorVfx(raftAnchorVfxGroup, {
-                        anchored: spd < 1.2 && !onSolid,
-                        onSolid,
-                        velocity: vel,
-                        time: elapsedSec,
-                    });
-                }
+                if (raftAnchorVfxGroup) raftAnchorVfxGroup.visible = false;
             });
             breakerRegistry.step('coop_tether_vfx', () => {
-                if (coopTetherGroup && raft?.craft) {
-                    const crewList = Object.entries(getOtherPlayers() || {})
-                        .filter(([, v]) => v?.group?.visible)
-                        .map(([id, v]) => ({ id, position: v.group.position, isDead: false }));
-                    updateCoopTetherVfx(coopTetherGroup, {
-                        localPlayer: { id: socket.id || 'local', position: raft.craft.position, isDead: getIsDead() },
-                        crewPlayers: crewList,
-                        time: elapsedSec,
-                    });
-                    // Hide flat floor aura rings so players never confuse them with water whirlpools
-                    if (coopTetherGroup._pools?.auraPool) {
-                        for (const a of coopTetherGroup._pools.auraPool) {
-                            if (a.mesh) a.mesh.visible = false;
-                        }
-                    }
-                }
+                const tetherNode = coopTetherGroup?.group || coopTetherGroup;
+                if (tetherNode) tetherNode.visible = false;
             });
             breakerRegistry.step('shoreline', () => {
                 animateShorelineLandmarks(shorelineHandle, raft?.craft?.position, elapsedSec);
@@ -965,8 +921,6 @@ export function createAAAFeverDirector({
                     const hp = st.health ?? 100;
                     const maxHp = st.maxHealth ?? 100;
                     const isAir = Boolean(raft.vis?.anim?.airborne);
-                    // Only display diegetic water arcs when damaged or airborne so the water around the raft stays clean
-                    diegeticArcs.setVisible(hp < maxHp || isAir);
                     diegeticArcs.update(dt, {
                         position: raft.craft.position,
                         yaw: raft.craft.yaw,
@@ -975,20 +929,22 @@ export function createAAAFeverDirector({
                         stamina: isAir ? 0.35 : 1.0,
                         elapsedSec,
                     });
+                    // Keep artificial water arcs hidden so only real whirlpools & foam wake appear on the water
+                    diegeticArcs.setVisible(false);
                 }
             });
 
-            // Progressive 4-Stage Mechanic Introduction Banners
+            // Dream Essence Stage Callouts
             if (raft?.craft && !getIsDead()) {
                 if (z < -58 && z > -92 && !onboardingStagesShown.has('stage2_whirlpool')) {
                     onboardingStagesShown.add('stage2_whirlpool');
-                    hud.toast('🌀 STAGE 2: SPINNING WHIRLPOOLS & RAPIDS — FEEL THE VORTEX PULL & SURGE!', 4000);
-                } else if (z < -94 && z > -135 && !onboardingStagesShown.has('stage3_mage')) {
-                    onboardingStagesShown.add('stage3_mage');
-                    hud.toast('🧙‍♂️ STAGE 3: THE RIVER MAGE — BLOCK [RMB] OR GET GRABBED, SPUN & THROWN!', 4200);
-                } else if (z < -142 && z > -245 && !onboardingStagesShown.has('stage4_harbor')) {
+                    hud.toast('🌀 WHIRLPOOLS & RAPIDS AHEAD — JUMP ON SIDE VEGETATION BORDERS OR PLANKS TO STAY SAFE FROM THE WHITE GUY!', 4200);
+                } else if (z < -138 && z > -245 && !onboardingStagesShown.has('stage4_harbor')) {
                     onboardingStagesShown.add('stage4_harbor');
-                    hud.toast('🏛️ STAGE 4: WALLED HARBOR CITY — ZERO DRIFT! DOCK & PRESS [E]/[B] TO SHOP', 4500);
+                    hud.toast('🏙️ RIVERSIDE CITY: LURE THE 3-LEGGED MUD ALIEN NEAR A PEDESTRIAN SO ITS AOE TRIGGERS THE POLICE GUNS!', 5200);
+                } else if (z < -275 && z > -350 && !onboardingStagesShown.has('stage5_worm')) {
+                    onboardingStagesShown.add('stage5_worm');
+                    hud.toast('🐍 THE LONG WORM: STRIKES IN STRAIGHT VECTORS LIKE NOKIA SNAKE — WATCH ITS HEAD & SIDESTEP!', 4800);
                 }
             }
             breakerRegistry.step('boss_telegraphs', () => {
@@ -997,10 +953,6 @@ export function createAAAFeverDirector({
                 }
             });
             breakerRegistry.step('cinema_letterbox', () => {
-                // Only show full-screen Act letterbox banners starting at Act II/III/IV (z < -265) so spawn (z = 0) stays completely uncluttered
-                if (z < -265 || (krakenState.isSpawned && !krakenState.isDefeated)) {
-                    cinemaLetterbox.checkTriggers(z, krakenState.isSpawned && !krakenState.isDefeated);
-                }
                 cinemaLetterbox.update(dt);
             });
             breakerRegistry.step('quickbuy_hotbar', () => {

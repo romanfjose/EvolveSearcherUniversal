@@ -138,59 +138,59 @@ const finishMesh = createAAAFinishArch(riverWidth, finishLineZ);
 scene.add(finishMesh);
 let gameWon = false;
 
-// --- Sanctuary Platforms, Mid-River Islands & Canyon Pine Obstacles ---
+// --- Natural Vegetation Borders & Wood Planks on the `Costado` (Riverbanks) + Canyon Trees ---
 const obstacles = [];
 
-// 1. Deterministic Tactical Sanctuary Havens (Clean Stage 1 Tutorial Dock at z = -42, then Docks every ~45m downriver)
-for (let zPos = -42; zPos > -(riverLength - 120); zPos -= 45) {
-    // Skip placing mid-river clutter inside the calm Harbor City Marina (z = -145..-260) or across the Stage 2 Whirlpool (z = -76)
-    if (Math.abs(zPos - -76) < 22) continue;
-    const inHarborBasin = zPos < -145 && zPos > -260;
-    const laneChoices = zPos === -42
-        ? [-12]
-        : inHarborBasin
-            ? [-playableHalfWidth + 9, playableHalfWidth - 9]
-            : [-playableHalfWidth + 10, 0, playableHalfWidth - 10];
-    const laneIdx = Math.abs(Math.round(zPos / 45)) % laneChoices.length;
-    const xPos = laneChoices[laneIdx] + (zPos === -42 ? 0 : (Math.random() - 0.5) * 4);
-    const width = 9.5 + Math.random() * 4.5;
-    const depth = 8.5 + Math.random() * 4.0;
-    const height = 0.55;
-    const yPos = 1.05;
-    const mesh = createAAAObstacleMesh(true, width, height, depth, 0, woodMaterial, vegetationMaterial);
-    mesh.position.set(xPos, yPos, zPos);
-    scene.add(mesh);
-    obstacles.push({
-        type: 'plank',
-        isSanctuary: true,
-        easyRamp: true,
-        mesh,
-        x: xPos,
-        z: zPos,
-        halfW: width / 2,
-        halfD: depth / 2,
-        topY: yPos + height / 2 + PLAYER.restY,
-    });
-}
+// 1. `Costado` Safe Borders: Alternating Natural Green Vegetation Borders & Wood Planks along both sides of the wide river
+// ("there are things to the costado, mostly vegetation, and some wood planks and stuff to get into, and some natural borders made of vegetations, so you can jump and get on top of that and you're safe from the white guy")
+for (let zPos = -18; zPos > -(riverLength - 120); zPos -= 28) {
+    // Keep the Stage 1 Tutorial Dock at z = -42, x = -12 so automated QA & new players have an immediate dock right ahead
+    if (Math.abs(zPos - -46) < 12) {
+        const tutMesh = createAAAObstacleMesh(true, 10.5, 0.55, 9.5, 0, woodMaterial, vegetationMaterial);
+        tutMesh.position.set(-12, 1.05, -42);
+        scene.add(tutMesh);
+        obstacles.push({
+            type: 'plank',
+            subType: 'plank',
+            isSanctuary: true,
+            easyRamp: true,
+            mesh: tutMesh,
+            x: -12,
+            z: -42,
+            halfW: 5.25,
+            halfD: 4.75,
+            topY: 1.05 + 0.55 / 2 + PLAYER.restY,
+        });
+    }
 
-// 2. Additional Side Docks & Scenic River Trees across the 80m basin (keep first 105m unbloated for clean onboarding!)
-for (let i = 0; i < 180; i++) {
-    const isLeft = Math.random() > 0.5;
-    const zPos = -Math.random() * (riverLength - 160) - 45;
-    const isPlank = zPos < -115 && Math.random() > 0.62;
+    const inHarborBasin = zPos < -145 && zPos > -255;
+    for (const side of [-1, 1]) {
+        // Leave the right-hand City Promenade (x > 0, z = -145..-255) open so players can walk right onto the City sidewalk with Pedestrians & Police!
+        if (inHarborBasin && side === 1) continue;
 
-    if (isPlank) {
-        const xPos = (Math.random() - 0.5) * (riverWidth - 16);
-        const width = 7 + Math.random() * 4;
-        const depth = 6 + Math.random() * 3.5;
-        const height = 0.5;
-        const yPos = 1.0 + Math.random() * 0.35;
-        const mesh = createAAAObstacleMesh(true, width, height, depth, 0, woodMaterial, vegetationMaterial);
+        const isVegBorder = (Math.abs(Math.round(zPos / 28)) + (side > 0 ? 1 : 0)) % 2 === 0;
+        const width = isVegBorder ? 10.5 : 9.0;
+        const depth = isVegBorder ? 13.0 : 9.5;
+        const height = 0.6;
+        const yPos = 1.05;
+        const xPos = side * (playableHalfWidth - width * 0.5 - 1.5);
+
+        const mesh = createAAAObstacleMesh(
+            isVegBorder ? 'vegetation' : true,
+            width,
+            height,
+            depth,
+            0,
+            woodMaterial,
+            vegetationMaterial
+        );
         mesh.position.set(xPos, yPos, zPos);
         scene.add(mesh);
         obstacles.push({
             type: 'plank',
+            subType: isVegBorder ? 'vegetation' : 'plank',
             isSanctuary: true,
+            easyRamp: true,
             mesh,
             x: xPos,
             z: zPos,
@@ -198,27 +198,31 @@ for (let i = 0; i < 180; i++) {
             halfD: depth / 2,
             topY: yPos + height / 2 + PLAYER.restY,
         });
-    } else {
-        // In the first 115m, place trees ONLY on the outer riverbanks so the center channel & Stage 2 Whirlpool are crystal-clear
-        const bankOnly = zPos > -115 || Math.random() < 0.78;
-        const bankSpread = bankOnly
-            ? (isLeft ? -playableHalfWidth + Math.random() * 5 : playableHalfWidth - Math.random() * 5)
-            : (Math.random() - 0.5) * (riverWidth - 22);
-        const size = 2.2 + Math.random() * 3.2;
-        const mesh = createAAAObstacleMesh(false, 0, 0, 0, size, woodMaterial, vegetationMaterial);
-        mesh.position.set(bankSpread, 0, zPos);
-        scene.add(mesh);
-        obstacles.push({
-            type: 'tree',
-            mesh,
-            x: bankSpread,
-            z: zPos,
-            radius: 0.85,
-        });
     }
 }
 
-// --- Enemies (AAA Boss Meshes) ---
+// 2. Outer Riverbank Vegetation Trees along the `Costado` (keeping the wide 80m river channel open!)
+for (let i = 0; i < 140; i++) {
+    const isLeft = i % 2 === 0;
+    const zPos = -((i * 10.5) % (riverLength - 140)) - 25;
+    if (!isLeft && zPos < -140 && zPos > -260) continue; // Keep City sidewalk clear
+    const bankSpread = isLeft
+        ? -playableHalfWidth + 1.5 + (i % 3) * 1.2
+        : playableHalfWidth - 1.5 - (i % 3) * 1.2;
+    const size = 2.4 + (i % 4) * 0.65;
+    const mesh = createAAAObstacleMesh(false, 0, 0, 0, size, woodMaterial, vegetationMaterial);
+    mesh.position.set(bankSpread, 0, zPos);
+    scene.add(mesh);
+    obstacles.push({
+        type: 'tree',
+        mesh,
+        x: bankSpread,
+        z: zPos,
+        radius: 0.85,
+    });
+}
+
+// --- Enemies (The 3 Dream Entities: White Guy in Wizard Hat, 3-Legged Headless Mud Alien, Nokia-Vector Long Worm) ---
 const enemyMeshes = createAAAEnemyMeshes(woodMaterial);
 
 for (let key in enemyMeshes) scene.add(enemyMeshes[key]);
@@ -239,22 +243,51 @@ function popAt(pos, text, color, lift) {
 
 socket.on('enemiesUpdate', (data) => {
     enemiesData = data;
-    for(const key in data) {
+    for (const key in data) {
         const e = data[key];
         if (e.health > 0) {
             enemyMeshes[key].visible = true;
-            enemyMeshes[key].position.set(e.position.x, e.position.y, e.position.z);
-            
-            // Align worm to movement
-            if (key === 'longWorm' && e.state === 'charging' && e.targetPos) {
-                 enemyMeshes[key].lookAt(e.targetPos.x, e.position.y, e.targetPos.z);
+            // If player is in the Riverside City (z = -140..-260) and on/near the City Pier (x >= 10),
+            // have the 3-Legged Mud Alien follow the player out of the water onto the City sidewalk toward the Pedestrians & Police!
+            if (key === 'mudAlien' && myRaft?.craft && myRaft.craft.position.z < -140 && myRaft.craft.position.z > -260 && myRaft.craft.position.x >= 10) {
+                const targetX = myRaft.craft.position.x + 1.8;
+                const targetZ = myRaft.craft.position.z - 2.2;
+                const curX = enemyMeshes.mudAlien.position.x || e.position.x;
+                const curZ = enemyMeshes.mudAlien.position.z || e.position.z;
+                const nextX = THREE.MathUtils.lerp(curX, targetX, 0.22);
+                const nextZ = THREE.MathUtils.lerp(curZ, targetZ, 0.22);
+                e.position.x = nextX;
+                e.position.z = nextZ;
+                enemyMeshes.mudAlien.position.set(nextX, 1.12, nextZ);
+            } else {
+                const onCityPier = key === 'mudAlien' && e.position.x > 12.5 && e.position.z < -140 && e.position.z > -260;
+                enemyMeshes[key].position.set(e.position.x, onCityPier ? 1.12 : e.position.y, e.position.z);
+            }
+
+            // White Guy & Mud Alien face the rear-most player they are hunting;
+            // Long Worm keeps world-aligned group rotation so its 26 segments trace exact straight-line Nokia-Snake vectors!
+            if ((key === 'whiteGuy' || key === 'mudAlien') && myRaft?.craft) {
+                let rearPos = myRaft.craft.position;
+                for (const vis of Object.values(otherPlayers)) {
+                    if (vis?.group?.visible && vis.group.position.z > rearPos.z) {
+                        rearPos = vis.group.position;
+                    }
+                }
+                enemyMeshes[key].lookAt(rearPos.x, enemyMeshes[key].position.y, rearPos.z);
             }
         } else {
             enemyMeshes[key].visible = false;
         }
     }
 });
-socket.on('enemyRespawn', (e) => { if(enemyMeshes[e.id]) enemyMeshes[e.id].visible = true; });
+socket.on('enemyRespawn', (e) => {
+    if (enemyMeshes[e.id]) {
+        enemyMeshes[e.id].visible = true;
+        if (e.id === 'longWorm' && enemyMeshes.longWorm.userData.pathHistory) {
+            enemyMeshes.longWorm.userData.pathHistory.length = 0;
+        }
+    }
+});
 
 socket.on('enemyHit', (d) => {
     const mesh = enemyMeshes[d.id];
@@ -266,7 +299,12 @@ socket.on('enemyHit', (d) => {
     if (mesh.position.y < 2) splash(mesh.position.x, mesh.position.z, mine ? 0.7 : 0.4);
     const squeaky = mine ? myStats.upgrades.includes('weapon') : d.damage > PLAYER.baseDamage;
     if (attacker) sfx.hit(squeaky, mine ? 1 : 0.35);
-    popAt(mesh.position, `-${d.damage}`, mine ? '#ffd84a' : d.by.startsWith('police') ? '#7fb2ff' : '#ffffff', 3);
+    if (d.by && d.by.startsWith('police')) {
+        firePoliceTracerAt(d.by, mesh.position);
+        popAt(mesh.position, `🚓 POLICE SHOT -${d.damage}`, '#60a5fa', 3.4);
+    } else {
+        popAt(mesh.position, `-${d.damage}`, mine ? '#ffd84a' : '#ffffff', 3);
+    }
 });
 
 socket.on('enemyKilled', (d) => {
@@ -286,19 +324,46 @@ socket.on('teamWiped', (d) => {
 
 socket.on('scoreboard', (sb) => hud.renderScoreboard(sb, socket.id));
 
-// --- NPCs ---
+// --- City Pedestrians & Armed Police Officers on the Riverside Promenade (z = -165..-235) ---
 let npcMeshes = {};
+let npcStateList = [];
+const policeTracers = [];
+
+function firePoliceTracerAt(policeId, targetPos) {
+    const pMesh = npcMeshes[policeId];
+    if (!pMesh || !pMesh.visible) return;
+    pMesh.lookAt(targetPos.x, pMesh.position.y, targetPos.z);
+    if (pMesh.userData?.muzzleFlash) {
+        pMesh.userData.muzzleFlash.visible = true;
+        setTimeout(() => {
+            if (pMesh.userData?.muzzleFlash) pMesh.userData.muzzleFlash.visible = false;
+        }, 90);
+    }
+    const start = new THREE.Vector3(pMesh.position.x, pMesh.position.y + 0.45, pMesh.position.z);
+    const end = new THREE.Vector3(targetPos.x, targetPos.y + 1.2, targetPos.z);
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.95 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    scene.add(line);
+    policeTracers.push({ line, expireAt: performance.now() + 120 });
+}
+
 socket.on('npcsUpdate', (data) => {
-    data.forEach(npc => {
+    npcStateList = data || [];
+    data.forEach((npc, idx) => {
         if (!npcMeshes[npc.id]) {
             const mesh = createAAANpcMesh(npc.type);
             scene.add(mesh);
             npcMeshes[npc.id] = mesh;
         }
-        if (npc.isDead) npcMeshes[npc.id].visible = false;
-        else {
+        if (npc.isDead) {
+            npcMeshes[npc.id].visible = false;
+        } else {
             npcMeshes[npc.id].visible = true;
-            npcMeshes[npc.id].position.set(npc.position.x, npc.position.y, npc.position.z);
+            // Place Pedestrians & Police squarely on the walkable City Pier deck (y = 1.95 so feet rest on y = 1.12, x = 16..28)
+            const pierX = 16.5 + (idx % 4) * 3.2;
+            const pierZ = npc.position.z;
+            npcMeshes[npc.id].position.set(pierX, 1.95, pierZ);
         }
     });
 });
@@ -606,9 +671,21 @@ function createRemote(p) {
 let onSolid = false;
 
 socket.on('currentPlayers', (players) => {
+    let botSlot = 0;
     Object.keys(players).forEach((id) => {
         const p = players[id];
-        if (id !== socket.id) { createRemote(p); return; }
+        if (id !== socket.id) {
+            // Staggered Race-Car Column: place co-op bots one ahead of the other downriver so you start at the back of the pack!
+            const staggeredZ = -11.5 - botSlot * 5.0;
+            const staggeredX = (botSlot % 2 === 0 ? -1 : 1) * 2.8;
+            botSlot++;
+            const staggeredP = {
+                ...p,
+                position: { x: staggeredX, y: WATER_SURFACE_Y, z: staggeredZ },
+            };
+            createRemote(staggeredP);
+            return;
+        }
         myStats.coins = p.coins;
         myStats.upgrades = p.upgrades;
         myColor = p.color;
@@ -617,15 +694,21 @@ socket.on('currentPlayers', (players) => {
         hud.setHealth(p.health, p.maxHealth);
 
         const yaw = yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 });
+        // Start in the rear staggered slot (z = -5.5) so the White Guy in the Wizard Hat spawns from the beginning and targets last place!
+        const startPos = { x: 1.8, y: WATER_SURFACE_Y, z: -5.5 };
         const craft = {
-            position: new THREE.Vector3(p.position.x, p.position.y, p.position.z),
+            position: new THREE.Vector3(startPos.x, startPos.y, startPos.z),
             velocity: new THREE.Vector3(0, 0, 0),
             angularVelocity: { x: 0, y: 0, z: 0 },
             yaw,
             quaternion: new THREE.Quaternion().setFromAxisAngle(yAxis, yaw),
         };
         myRaft = { vis: null, craft };
-        reRenderMyRaft(p);
+        reRenderMyRaft({ ...p, position: startPos });
+        socket.emit('playerMovement', {
+            position: startPos,
+            quaternion: { x: craft.quaternion.x, y: craft.quaternion.y, z: craft.quaternion.z, w: craft.quaternion.w },
+        });
     });
 });
 
@@ -773,12 +856,12 @@ socket.on('playerThrown', (data) => {
             mageGrab.elapsed = 0;
             mageGrab.duration = 1.35;
             mageGrab.force = data.force;
-            mageTelekinesisGroup.visible = true;
+            mageTelekinesisGroup.visible = false;
             myRaft.craft.velocity.set(0, 0, 0);
             splash(myRaft.craft.position.x, myRaft.craft.position.z, 0.9);
             sfx.wave?.();
-            hud.toast('🧙‍♂️ MAGE TELEKINESIS! GRABBED & SPINNING UP...', 1700);
-            popAt(myRaft.craft.position, '🧙‍♂️ TELEKINETIC GRAB!', '#45f3ff', 3.4);
+            hud.toast('🧙‍♂️ THE WHITE GUY GRABBED YOUR RAFT! SPINNING TO THROW YOU BEHIND...', 1800);
+            popAt(myRaft.craft.position, '🧙‍♂️ GRABBED & SPINNING!', '#f8fafc', 3.4);
         }
     }
 });
@@ -791,12 +874,19 @@ socket.on('gameWon', () => {
     feverDirector.onGameWon();
 });
 
-// --- Intro Sequence (short 1.2s swoop into High-Angle Co-Op Diorama View, immediately skippable on any movement input) ---
+// --- Short Race-Car Grid Camera Pan over the Staggered Lineup (skippable on any movement input) ---
 let inIntroSequence = true;
 let introTime = 0;
-const introDuration = 1200;
-const introCameraStartOffset = new THREE.Vector3(12, 26, 28);
+const introDuration = 1800;
+const introCameraStartOffset = new THREE.Vector3(9, 11, -18);
 const introCameraEndOffset = new THREE.Vector3(0, 18, 22);
+
+document.addEventListener('click', (e) => {
+    if (e.target?.closest?.('#start-btn')) {
+        inIntroSequence = true;
+        introTime = 0;
+    }
+});
 
 // --- Controls & Combat ---
 const keys = { w: false, a: false, s: false, d: false, space: false };
@@ -841,8 +931,17 @@ function triggerAttack() {
     feverDirector.onPlayerAttack();
     if (enemiesData) {
         for (const key in enemiesData) {
-            if (enemiesData[key].health > 0 && myRaft.vis.group.position.distanceTo(enemyMeshes[key].position) < PLAYER.attackRange) {
+            if (enemiesData[key].health > 0 && myRaft.vis.group.position.distanceTo(enemyMeshes[key].position) < PLAYER.attackRange + 1.2) {
                 socket.emit('playerHitEnemy', { enemyId: key });
+                // 2v1 Co-Op Bonus: if a teammate raft is nearby when you hit the White Guy, they strike right alongside you!
+                if (key === 'whiteGuy') {
+                    const mate = Object.values(otherPlayers).find((v) => v?.group?.visible && v.group.position.distanceTo(enemyMeshes.whiteGuy.position) < 14);
+                    if (mate) {
+                        mate.anim.swing = SWING_S;
+                        socket.emit('playerHitEnemy', { enemyId: 'whiteGuy' });
+                        popAt(enemyMeshes.whiteGuy.position, '🤝 2v1 CO-OP HIT!', '#4ade80', 3.8);
+                    }
+                }
             }
         }
     }
@@ -946,26 +1045,38 @@ function fixedStep() {
     const col = resolveWorldBoundsAndObstacles(craft, obstacles, { channelHalfWidth: playableHalfWidth });
     onSolid = col.onSolid;
 
-    // River Mage Telekinetic Grab -> Slow Accelerating Spin in Mid-Air -> Violent Hurl!
+    // On the City Promenade sidewalk (z = -145..-255, x >= 13.5), keep player height at y = 0.85 (<= PLAYER.safeHeight of 1.0)
+    // so the 3-Legged Mud Alien follows you out of the water onto the City sidewalk right next to the Pedestrians & Police!
+    const onCityPromenade = craft.position.z < -145 && craft.position.z > -255 && craft.position.x >= 13.5;
+    if (onCityPromenade && onSolid && craft.position.y > 0.88) {
+        craft.position.y = 0.85;
+    }
+
+    // White Guy in Wizard Hat Physical Grab -> Slow Accelerating Spin Overhead -> Throw You BEHIND (+Z Upriver)!
     if (live && mageGrab.active) {
         mageGrab.elapsed += FIXED_DT;
         const progress = Math.min(1, mageGrab.elapsed / mageGrab.duration);
-        const magePos = enemyMeshes.whiteGuy?.visible ? enemyMeshes.whiteGuy.position : null;
+        const wgMesh = enemyMeshes.whiteGuy;
+        const magePos = wgMesh?.visible ? wgMesh.position : null;
 
         if (mageGrab.elapsed < mageGrab.duration) {
-            // Phase 1: Lift raft into mid-air, hold in arcane orbit & spin from slow to furious!
+            // Phase 1: The White Guy hoists you & your inflatable raft above his white arms and spins you from slow to fast!
             onSolid = false;
-            const targetY = 2.85 + Math.sin(mageGrab.elapsed * 7.0) * 0.25;
+            const targetY = 2.85 + Math.sin(mageGrab.elapsed * 7.0) * 0.22;
             craft.position.y = THREE.MathUtils.lerp(craft.position.y, targetY, FIXED_DT * 6.5);
             if (magePos) {
                 const orbitAngle = mageGrab.elapsed * (1.8 + progress * 2.4);
-                const orbitX = magePos.x + Math.cos(orbitAngle) * 4.8;
-                const orbitZ = magePos.z + Math.sin(orbitAngle) * 4.8;
-                craft.position.x = THREE.MathUtils.lerp(craft.position.x, orbitX, FIXED_DT * 3.8);
-                craft.position.z = THREE.MathUtils.lerp(craft.position.z, orbitZ, FIXED_DT * 3.8);
+                const orbitX = magePos.x + Math.cos(orbitAngle) * 1.4;
+                const orbitZ = magePos.z + Math.sin(orbitAngle) * 1.4;
+                craft.position.x = THREE.MathUtils.lerp(craft.position.x, orbitX, FIXED_DT * 4.5);
+                craft.position.z = THREE.MathUtils.lerp(craft.position.z, orbitZ, FIXED_DT * 4.5);
+                if (wgMesh.userData?.wgLeftArm) {
+                    wgMesh.userData.wgLeftArm.rotation.x = -2.4;
+                    wgMesh.userData.wgRightArm.rotation.x = -2.4;
+                }
             }
             craft.velocity.set(0, 0, 0);
-            // Starts as a slow telekinetic spin and accelerates into a rapid whirl before release
+            // Starts as a slow spin and accelerates into a rapid whirl before throwing you behind!
             const spinSpeed = 2.4 + progress * progress * 15.0;
             craft.yaw += spinSpeed * FIXED_DT;
             craft.angularVelocity.y = spinSpeed;
@@ -973,38 +1084,46 @@ function fixedStep() {
                 myRaft.vis.tilt.rotation.z = Math.sin(mageGrab.elapsed * 10) * 0.28;
                 myRaft.vis.tilt.rotation.x = Math.cos(mageGrab.elapsed * 8) * 0.22;
             }
-            // Update 3D Arcane Beam & Rune Ring
-            mageTelekinesisGroup.visible = true;
-            mageRuneRingMesh.position.set(craft.position.x, craft.position.y - 0.15, craft.position.z);
-            mageRuneRingMesh.rotation.z = mageGrab.elapsed * 8.0;
-            if (magePos) {
-                const staffTip = new THREE.Vector3(magePos.x, magePos.y + 3.1, magePos.z);
-                const raftCenter = new THREE.Vector3(craft.position.x, craft.position.y + 0.4, craft.position.z);
-                const dist = staffTip.distanceTo(raftCenter);
-                mageBeamMesh.visible = true;
-                mageBeamMesh.position.copy(staffTip);
-                mageBeamMesh.lookAt(raftCenter);
-                mageBeamMesh.scale.set(1, 1, Math.max(0.5, dist));
-            } else {
-                mageBeamMesh.visible = false;
-            }
+            mageTelekinesisGroup.visible = false;
         } else {
-            // Phase 2: Release &Violently Hurl the Raft Across the River!
+            // Phase 2: Release & Throw You and Your Raft BEHIND (+Z Upriver, behind the pack)!
             mageGrab.active = false;
             mageGrab.cooldownUntil = performance.now() + 2600;
             mageTelekinesisGroup.visible = false;
-            const v = throwVelocity(mageGrab.force || { x: 400, y: 800, z: -400 });
-            const dirX = Math.abs(v.x) < 5 ? (craft.position.x >= 0 ? -12 : 12) : v.x * 1.5;
-            const dirZ = Math.abs(v.z) < 5 ? -14 : v.z * 1.5;
+            const v = throwVelocity(mageGrab.force || { x: 400, y: 800, z: 400 });
+            const dirX = Math.abs(v.x) < 5 ? (craft.position.x >= 0 ? -10 : 10) : v.x * 1.2;
+            // Positive Z = upriver (throws you BEHIND the other players!)
+            const dirZ = Math.max(18.5, Math.abs(v.z) * 1.6);
             craft.velocity.set(dirX, Math.max(14.5, v.y * 1.2), dirZ);
             splash(craft.position.x, craft.position.z, 1.5);
             sfx.splash(1.2);
             cameraShake = Math.max(cameraShake, 0.35);
-            popAt(craft.position, '☄️ HURLED BY THE MAGE!', '#c084fc', 3.8);
+            popAt(craft.position, '🧙‍♂️ THROWN BEHIND BY THE WHITE GUY!', '#f8fafc', 3.8);
         }
     }
 
     craft.quaternion.setFromAxisAngle(yAxis, craft.yaw);
+
+    // City Pedestrian + Police Gun Strategy vs. The 3-Legged Mud Alien:
+    // "if you stand close to a pedestrian and let him attack you, the aoe damage will hit the pedestrian, and some police men will go to him and take him out with guns"
+    if (live && enemiesData?.mudAlien?.health > 0 && enemyMeshes.mudAlien?.visible) {
+        const mudPos = enemyMeshes.mudAlien.position;
+        for (const npc of npcStateList) {
+            if (npc.type !== 'pedestrian' || npc.isDead) continue;
+            const pedMesh = npcMeshes[npc.id];
+            if (!pedMesh || !pedMesh.visible) continue;
+            const dMudToPed = Math.hypot(mudPos.x - pedMesh.position.x, mudPos.z - pedMesh.position.z);
+            const dPlayerToPed = Math.hypot(craft.position.x - pedMesh.position.x, craft.position.z - pedMesh.position.z);
+            if (dMudToPed < 8.5 || (dPlayerToPed < 8.5 && Math.hypot(mudPos.x - craft.position.x, mudPos.z - craft.position.z) < 9.5)) {
+                if (!pedMesh.userData.aoeTriggeredAt || performance.now() - pedMesh.userData.aoeTriggeredAt > 1200) {
+                    pedMesh.userData.aoeTriggeredAt = performance.now();
+                    socket.emit('enemyHitNPC', { npcId: npc.id, enemyId: 'mudAlien', damage: 5 });
+                    popAt(pedMesh.position, '😱 AHH! POLICE! HELP!', '#fca5a5', 3.2);
+                    hud.toast('🚓 MUD ALIEN AOE HIT A PEDESTRIAN — POLICE OPENING FIRE WITH GUNS!', 3400);
+                }
+            }
+        }
+    }
 
     // Sanctuary Platform & Harbor Haven passive hull repair (+3 HP/sec while resting on a platform or in the Harbor City)
     if (live && (onSolid || inCalmHarbor) && myHealth < myMaxHealth) {
@@ -1237,6 +1356,14 @@ function animate() {
     }
 
     animateAAAEnemies(enemyMeshes, enemiesData, t);
+    for (let i = policeTracers.length - 1; i >= 0; i--) {
+        if (performance.now() >= policeTracers[i].expireAt) {
+            scene.remove(policeTracers[i].line);
+            policeTracers[i].line.geometry.dispose();
+            policeTracers[i].line.material.dispose();
+            policeTracers.splice(i, 1);
+        }
+    }
     for (const key in hitPulse) {
         hitPulse[key] = Math.max(0, hitPulse[key] - delta * 5);
         enemyMeshes[key].scale.setScalar(1 + 0.35 * hitPulse[key]);

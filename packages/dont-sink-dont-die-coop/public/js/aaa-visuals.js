@@ -363,30 +363,19 @@ export function createAAACanyonAndCity(scene, riverWidth, riverLength) {
         }
     }
 
-    // ─── Act I Biome Architecture: Redwood Waterwheel Mills & Flume Bridges (z = -35..-125 & -290..-460) ───
+    // ─── Act I Biome Architecture: Redwood Waterwheel Mills on Outer Banks (z = -55..-445) ───
     const act1Group = new THREE.Group();
     for (const wz of [-55, -110, -310, -390, -445]) {
         const side = wz % 2 === 0 ? 1 : -1;
         const millHouse = new THREE.Mesh(new THREE.BoxGeometry(9, 7, 11), pierWoodMat);
-        millHouse.position.set(side * (halfW + 5), 3.8, wz);
+        millHouse.position.set(side * (halfW + 7), 3.8, wz);
         const millRoof = new THREE.Mesh(new THREE.ConeGeometry(7.5, 4, 4), roofTileMat);
         millRoof.rotation.y = Math.PI / 4;
-        millRoof.position.set(side * (halfW + 5), 9.2, wz);
+        millRoof.position.set(side * (halfW + 7), 9.2, wz);
         const wheel = new THREE.Mesh(new THREE.TorusGeometry(3.8, 0.45, 8, 16), pierWoodMat);
         wheel.rotation.y = Math.PI / 2;
-        wheel.position.set(side * (halfW - 0.2), 3.6, wz);
+        wheel.position.set(side * (halfW + 1.2), 3.6, wz);
         act1Group.add(millHouse, millRoof, wheel);
-    }
-    // Overhead wooden log-flume aqueduct bridges spanning the wide river
-    for (const bz of [-85, -350]) {
-        const bridgeSpan = new THREE.Mesh(new THREE.BoxGeometry(riverWidth + 16, 1.4, 3.6), pierWoodMat);
-        bridgeSpan.position.set(0, 13.5, bz);
-        act1Group.add(bridgeSpan);
-        for (const sx of [-halfW * 0.55, halfW * 0.55]) {
-            const trestle = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.1, 14, 8), pierWoodMat);
-            trestle.position.set(sx, 6.8, bz);
-            act1Group.add(trestle);
-        }
     }
     bankGroup.add(act1Group);
 
@@ -441,21 +430,40 @@ export function createAAACanyonAndCity(scene, riverWidth, riverLength) {
     return { bankGroup, cityGroup, act1Group, act3Group, act4Group, emeraldWardMat };
 }
 
-// ─── 4. Sculpted Obstacles: Safe Sanctuary Docks & Multi-Tier Pine/Willow Trees
+// ─── 4. Sculpted Obstacles: Safe Wood Planks, Natural Vegetation Borders (`Costado`) & Canyon Trees
 export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodMaterial, vegetationMaterial) {
+    if (isPlank === 'vegetation') {
+        // Natural Vegetation Border on the `costado` (flat-topped mossy grass ledge you can jump onto to be safe from the White Guy!)
+        const vegGroup = new THREE.Group();
+        const turfMat = new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.85, flatShading: true });
+        const mossMat = new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.8, flatShading: true });
+        const soilMat = new THREE.MeshStandardMaterial({ color: 0x4e342e, roughness: 0.92, flatShading: true });
+
+        const soilBase = new THREE.Mesh(new THREE.BoxGeometry(width * 0.96, height * 1.6, depth * 0.96), soilMat);
+        soilBase.position.y = -height * 0.55;
+        vegGroup.add(soilBase);
+
+        const grassTop = new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.85, depth), turfMat);
+        grassTop.castShadow = true;
+        grassTop.receiveShadow = true;
+        vegGroup.add(grassTop);
+
+        // Natural reed & bush tufts along the back edge so the flat landing deck stays wide open for jumping
+        for (let i = 0; i < 4; i++) {
+            const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.65 + (i % 2) * 0.2, 0), mossMat);
+            const bz = -depth * 0.35 + (i / 3) * (depth * 0.7);
+            bush.position.set(0, height * 0.55, bz);
+            bush.scale.set(1.2, 0.65, 1.1);
+            vegGroup.add(bush);
+        }
+        return vegGroup;
+    }
+
     if (isPlank) {
         const group = new THREE.Group();
         const plankCount = 5;
         const pDepth = depth / plankCount;
-        const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.4 });
         const beaconGoldMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
-        const sanctuaryRingMat = new THREE.MeshBasicMaterial({
-            color: 0x34d399,
-            transparent: true,
-            opacity: 0.42,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-        });
 
         for (let i = 0; i < plankCount; i++) {
             const board = new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.8, pDepth * 0.9), woodMaterial);
@@ -475,7 +483,6 @@ export function createAAAObstacleMesh(isPlank, width, height, depth, size, woodM
                 group.add(bollardCap);
             }
         }
-        // Subtle corner lantern glow only (no giant water-surface ring around docks so players never confuse docks with water whirlpools)
         return group;
     }
 
@@ -576,62 +583,99 @@ export function createAAAFinishArch(riverWidth, finishZ) {
     return group;
 }
 
-// ─── 6. Articulated Log-Craft Raft & Expedition Crew Character ──────────
+// ─── 6. Small 1-Person Bright Colored Plastic Inflatable Raft & Crew ─────
 export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, paddleMaterial, hammerMaterial, motorMaterial, propMaterial) {
     const group = new THREE.Group();
     const tilt = new THREE.Group();
     group.add(tilt);
 
-    // 6A. Multi-Log Lashed Raft Hull
+    // 6A. Glossy Puffy 1-Person Plastic Inflatable Dinghy (Red, Blue, Green, Yellow!)
     const raft = new THREE.Group();
-    const logCount = 6;
-    const logRadius = (raftSize.w / logCount) * 0.54;
-    const ropeMat = new THREE.MeshStandardMaterial({ color: 0xc2a675, roughness: 0.9 });
+    const baseCol = new THREE.Color(color);
+    const floorCol = baseCol.clone().multiplyScalar(0.68);
+    const highlightCol = baseCol.clone().lerp(new THREE.Color(0xffffff), 0.22);
+
+    const vinylTubeMat = new THREE.MeshStandardMaterial({
+        color: highlightCol,
+        emissive: baseCol,
+        emissiveIntensity: 0.14,
+        roughness: 0.22,
+        metalness: 0.06,
+    });
+    const vinylFloorMat = new THREE.MeshStandardMaterial({
+        color: floorCol,
+        roughness: 0.35,
+        metalness: 0.04,
+    });
+    const patchMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.3 });
+    const seamMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
     const ironMat = new THREE.MeshStandardMaterial({ color: 0x3a434e, metalness: 0.75, roughness: 0.32 });
 
-    for (let i = 0; i < logCount; i++) {
-        const lx = (i - (logCount - 1) / 2) * (raftSize.w / logCount);
-        const lenJitter = (i % 2 === 0 ? 0.08 : -0.06);
-        const log = new THREE.Mesh(new THREE.CylinderGeometry(logRadius, logRadius, raftSize.d + lenJitter, 10), woodMaterial);
-        log.rotation.x = Math.PI / 2;
-        log.position.set(lx, 0, 0);
-        log.castShadow = true;
-        log.receiveShadow = true;
-        raft.add(log);
+    const tubeR = 0.36;
+    const halfW = raftSize.w * 0.48;
+    const halfD = raftSize.d * 0.44;
+
+    // Left & Right inflatable side pontoon tubes
+    for (const side of [-1, 1]) {
+        const sideTube = new THREE.Mesh(new THREE.CylinderGeometry(tubeR, tubeR, raftSize.d * 0.88, 14), vinylTubeMat);
+        sideTube.rotation.x = Math.PI / 2;
+        sideTube.position.set(side * halfW, 0.08, 0);
+        sideTube.castShadow = true;
+        sideTube.receiveShadow = true;
+        raft.add(sideTube);
+
+        // Dark rubber seam rings & yellow safety rope patches on the inflatable tubes
+        for (const sz of [-halfD * 0.55, 0, halfD * 0.55]) {
+            const seam = new THREE.Mesh(new THREE.TorusGeometry(tubeR + 0.012, 0.022, 8, 16), seamMat);
+            seam.position.set(side * halfW, 0.08, sz);
+            raft.add(seam);
+        }
+        const grabPatch = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.75), patchMat);
+        grabPatch.position.set(side * (halfW + tubeR * 0.88), 0.14, 0);
+        raft.add(grabPatch);
     }
 
-    // Crossbeams & Rope Lashings
-    for (const bz of [-raftSize.d * 0.34, raftSize.d * 0.34]) {
-        const beam = new THREE.Mesh(new THREE.BoxGeometry(raftSize.w * 1.04, 0.14, 0.22), woodMaterial);
-        beam.position.set(0, logRadius * 0.75, bz);
-        beam.castShadow = true;
-        const rope = new THREE.Mesh(new THREE.BoxGeometry(raftSize.w * 1.06, 0.18, 0.08), ropeMat);
-        rope.position.set(0, logRadius * 0.76, bz);
-        raft.add(beam, rope);
+    // Front (Bow) & Back (Stern) puffy inflatable cross-tubes + rounded corner joints
+    for (const end of [-1, 1]) {
+        const crossTube = new THREE.Mesh(new THREE.CylinderGeometry(tubeR * 0.96, tubeR * 0.96, raftSize.w * 0.96, 14), vinylTubeMat);
+        crossTube.rotation.z = Math.PI / 2;
+        crossTube.position.set(0, 0.1, end * halfD);
+        crossTube.castShadow = true;
+        raft.add(crossTube);
+
+        for (const side of [-1, 1]) {
+            const cornerSphere = new THREE.Mesh(new THREE.SphereGeometry(tubeR * 1.02, 12, 12), vinylTubeMat);
+            cornerSphere.position.set(side * halfW, 0.09, end * halfD);
+            cornerSphere.castShadow = true;
+            raft.add(cornerSphere);
+        }
     }
 
-    // Warm Bow Expedition Lantern
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.85, 6), woodMaterial);
-    post.position.set(-raftSize.w * 0.38, 0.45, -raftSize.d * 0.42);
-    const lanternGlass = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffd479 })
-    );
-    lanternGlass.position.set(-raftSize.w * 0.38, 0.92, -raftSize.d * 0.42);
-    raft.add(post, lanternGlass);
+    // Ribbed inflatable inner floor cushion
+    const floorMatMesh = new THREE.Mesh(new THREE.BoxGeometry(raftSize.w * 0.86, 0.16, raftSize.d * 0.84), vinylFloorMat);
+    floorMatMesh.position.set(0, -0.04, 0);
+    floorMatMesh.receiveShadow = true;
+    raft.add(floorMatMesh);
 
-    // Optional Armor Upgrade: Riveted Steel Bulwark Plates & Bow Ram
+    for (let r = -2; r <= 2; r++) {
+        const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, raftSize.w * 0.78, 8), vinylFloorMat);
+        rib.rotation.z = Math.PI / 2;
+        rib.position.set(0, 0.04, r * 0.42);
+        raft.add(rib);
+    }
+
+    // Optional Armor Upgrade: Reinforced Bumper Guards & Bow Shield
     if (upgrades.includes('armor')) {
         for (const side of [-1, 1]) {
             const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, raftSize.d * 0.88), ironMat);
-            plate.position.set(side * (raftSize.w * 0.53), 0.18, 0);
+            plate.position.set(side * (raftSize.w * 0.66), 0.18, 0);
             plate.castShadow = true;
             raft.add(plate);
         }
         const bowShield = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.9, 4), ironMat);
         bowShield.rotation.x = -Math.PI / 2;
         bowShield.rotation.z = Math.PI / 4;
-        bowShield.position.set(0, 0.1, -raftSize.d * 0.56);
+        bowShield.position.set(0, 0.14, -raftSize.d * 0.62);
         raft.add(bowShield);
     }
 
@@ -639,7 +683,7 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     let prop = null;
     if (upgrades.includes('motor')) {
         const motor = new THREE.Group();
-        motor.position.set(0, raftSize.h / 2 + 0.22, raftSize.d / 2 + 0.18);
+        motor.position.set(0, raftSize.h / 2 + 0.22, raftSize.d / 2 + 0.26);
 
         const cowl = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.62, 0.72), motorMaterial);
         cowl.position.y = 0.15;
@@ -663,10 +707,10 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
         raft.add(motor);
     }
 
-    // 6B. Articulated Expedition Crew Member
+    // 6B. Articulated Co-Op Survivor Matching the Inflatable Color (Red, Blue, Green, Yellow)
     const skinMat = new THREE.MeshStandardMaterial({ color: 0xf4c29f, roughness: 0.65 });
-    const shirtMat = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
-    const vestMat = new THREE.MeshStandardMaterial({ color: 0xe66817, roughness: 0.5 });
+    const shirtMat = new THREE.MeshStandardMaterial({ color: highlightCol, emissive: baseCol, emissiveIntensity: 0.12, roughness: 0.45 });
+    const vestMat = new THREE.MeshStandardMaterial({ color: baseCol, roughness: 0.4 });
     const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.75 });
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.4 });
 
@@ -679,16 +723,16 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     const rightLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.38, 4, 8), pantsMat);
     rightLeg.position.set(0.22, 0.32, -0.05);
 
-    // Torso + Life Jacket
+    // Torso + Colored Life Jacket
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.82, 0.44), shirtMat);
     torso.position.y = 0.88;
     torso.castShadow = true;
     const lifeVest = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.62, 0.5), vestMat);
     lifeVest.position.y = 0.92;
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.1, 0.52), darkMat);
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.1, 0.52), patchMat);
     belt.position.y = 0.82;
 
-    // Head + Bandana + Goggles
+    // Head + Colored Cap/Bandana
     const headGroup = new THREE.Group();
     headGroup.position.y = 1.56;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), skinMat);
@@ -711,7 +755,7 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
 
     character.add(leftLeg, rightLeg, torso, lifeVest, belt, headGroup, leftArm, rightArm);
 
-    // 6C. Sculpted Oar / Squeaky War-Mallet Weapon
+    // 6C. Plastic Oar / Squeaky Mallet Weapon
     const hammer = upgrades.includes('weapon');
     const paddle = new THREE.Group();
     if (hammer) {
@@ -729,7 +773,7 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     } else {
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.5, 8), paddleMaterial);
         shaft.rotation.x = Math.PI / 2;
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.85), paddleMaterial);
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.85), patchMat);
         blade.position.z = -1.25;
         const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.24, 6), paddleMaterial);
         grip.rotation.z = Math.PI / 2;
@@ -758,194 +802,293 @@ export function createAAARaftAndCrew(color, upgrades, raftSize, woodMaterial, pa
     };
 }
 
-// ─── 7. AAA Boss-Grade Enemy Meshes & Procedural Animations ─────────────
+// ─── 7. The 3 Original Dream Entities (White Guy in Wizard Hat, 3-Legged Headless Mud Alien, Nokia-Vector Long Worm) ───
 export function createAAAEnemyMeshes(woodMaterial) {
-    // 7A. The River Wizard (whiteGuy): Arcane Skiff + Hooded Sorcerer + Glowing Orb Staff
-    const wizardGroup = new THREE.Group();
-    const skiff = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.15, 0.85, 3.4, 8),
-        woodMaterial
-    );
-    skiff.rotation.x = Math.PI / 2;
-    skiff.scale.set(1.0, 1.0, 0.32);
-    skiff.castShadow = true;
+    // 7A. The Annoying White Entity with a Wizard Hat (`whiteGuy`):
+    // "a white guy with wizard hat but its not really a wizard, it's just some annoying entity that wants to grab you and your ship and throw you behind"
+    const whiteGuyGroup = new THREE.Group();
+    const starkWhiteMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0xe2e8f0,
+        emissiveIntensity: 0.28,
+        roughness: 0.35,
+    });
+    const hatMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.55 });
+    const hatBandMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8 });
+    const darkEyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
 
-    const robeMat = new THREE.MeshStandardMaterial({ color: 0xe8eef7, roughness: 0.55 });
-    const cloakMat = new THREE.MeshStandardMaterial({ color: 0x1e2b58, roughness: 0.45, metalness: 0.15 });
-    const orbMat = new THREE.MeshBasicMaterial({ color: 0x45f3ff });
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x7df9ff });
+    // Lanky stark-white humanoid torso & legs wading/swimming directly in the river (no boat, no magic staff!)
+    const wgTorso = new THREE.Mesh(new THREE.CapsuleGeometry(0.48, 1.35, 6, 12), starkWhiteMat);
+    wgTorso.position.y = 1.35;
+    wgTorso.castShadow = true;
 
-    const robe = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.35, 10), robeMat);
-    robe.position.y = 1.35;
-    robe.castShadow = true;
+    const wgLeftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.85, 4, 8), starkWhiteMat);
+    wgLeftLeg.position.set(-0.26, 0.35, 0);
+    const wgRightLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.85, 4, 8), starkWhiteMat);
+    wgRightLeg.position.set(0.26, 0.35, 0);
 
-    const shoulders = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.85, 0.65, 10), cloakMat);
-    shoulders.position.y = 2.05;
+    // Long lanky white grabbing arms reaching out toward your inflatable raft
+    const wgLeftArm = new THREE.Group();
+    wgLeftArm.position.set(-0.62, 1.85, -0.1);
+    const lArmMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 1.15, 4, 8), starkWhiteMat);
+    lArmMesh.rotation.x = Math.PI / 2.2;
+    lArmMesh.position.set(0, -0.1, -0.55);
+    const lHandMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), starkWhiteMat);
+    lHandMesh.position.set(0, -0.15, -1.15);
+    wgLeftArm.add(lArmMesh, lHandMesh);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 10), new THREE.MeshStandardMaterial({ color: 0x111625 }));
-    head.position.y = 2.55;
-    for (const sx of [-0.14, 0.14]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), eyeMat);
-        eye.position.set(sx, 2.58, -0.36);
-        wizardGroup.add(eye);
+    const wgRightArm = new THREE.Group();
+    wgRightArm.position.set(0.62, 1.85, -0.1);
+    const rArmMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 1.15, 4, 8), starkWhiteMat);
+    rArmMesh.rotation.x = Math.PI / 2.2;
+    rArmMesh.position.set(0, -0.1, -0.55);
+    const rHandMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), starkWhiteMat);
+    rHandMesh.position.set(0, -0.15, -1.15);
+    wgRightArm.add(rArmMesh, rHandMesh);
+
+    // Uncanny blank white head + hollow dark eyes + annoying smirk
+    const wgHead = new THREE.Mesh(new THREE.SphereGeometry(0.46, 12, 12), starkWhiteMat);
+    wgHead.position.y = 2.48;
+    wgHead.castShadow = true;
+    for (const sx of [-0.15, 0.15]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), darkEyeMat);
+        eye.position.set(sx, 2.52, -0.41);
+        whiteGuyGroup.add(eye);
     }
+    const wgMouth = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.06), darkEyeMat);
+    wgMouth.position.set(0, 2.34, -0.42);
+    wgMouth.rotation.z = 0.12;
 
-    const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.08, 12), cloakMat);
+    // Crooked Wizard Hat ("a white guy with wizard hat but its not really a wizard")
+    const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 0.08, 14), hatMat);
     hatBrim.position.y = 2.86;
-    const hatCone = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.55, 10), cloakMat);
-    hatCone.position.set(0, 3.55, 0.08);
-    hatCone.rotation.x = -0.18;
+    hatBrim.rotation.z = 0.08;
+    const hatBand = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.56, 0.14, 12), hatBandMat);
+    hatBand.position.y = 2.94;
+    const hatCone = new THREE.Mesh(new THREE.ConeGeometry(0.56, 1.65, 12), hatMat);
+    hatCone.position.set(0.06, 3.68, 0.05);
+    hatCone.rotation.z = -0.14;
+    hatCone.rotation.x = -0.12;
 
-    const staffGroup = new THREE.Group();
-    staffGroup.position.set(0.75, 1.6, -0.35);
-    const staffShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.9, 8), woodMaterial);
-    const staffOrb = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 1), orbMat);
-    staffOrb.position.y = 1.55;
-    const staffRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.04, 8, 16), orbMat);
-    staffRing.position.y = 1.55;
-    staffGroup.add(staffShaft, staffOrb, staffRing);
+    whiteGuyGroup.add(wgTorso, wgLeftLeg, wgRightLeg, wgLeftArm, wgRightArm, wgHead, wgMouth, hatBrim, hatBand, hatCone);
+    whiteGuyGroup.userData = { wgLeftArm, wgRightArm, wgLeftLeg, wgRightLeg, wgTorso };
 
-    wizardGroup.add(skiff, robe, shoulders, head, hatBrim, hatCone, staffGroup);
-    wizardGroup.userData = { staffGroup, staffRing, staffOrb };
-
-    // 7B. The Swamp Behemoth (mudAlien): Multi-Limbed Sludge Golem + Orbiting Debris + Toxic Aura Ring
+    // 7B. The 3-Legged Headless Mud Alien (`mudAlien`):
+    // "brown green... like mud color, doesn't have a form, maybe is three legged no head, like simple, but weird, with a small mouth"
     const mudGroup = new THREE.Group();
-    const sludgeMat = new THREE.MeshStandardMaterial({ color: 0x4b331d, roughness: 0.92, metalness: 0.05, flatShading: true });
-    const mossCrustMat = new THREE.MeshStandardMaterial({ color: 0x2f4f28, roughness: 0.85, flatShading: true });
-    const toxicMat = new THREE.MeshBasicMaterial({ color: 0xa8ff3e });
+    const mudBrownGreenMat = new THREE.MeshStandardMaterial({
+        color: 0x5c5335,
+        roughness: 0.92,
+        metalness: 0.02,
+        flatShading: true,
+    });
+    const mudOliveMat = new THREE.MeshStandardMaterial({
+        color: 0x495632,
+        roughness: 0.88,
+        flatShading: true,
+    });
+    const smallMouthMat = new THREE.MeshBasicMaterial({ color: 0x14110b });
 
-    const coreBody = new THREE.Mesh(new THREE.DodecahedronGeometry(2.05, 1), sludgeMat);
-    coreBody.position.y = 1.5;
-    coreBody.castShadow = true;
+    // Formless, headless lumpy mud-colored torso blob
+    const coreBody = new THREE.Group();
+    coreBody.position.y = 2.05;
+    const blobMain = new THREE.Mesh(new THREE.DodecahedronGeometry(1.75, 1), mudBrownGreenMat);
+    blobMain.scale.set(1.15, 0.92, 1.05);
+    blobMain.castShadow = true;
+    const blobLump1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.25, 1), mudOliveMat);
+    blobLump1.position.set(-0.55, 0.35, 0.25);
+    const blobLump2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.15, 1), mudBrownGreenMat);
+    blobLump2.position.set(0.6, 0.2, -0.2);
 
-    const hump = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45, 1), mossCrustMat);
-    hump.position.set(0, 2.75, 0.35);
+    // Small dark mouth right in the front-center of the headless body (no head, no eyes!)
+    const smallMouthRim = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.08, 8, 14), mudOliveMat);
+    smallMouthRim.position.set(0, 0.05, -1.72);
+    const smallMouthHole = new THREE.Mesh(new THREE.CircleGeometry(0.26, 12), smallMouthMat);
+    smallMouthHole.position.set(0, 0.05, -1.76);
+    smallMouthHole.rotation.y = Math.PI;
+    coreBody.add(blobMain, blobLump1, blobLump2, smallMouthRim, smallMouthHole);
 
-    const leftArm = new THREE.Group();
-    leftArm.position.set(-2.0, 2.1, -0.2);
-    const lFist = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), sludgeMat);
-    lFist.position.set(-0.5, -0.8, -0.6);
-    leftArm.add(lFist);
-
-    const rightArm = new THREE.Group();
-    rightArm.position.set(2.0, 2.1, -0.2);
-    const rFist = new THREE.Mesh(new THREE.DodecahedronGeometry(1.05, 1), sludgeMat);
-    rFist.position.set(0.5, -0.8, -0.6);
-    rightArm.add(rFist);
-
-    // Glowing toxic eyes & maw
-    for (const sx of [-0.55, 0.55]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), toxicMat);
-        eye.position.set(sx, 2.35, -1.75);
-        mudGroup.add(eye);
+    // THREE tripod legs ("maybe is three legged no head, like simple, but weird")
+    const tripodLegs = [];
+    const legAngles = [-Math.PI * 0.38, Math.PI * 0.38, Math.PI]; // Front-left, Front-right, Rear-center tripod!
+    for (let i = 0; i < 3; i++) {
+        const legPivot = new THREE.Group();
+        const a = legAngles[i];
+        legPivot.position.set(Math.sin(a) * 1.15, 1.45, -Math.cos(a) * 1.05);
+        const upperLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.25, 5, 8), i === 2 ? mudOliveMat : mudBrownGreenMat);
+        upperLeg.position.set(Math.sin(a) * 0.25, -0.65, -Math.cos(a) * 0.25);
+        upperLeg.rotation.z = -Math.sin(a) * 0.22;
+        upperLeg.rotation.x = Math.cos(a) * 0.18;
+        upperLeg.castShadow = true;
+        const footPad = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), mudOliveMat);
+        footPad.position.set(Math.sin(a) * 0.42, -1.35, -Math.cos(a) * 0.42);
+        footPad.scale.set(1.2, 0.55, 1.2);
+        legPivot.add(upperLeg, footPad);
+        mudGroup.add(legPivot);
+        tripodLegs.push(legPivot);
     }
 
-    // Orbiting mud boulders + AoE radius indicator ring
-    const orbitRing = new THREE.Group();
-    orbitRing.position.y = 1.2;
-    for (let i = 0; i < 6; i++) {
-        const shard = new THREE.Mesh(new THREE.DodecahedronGeometry(0.38, 0), sludgeMat);
-        const a = (i * Math.PI * 2) / 6;
-        shard.position.set(Math.cos(a) * 3.1, (i % 2) * 0.4, Math.sin(a) * 3.1);
-        orbitRing.add(shard);
-    }
+    // Subtle muddy AoE slam ring on the ground/water (shows the radius that hits City pedestrians to trigger Police!)
     const auraDisc = new THREE.Mesh(
-        new THREE.RingGeometry(4.4, 4.9, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0x76ff33, transparent: true, opacity: 0.28, depthWrite: false })
+        new THREE.RingGeometry(4.4, 4.95, 32).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0xa3b16b, transparent: true, opacity: 0.35, depthWrite: false })
     );
-    auraDisc.position.y = 0.08;
+    auraDisc.position.y = 0.12;
 
-    mudGroup.add(coreBody, hump, leftArm, rightArm, orbitRing, auraDisc);
-    mudGroup.userData = { leftArm, rightArm, orbitRing, coreBody };
+    mudGroup.add(coreBody, auraDisc);
+    mudGroup.userData = { tripodLegs, coreBody, auraDisc };
 
-    // 7C. The Abyssal Leviathan (longWorm): 12-Segment Articulated Sea Serpent with Fanged Maw & Dorsal Spines
+    // 7C. The Long Monstrous Nokia-Vector Worm (`longWorm`):
+    // "similar to the second alien too, like a just long like snake, but not snake moving, more like it only has one vector.
+    //  And its really long, but only can turn in straight angles... more like that worm game, that one from the phones from long ago,
+    //  that type of movement, that you know he is moving but its hard to tell because he is so long, like the only way to see he is moving is to look at his head"
     const wormGroup = new THREE.Group();
-    const carapaceMat = new THREE.MeshStandardMaterial({ color: 0x5b126b, roughness: 0.4, metalness: 0.35, flatShading: true });
-    const bellyMat = new THREE.MeshStandardMaterial({ color: 0xb8338a, roughness: 0.55 });
-    const spineMat = new THREE.MeshBasicMaterial({ color: 0xff3df0 });
-    const fangMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+    const wormMudMat = new THREE.MeshStandardMaterial({ color: 0x4f4a32, roughness: 0.88, metalness: 0.04, flatShading: true });
+    const wormRingMat = new THREE.MeshStandardMaterial({ color: 0x3e472b, roughness: 0.9, flatShading: true });
+    const headEyeMat = new THREE.MeshBasicMaterial({ color: 0xe2e8f0 });
 
     const segments = [];
-    const segCount = 12;
+    const segCount = 26; // Super long (~23m!) uniform Nokia-worm body
     for (let s = 0; s < segCount; s++) {
         const seg = new THREE.Group();
-        const t = s / (segCount - 1);
-        const radius = s === 0 ? 1.25 : 1.2 * (1 - t * 0.68);
-        // Position along Z from -5 (head) to +5 (tail) so lookAt aligns the head toward target
-        seg.position.z = (s - (segCount - 1) / 2) * 0.95;
+        // Uniform thickness along the body so it's hard to tell it's moving unless you look at the head!
+        const radius = s === 0 ? 1.18 : s >= segCount - 2 ? 0.95 : 1.12;
+        seg.position.set(0, 0.35, s * 0.88);
 
-        const body = new THREE.Mesh(new THREE.SphereGeometry(radius, 10, 8), carapaceMat);
-        body.scale.set(1.0, 0.88, 1.25);
+        const body = new THREE.Mesh(
+            new THREE.CylinderGeometry(radius, radius, 0.92, 10).rotateX(Math.PI / 2),
+            s % 2 === 0 ? wormMudMat : wormRingMat
+        );
         body.castShadow = true;
         seg.add(body);
 
-        // Dorsal bioluminescent fin spine
-        const spine = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.28, radius * 1.1, 5), s % 2 === 0 ? spineMat : bellyMat);
-        spine.position.y = radius * 0.95;
-        spine.rotation.x = 0.35;
-        seg.add(spine);
-
-        // Fanged Leviathan Head on Segment 0
+        // Distinct Head on Segment 0 so looking at its head tells you where it's striking
         if (s === 0) {
-            for (const sx of [-0.5, 0.5]) {
-                const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffee38 }));
-                eye.position.set(sx, 0.45, 0.85);
+            const headCap = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.02, 10, 10), wormMudMat);
+            headCap.position.z = -0.35;
+            seg.add(headCap);
+
+            const mouthHole = new THREE.Mesh(new THREE.CircleGeometry(0.48, 10), smallMouthMat);
+            mouthHole.position.set(0, 0, -1.42);
+            mouthHole.rotation.y = Math.PI;
+            seg.add(mouthHole);
+
+            for (const sx of [-0.48, 0.48]) {
+                const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), headEyeMat);
+                eye.position.set(sx, 0.48, -1.05);
                 seg.add(eye);
-            }
-            for (let f = 0; f < 6; f++) {
-                const angle = (f / 6) * Math.PI * 2;
-                const fang = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.55, 5), fangMat);
-                fang.rotation.x = Math.PI / 2;
-                fang.position.set(Math.cos(angle) * 0.65, Math.sin(angle) * 0.55, 1.25);
-                seg.add(fang);
             }
         }
         wormGroup.add(seg);
         segments.push(seg);
     }
-    wormGroup.userData = { segments };
+    wormGroup.userData = { segments, pathHistory: [] };
 
     return {
-        whiteGuy: wizardGroup,
+        whiteGuy: whiteGuyGroup,
         mudAlien: mudGroup,
         longWorm: wormGroup,
     };
 }
 
 export function animateAAAEnemies(enemyMeshes, enemiesData, t) {
-    // Wizard staff & orb pulse
+    // 1. White Guy in Wizard Hat: frantic wading stride & grabbing white arms lunging forward
     const wiz = enemyMeshes.whiteGuy;
-    if (wiz?.visible && wiz.userData.staffRing) {
-        wiz.userData.staffRing.rotation.x = t * 2.4;
-        wiz.userData.staffRing.rotation.y = t * 1.7;
-        wiz.userData.staffGroup.position.y = 1.6 + Math.sin(t * 3.5) * 0.18;
+    if (wiz?.visible && wiz.userData.wgLeftArm) {
+        const reach = Math.sin(t * 7.5) * 0.32;
+        wiz.userData.wgLeftArm.rotation.x = reach;
+        wiz.userData.wgRightArm.rotation.x = -reach;
+        wiz.userData.wgLeftArm.rotation.y = Math.cos(t * 5.0) * 0.18;
+        wiz.userData.wgRightArm.rotation.y = -Math.cos(t * 5.0) * 0.18;
+        wiz.userData.wgLeftLeg.rotation.x = -reach * 1.2;
+        wiz.userData.wgRightLeg.rotation.x = reach * 1.2;
+        wiz.userData.wgTorso.position.y = 1.35 + Math.abs(Math.sin(t * 7.5)) * 0.12;
     }
 
-    // Mud Behemoth arm smash & orbiting boulder vortex
+    // 2. 3-Legged Headless Mud Alien: heavy tripod gait + pulsing mud AoE ring
     const mud = enemyMeshes.mudAlien;
-    if (mud?.visible && mud.userData.orbitRing) {
-        mud.userData.orbitRing.rotation.y = t * 1.6;
-        mud.userData.leftArm.rotation.x = Math.sin(t * 2.8) * 0.45;
-        mud.userData.rightArm.rotation.x = -Math.sin(t * 2.8) * 0.45;
-        mud.userData.coreBody.rotation.y = Math.sin(t * 0.9) * 0.2;
+    if (mud?.visible && mud.userData.tripodLegs) {
+        const legs = mud.userData.tripodLegs;
+        for (let i = 0; i < legs.length; i++) {
+            const phase = t * 4.5 + (i * Math.PI * 2) / 3;
+            legs[i].rotation.x = Math.sin(phase) * 0.38;
+            legs[i].rotation.z = Math.cos(phase) * 0.18;
+        }
+        mud.userData.coreBody.position.y = 2.05 + Math.sin(t * 4.5) * 0.14;
+        mud.userData.coreBody.rotation.z = Math.cos(t * 2.2) * 0.08;
+        if (mud.userData.auraDisc) {
+            const pulse = 1.0 + Math.sin(t * 5.0) * 0.06;
+            mud.userData.auraDisc.scale.setScalar(pulse);
+        }
     }
 
-    // Leviathan sinusoidal slither (faster when charging!)
+    // 3. Long Monstrous Worm: True Nokia-Phone Snake Polyline Vector Trail!
+    // Every segment slides strictly along the straight-line vector path & sharp-angle turn corners behind the head
+    // (ZERO sinusoidal wiggle, so the body stays straight along its vector and you look at the head to see it moving!)
     const worm = enemyMeshes.longWorm;
     if (worm?.visible && worm.userData.segments) {
-        const charging = enemiesData?.longWorm?.state === 'charging';
-        const freq = charging ? 11.0 : 4.2;
-        const amp = charging ? 0.55 : 0.95;
         const segs = worm.userData.segments;
-        for (let i = 0; i < segs.length; i++) {
-            const phase = t * freq - i * 0.55;
-            segs[i].position.x = Math.sin(phase) * amp * (0.35 + (i / segs.length) * 0.65);
-            segs[i].position.y = Math.cos(phase * 0.8) * 0.22;
+        const hist = worm.userData.pathHistory;
+        const headX = worm.position.x;
+        const headZ = worm.position.z;
+
+        // Keep wormGroup rotation neutral in world space so segment offsets trace exact world-space straight lines & sharp corners
+        worm.rotation.set(0, 0, 0);
+
+        if (hist.length === 0) {
+            for (let i = 0; i < segs.length; i++) {
+                hist.push({ x: headX, z: headZ + i * 0.88 });
+            }
+        } else {
+            const dHead = Math.hypot(headX - hist[0].x, headZ - hist[0].z);
+            if (dHead > 0.08) {
+                hist.unshift({ x: headX, z: headZ });
+                if (hist.length > 260) hist.length = 260;
+            }
+        }
+
+        const spacing = 0.88;
+        let pathIdx = 0;
+        let accumDist = 0;
+
+        for (let s = 0; s < segs.length; s++) {
+            const targetDist = s * spacing;
+            while (pathIdx < hist.length - 1) {
+                const p0 = hist[pathIdx];
+                const p1 = hist[pathIdx + 1];
+                const segLen = Math.hypot(p1.x - p0.x, p1.z - p0.z);
+                if (accumDist + segLen >= targetDist || segLen < 1e-5) {
+                    const frac = segLen > 1e-5 ? (targetDist - accumDist) / segLen : 0;
+                    const wx = p0.x + (p1.x - p0.x) * frac;
+                    const wz = p0.z + (p1.z - p0.z) * frac;
+                    segs[s].position.set(wx - headX, 0.38, wz - headZ);
+                    if (s === 0) {
+                        const targetPos = enemiesData?.longWorm?.targetPos;
+                        if (targetPos) {
+                            const angle = Math.atan2(-(targetPos.x - headX), -(targetPos.z - headZ));
+                            segs[0].rotation.y = angle;
+                        } else if (segLen > 1e-4) {
+                            const angle = Math.atan2(-(p0.x - p1.x), -(p0.z - p1.z));
+                            segs[0].rotation.y = angle;
+                        }
+                    } else if (segLen > 1e-4) {
+                        const angle = Math.atan2(-(p0.x - p1.x), -(p0.z - p1.z));
+                        segs[s].rotation.y = angle;
+                    }
+                    break;
+                }
+                accumDist += segLen;
+                pathIdx++;
+            }
+            if (pathIdx >= hist.length - 1) {
+                const last = hist[hist.length - 1];
+                segs[s].position.set(last.x - headX, 0.38, last.z - headZ);
+            }
         }
     }
 }
 
-// ─── 8. Articulated Harbor Citizens & Police Officers ───────────────────
+// ─── 8. Articulated Harbor Citizens & Armed Police Officers ─────────────
 export function createAAANpcMesh(type) {
     const isPolice = type === 'police';
     const group = new THREE.Group();
@@ -969,7 +1112,22 @@ export function createAAANpcMesh(type) {
         cap.position.y = 1.15;
         const badge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.05), new THREE.MeshBasicMaterial({ color: 0xffd700 }));
         badge.position.set(-0.18, 0.42, -0.22);
-        group.add(cap, badge);
+
+        // Outstretched Police Arm + 3D Handgun + Muzzle Flash
+        const gunArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.45, 4, 8), suitMat);
+        gunArm.rotation.x = Math.PI / 2;
+        gunArm.position.set(0.42, 0.42, -0.35);
+        const pistol = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.38), darkMat);
+        pistol.position.set(0.42, 0.46, -0.68);
+        const muzzleFlash = new THREE.Mesh(
+            new THREE.ConeGeometry(0.18, 0.45, 8).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        muzzleFlash.position.set(0.42, 0.46, -1.02);
+        muzzleFlash.visible = false;
+
+        group.add(cap, badge, gunArm, pistol, muzzleFlash);
+        group.userData = { muzzleFlash };
     }
 
     return group;

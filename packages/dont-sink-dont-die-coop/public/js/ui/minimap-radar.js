@@ -153,6 +153,25 @@ export function createMinimapRadar(container = document.body, options = {}) {
 
     root.appendChild(canyonPanel);
     root.appendChild(radarPanel);
+    if (typeof document !== 'undefined' && !document.getElementById('minimap-mobile-styles')) {
+        const mStyle = document.createElement('style');
+        mStyle.id = 'minimap-mobile-styles';
+        mStyle.textContent = `
+            @media (max-width: 900px), (pointer: coarse) {
+                #tactical-minimap-root {
+                    top: 86px !important;
+                    right: 8px !important;
+                    bottom: auto !important;
+                    transform: scale(0.5);
+                    transform-origin: top right;
+                }
+                #tactical-minimap-root .canyon-progress-panel {
+                    display: none !important;
+                }
+            }
+        `;
+        document.head?.appendChild(mStyle);
+    }
     if (container) {
         container.appendChild(root);
         container.appendChild(bossBarRoot);

@@ -411,16 +411,19 @@ export function createQuickBuyHotbar({
                 opacity: 1;
                 transform: scale(1);
             }
-            @media (max-width: 768px) {
+            @media (max-width: 900px), (pointer: coarse) {
                 #quickbuy-hotbar-root {
-                    bottom: 46px;
+                    bottom: 196px;
                     padding: 4px 6px;
-                    gap: 5px;
+                    gap: 4px;
+                    max-width: calc(100vw - 16px);
                 }
                 .qb-slot-pill {
-                    padding: 3px 7px;
+                    padding: 4px 7px;
                     font-size: 10px;
+                    gap: 4px;
                 }
+                .qb-key-badge,
                 .qb-name {
                     display: none;
                 }

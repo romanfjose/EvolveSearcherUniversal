@@ -1,8 +1,8 @@
 # 🦈 Sovereign PO-Shark & Helmet 08 — 99% Branch Crawler Report
 
-- **Timestamp:** `2026-11-08T13:56:04.120Z`
-- **Branches Audited in Live WebGL (1920x1080):** `11`
-- **Passed:** `11 / 11`
+- **Timestamp:** `2026-11-08T14:51:32.108Z`
+- **Branches Audited in Live WebGL (1920x1080):** `12`
+- **Passed:** `12 / 12`
 - **Defects / Dead Wires Exposed:** `0`
 
 ## Branch Matrix
@@ -18,5 +18,6 @@
 | `C2` | Armory & Economy | Raft Gadgets (Bow Harpoon, Arcane Shockwave Bell, Twin Nitro Hydro-Jets) install with valid hyphenated IDs and apply live combat/thrust effects | ✅ PASS | `{"legacyShopExists":true,"legacyShopVisible":false,"armoryOpened":true,"armoryClosed":true,"upgrades":["motor","motor_1","motor_2","motor_3","weapon","weapon_1","armor","armor_1"],"installedGadgets":["nitro-keg","repair-drone","harpoon","shield-dome"],"gadgetEventsApplied":true}` |
 | `D1` | Co-Op Wingman Bot Orders | Pressing [Z], [X], [C], [V] issues valid tactical bot orders (focus-fire, form-up, scavenge, rush-checkpoint) and moves wingman bots into matching formation | ✅ PASS | `{"results":{"z":"focus-fire","x":"form-up","c":"scavenge","v":"rush-checkpoint"},"wingmanRespectsOrder":true}` |
 | `E1` | Dream Tarot Progression | Crossing checkpoints grants Dream Tarot blessings AND wires their multipliers (Caffeinated Oars thrust, Squeaky Overdrive shockwave, Reverse Psychology block coins) into live gameplay | ✅ PASS | `{"activeCount":2,"blessings":["reverse-psychology","caffeinated-oars"],"blessingsWiredToGameplay":true}` |
-| `F1` | World Encounters & Boss | Whirlpool spin/pull, Rapids downriver boost, City Promenade on-foot backpack stow, and Dread Kraken boss spawn all function in live WebGL | ✅ PASS | `{"whirlpoolYawDelta":1.305,"rapidsVz":-8.23,"rapidsZAfter":-107,"onCitySolid":true,"krakenSpawned":true}` |
-| `G1` | Lifecycle & Clutter | Photo Mode ([P]) toggle, Victory screen, Instant [R] Reset, Zero NaN nodes, and HUD footprint (< 8%) | ✅ PASS | `{"photoActiveOn":true,"photoActiveOff":true,"visibleMeshes":7595,"nanNodes":[],"hudFootprintRatio":0.0601,"winOverlayShown":true,"resetAfterWinClean":true,"consoleErrors":[],"pageErrors":[]}` |
+| `F1` | World Encounters & Boss | Whirlpool spin/pull, Rapids downriver boost, City Promenade on-foot backpack stow, and Dread Kraken boss spawn all function in live WebGL | ✅ PASS | `{"whirlpoolYawDelta":1.305,"rapidsVz":-7.81,"rapidsZAfter":-106.51,"onCitySolid":true,"krakenSpawned":true}` |
+| `G1` | Lifecycle & Clutter | Photo Mode ([P]) toggle, Victory screen, Instant [R] Reset, Zero NaN nodes, and HUD footprint (< 8%) | ✅ PASS | `{"photoActiveOn":true,"photoActiveOff":true,"visibleMeshes":7595,"nanNodes":[],"hudFootprintRatio":0.0626,"winOverlayShown":true,"resetAfterWinClean":true,"consoleErrors":[],"pageErrors":[]}` |
+| `H1` | Mobile & Touch (390x844) | Phone portrait viewport (390x844) renders scrollable Title Screen, virtual joystick + ROW/SWING/JUMP/BLOCK/SHOP touch cluster, zero HUD overlap, and live touch rowing/steering/combat | ✅ PASS | `{"startBtnVisibleInPhoneViewport":true,"touchHiddenOnTitle":true,"touchVisibleInGame":true,"zeroMobileHudOverlap":true,"touchRowTriggered":true,"touchSteered":true,"touchAttackSwungOar":true,"raftFramedOnPhone":true,"ndcPhone":{"x":0,"y":-0.242,"z":0.987}}` |

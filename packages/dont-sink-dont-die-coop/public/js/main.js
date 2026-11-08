@@ -516,6 +516,7 @@ const feverDirector = createAAAFeverDirector({
         gameWon = false;
         const winEl = document.getElementById('win');
         if (winEl) winEl.hidden = true;
+        feverDirector?.photoAndAwards?.hideVictoryAwards?.();
         hud.setStatus('');
         inIntroSequence = cfg.mode !== 'splitscreen';
         introTime = 0;
@@ -1508,6 +1509,7 @@ window.addEventListener('keydown', (e) => {
         gameWon = false;
         const winEl = document.getElementById('win');
         if (winEl) winEl.hidden = true;
+        feverDirector?.photoAndAwards?.hideVictoryAwards?.();
         hud.setStatus('');
         for (const cp of checkpoints) cp.active = true;
         if (feverDirector?.krakenState) {
@@ -1575,7 +1577,13 @@ window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; i
 
 window.addEventListener('mousedown', (e) => {
     if (Number.isFinite(e.clientX)) lastMouseScreenX = e.clientX;
-    if (e.target?.closest?.('#shop') || e.target?.closest?.('#armory-overlay') || e.target?.closest?.('#title-menu-root')) return;
+    if (
+        e.target?.closest?.('#shop') ||
+        e.target?.closest?.('#armory-overlay') ||
+        e.target?.closest?.('#title-menu-root') ||
+        e.target?.closest?.('#touch-controls-container') ||
+        e.target?.closest?.('#quickbuy-hotbar-root')
+    ) return;
     if (isDead || shopOpen || feverDirector.armoryShop.isOpen() || !myRaft) return;
     if (e.button === 0) {
         triggerAttack();
@@ -1585,6 +1593,20 @@ window.addEventListener('mousedown', (e) => {
         isBlocking = true;
     }
 });
+
+if (feverDirector?.inputManager) {
+    feverDirector.inputManager.onAction('row', () => {
+        inIntroSequence = false;
+        triggerOarStroke();
+    });
+    feverDirector.inputManager.onAction('attack', () => {
+        inIntroSequence = false;
+        triggerAttack();
+    });
+    feverDirector.inputManager.onAction('jump', () => {
+        inIntroSequence = false;
+    });
+}
 
 window.addEventListener('mouseup', (e) => {
     if (e.button === 2) isBlocking = false;
@@ -1608,23 +1630,42 @@ function fixedStep() {
     if (!myRaft?.craft || feverDirector.isPaused()) return;
     const craft = myRaft.craft;
     shopOpen = feverDirector.armoryShop.isOpen();
+    feverDirector.inputManager?.update?.();
+    const touchSt = feverDirector.inputManager?.touchState || null;
+    const gpSt = feverDirector.inputManager?.gamepadState || null;
+    if (touchSt?.forward || touchSt?.left || touchSt?.right || touchSt?.backward || touchSt?.row || touchSt?.jump || touchSt?.attack) {
+        inIntroSequence = false;
+    }
+    const effW = Boolean(keys.w || touchSt?.forward || touchSt?.row || gpSt?.forward);
+    const effA = Boolean(keys.a || touchSt?.left || gpSt?.left);
+    const effS = Boolean(keys.s || touchSt?.backward || gpSt?.backward);
+    const effD = Boolean(keys.d || touchSt?.right || gpSt?.right);
+    const effSpace = Boolean(keys.space || touchSt?.jump || gpSt?.jump);
+    if (touchSt?.block || gpSt?.block) {
+        if (!isBlocking) feverDirector.onBlockPressed(performance.now());
+        isBlocking = true;
+    }
     if (inIntroSequence) {
         craft.velocity.set(0, 0, 0);
         craft.angularVelocity.y = 0;
     }
     const live = !isDead && !inIntroSequence;
     const hasMotor = hasMotorUpgrade();
+    // On mobile touch / gamepad, holding the virtual joystick forward automatically chains rhythmic oar strokes
+    if (live && !hasMotor && !onSolid && (touchSt?.forward || gpSt?.forward) && !oarStroke.active && oarStroke.chokedTimer <= 0) {
+        triggerOarStroke();
+    }
     // Slower, Heavy, Physical River Pacing:
     // - Pre-motor open river drifts gently (`currentScale = 0.14`, ~1.0 m/s) so every timed pull of the remos counts!
     // - Once an Outboard Motor is purchased (`hasMotor`), holding `[W]` drives continuous motor throttle just as before.
     const inCalmHarbor = craft.position.z < -135 && craft.position.z > -275;
     const dockedAtHarborPier = inCalmHarbor && craft.position.x > 10;
     const currentScale = dockedAtHarborPier || onSolid || shopOpen ? 0 : (hasMotor ? 0.28 : 0.14);
-    const continuousW = (hasMotor || onSolid) ? keys.w : false;
+    const continuousW = (hasMotor || onSolid) ? effW : false;
     const prevVx = craft.velocity.x;
     const prevVz = craft.velocity.z;
     const input = live
-        ? { ...keys, w: continuousW, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
+        ? { w: continuousW, a: effA, s: effS, d: effD, space: effSpace, upgrades: myStats.upgrades, attacking: isAttacking, onSolid, currentScale }
         : { onSolid, currentScale: 0 };
     const { jumped, impact } = stepWatercraftKinematics(craft, input, FIXED_DT);
 
@@ -1633,11 +1674,11 @@ function fixedStep() {
         const clsDef = feverDirector.getCrewClassDef?.();
         const turnPerkMult = clsDef?.perks?.turnResponsivenessMultiplier || 1.0;
         const motorPerkMult = clsDef?.perks?.motorSpeedMultiplier || 1.0;
-        if (keys.a || keys.d) {
-            const steerSign = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
+        if (effA || effD) {
+            const steerSign = (effA ? 1 : 0) - (effD ? 1 : 0);
             craft.yaw += steerSign * (onSolid ? 0.85 : 0.45 * turnPerkMult) * FIXED_DT;
         }
-        if ((hasMotor || onSolid) && keys.w) {
+        if ((hasMotor || onSolid) && effW) {
             const f = headingOf(craft.yaw);
             const thrustAccel = onSolid ? 4.4 : 4.2 * motorPerkMult;
             craft.velocity.x += f.x * thrustAccel * FIXED_DT;
@@ -1697,7 +1738,7 @@ function fixedStep() {
             let vF = prevVx * f.x + prevVz * f.z;
             let vL = prevVx * r.x + prevVz * r.z;
             const pullAccel = (isAttacking ? 12.5 : 22.0) * pullCurve * oarThrustMult;
-            const backAccel = keys.s ? -5.8 : 0;
+            const backAccel = effS ? -5.8 : 0;
             const kWater = 1.35;
             const kKeel = 6.0;
             vF += (pullAccel + backAccel - kWater * (vF - driftF)) * FIXED_DT;
@@ -2228,8 +2269,10 @@ function updateCamera(dt) {
         // Helmet 01 (Camera & Game-Feel Pilot):
         // 1. Low, Close, Over-the-Shoulder Chase Camera (pitch ~0.25 rad / 14°, distance ~10.5m, looking 15m ahead down the river)
         // 2. 100% Player-Centered Lock (0% bot centroid drift — never pull my eyes sideways because a bot moved!)
-        const effPitch = THREE.MathUtils.clamp(cam.pitch + (rowImpulse.pitchOffset || 0), CAM.minPitch, CAM.maxPitch);
-        const dist = CAM.distance + Math.min(2.2, speed * 0.08) + (rowImpulse.distanceOffset || 0);
+        // 3. Portrait Phone Adaptation: when aspect < 1.0, pull back slightly so the full raft, twin oars & river channel stay framed!
+        const portraitFactor = camera.aspect < 1.0 ? Math.min(1, (1.0 - camera.aspect) / 0.55) : 0;
+        const effPitch = THREE.MathUtils.clamp(cam.pitch + (rowImpulse.pitchOffset || 0) + portraitFactor * 0.06, CAM.minPitch, CAM.maxPitch);
+        const dist = CAM.distance + portraitFactor * 2.4 + Math.min(2.2, speed * 0.08) + (rowImpulse.distanceOffset || 0);
         const boostLift = myRaft.vis.anim.airborne ? 0.55 : 0;
         desired.set(
             target.x + dist * Math.cos(effPitch) * Math.sin(yaw),
@@ -2254,8 +2297,9 @@ function updateCamera(dt) {
     cam.look.lerp(look, 1 - Math.exp(-12 * dt));
     camera.lookAt(cam.look);
 
+    const portraitFovBoost = camera.aspect < 1.0 ? Math.min(10, (1.0 - camera.aspect) * 18) : 0;
     const rowFovBoost = computeRowingCameraImpulse(oarStroke, speed).fovBoost || 0;
-    const fov = baseFov + Math.min(12, speed * 0.5) + rowFovBoost;
+    const fov = baseFov + portraitFovBoost + Math.min(12, speed * 0.5) + rowFovBoost;
     if (Math.abs(fov - camera.fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
 
     if (cameraShake > 0) {

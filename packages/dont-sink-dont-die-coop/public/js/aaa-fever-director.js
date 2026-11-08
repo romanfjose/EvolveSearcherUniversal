@@ -374,6 +374,22 @@ export function createAAAFeverDirector({
 
     // 17. Unified Gamepad + Touch Controls
     const inputManager = hasDOM ? new InputManager() : null;
+    if (inputManager) {
+        inputManager.onAction('shop', () => {
+            const stats = getMyStats();
+            const allP = typeof getAllPlayers === 'function' ? getAllPlayers() : {};
+            armoryShop.updatePlayerData({ coins: stats.coins, upgrades: stats.upgrades, isDead: getIsDead() });
+            armoryShop.updateCrewPlayers(allP);
+            armoryShop.toggle({ coins: stats.coins, upgrades: stats.upgrades, isDead: getIsDead() }, allP);
+        });
+        inputManager.onAction('settings', () => {
+            if (armoryShop.isOpen()) {
+                armoryShop.close();
+            } else {
+                titleMenu?.toggleSettingsDrawer?.();
+            }
+        });
+    }
 
     // 18. AI Companion Bot Tactical Orders ([Z]/[X]/[C]/[V])
     const botOrderState = createBotOrderState();
@@ -696,6 +712,8 @@ export function createAAAFeverDirector({
             }),
         getEndlessSession: () => endlessSession,
         getSplitScreenManager: () => splitScreenManager,
+        inputManager,
+        getInputManager: () => inputManager,
         applyCrewCosmetics,
         isPaused: () => {
             const paused = isPhotoPaused
@@ -1211,6 +1229,13 @@ export function createAAAFeverDirector({
                     verifyRaftVisibilityInvariants(raft.vis);
                 }
             });
+            if (inputManager?.touchElements) {
+                const modalOpen = isPhotoPaused
+                    || Boolean(titleMenu?.isTitleVisible?.())
+                    || Boolean(titleMenu?.isSettingsDrawerOpen?.())
+                    || Boolean(armoryShop?.isOpen?.());
+                inputManager.setTouchVisible(!modalOpen && activeMode !== 'splitscreen');
+            }
         },
         getHealthReport: () => breakerRegistry.getHealthReport(),
     };

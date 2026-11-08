@@ -68,10 +68,12 @@ export class InputManager {
             backward: false,
             left: false,
             right: false,
+            row: false,
             jump: false,
             attack: false,
             block: false,
             shop: false,
+            settings: false,
             steering: 0,
             throttle: 0,
             leftStick: { x: 0, y: 0, active: false },
@@ -121,10 +123,13 @@ export class InputManager {
     init() {
         if (typeof window === 'undefined') return;
 
-        // Check touch capabilities
+        // Check touch capabilities or mobile phone viewport width
+        const isMobileViewport = (typeof window.innerWidth === 'number' && window.innerWidth <= 900) ||
+            Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
         this.isTouchDevice = ('ontouchstart' in window) ||
             (navigator.maxTouchPoints > 0) ||
-            (navigator.msMaxTouchPoints > 0);
+            (navigator.msMaxTouchPoints > 0) ||
+            isMobileViewport;
 
         if (this.options.enableKeyboard) {
             window.addEventListener('keydown', this._onKeyDown);
@@ -141,8 +146,15 @@ export class InputManager {
             if (this.isTouchDevice) {
                 this.setupTouchControls();
             } else if (this.options.touchAutoDetect) {
-                // Auto-appear on first touch event
+                // Auto-appear on first touch event or mobile viewport resize
                 window.addEventListener('touchstart', this._onTouchStart, { once: true, passive: true });
+                this._onMobileResize = () => {
+                    if (!this.touchElements && window.innerWidth <= 900) {
+                        this.isTouchDevice = true;
+                        this.setupTouchControls();
+                    }
+                };
+                window.addEventListener('resize', this._onMobileResize);
             }
         }
     }
@@ -369,10 +381,35 @@ export class InputManager {
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 1000;
+            z-index: 90;
             user-select: none;
             -webkit-user-select: none;
             touch-action: none;
+        `;
+
+        // Top-Right Mobile Settings Button (⚙️) so phone users can open Settings / Title Menu without an [Esc] key
+        const btnSettings = document.createElement('button');
+        btnSettings.id = 'btn-touch-settings';
+        btnSettings.setAttribute('aria-label', 'Settings');
+        btnSettings.innerText = '⚙️';
+        btnSettings.style.cssText = `
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.85);
+            color: #e2e8f0;
+            font-size: 17px;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+            pointer-events: auto;
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
         `;
 
         // Left Virtual Joystick Zone (Steering & Throttle)
@@ -380,17 +417,31 @@ export class InputManager {
         leftZone.id = 'touch-joystick-zone';
         leftZone.style.cssText = `
             position: absolute;
-            bottom: 25px;
-            left: 25px;
-            width: 140px;
-            height: 140px;
+            bottom: 18px;
+            left: 16px;
+            width: 132px;
+            height: 132px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.08);
-            border: 2px solid rgba(255, 255, 255, 0.25);
+            background: radial-gradient(circle, rgba(15, 23, 42, 0.55) 0%, rgba(15, 23, 42, 0.78) 100%);
+            border: 2px solid rgba(94, 234, 212, 0.38);
             pointer-events: auto;
             touch-action: none;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
         `;
+
+        const joystickHint = document.createElement('div');
+        joystickHint.style.cssText = `
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font: 800 9px/1 ui-monospace, monospace;
+            letter-spacing: 0.08em;
+            color: rgba(94, 234, 212, 0.75);
+            pointer-events: none;
+        `;
+        joystickHint.innerText = 'STEER / ROW';
+        leftZone.appendChild(joystickHint);
 
         const joystickKnob = document.createElement('div');
         joystickKnob.id = 'touch-joystick-knob';
@@ -398,27 +449,28 @@ export class InputManager {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 54px;
-            height: 54px;
-            margin-top: -27px;
-            margin-left: -27px;
+            width: 52px;
+            height: 52px;
+            margin-top: -26px;
+            margin-left: -26px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(200, 220, 255, 0.4) 100%);
-            border: 2px solid rgba(255, 255, 255, 0.6);
+            background: radial-gradient(circle, rgba(94, 234, 212, 0.92) 0%, rgba(14, 165, 233, 0.55) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.75);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
             pointer-events: none;
-            transition: transform 0.05s ease-out;
+            transition: transform 0.04s ease-out;
         `;
         leftZone.appendChild(joystickKnob);
 
-        // Right Action Buttons Cluster: Jump, Attack, Block, Shop
+        // Right Action Buttons Cluster: ROW (Primary), SWING, JUMP, BLOCK, SHOP
         const actionCluster = document.createElement('div');
         actionCluster.id = 'touch-action-cluster';
         actionCluster.style.cssText = `
             position: absolute;
-            bottom: 25px;
-            right: 25px;
-            width: 180px;
-            height: 180px;
+            bottom: 16px;
+            right: 14px;
+            width: 178px;
+            height: 172px;
             pointer-events: none;
         `;
 
@@ -435,38 +487,44 @@ export class InputManager {
                 border-radius: 50%;
                 background: ${color};
                 color: #fff;
-                font-family: sans-serif;
-                font-size: 13px;
-                font-weight: bold;
-                border: 2px solid rgba(255, 255, 255, 0.4);
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.03em;
+                border: 2px solid rgba(255, 255, 255, 0.42);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
                 pointer-events: auto;
                 touch-action: none;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 text-shadow: 0 1px 2px #000;
+                cursor: pointer;
+                padding: 0;
             `;
             return btn;
         };
 
-        // Layout matching standard diamond / ergonomic thumb placement
-        const btnAttack = createButton('btn-touch-attack', 'SWING', 'rgba(230, 57, 70, 0.8)', 64, 116, 56);
-        const btnJump = createButton('btn-touch-jump', 'JUMP', 'rgba(42, 157, 143, 0.85)', 120, 58, 54);
-        const btnBlock = createButton('btn-touch-block', 'BLOCK', 'rgba(233, 196, 106, 0.85)', 64, 0, 54);
-        const btnShop = createButton('btn-touch-shop', 'SHOP', 'rgba(69, 123, 157, 0.8)', 0, 58, 48);
+        // Ergonomic right-thumb layout with dedicated ROW button for physical oar strokes
+        const btnRow = createButton('btn-touch-row', '🚣 ROW', 'rgba(14, 165, 233, 0.9)', 106, 114, 60);
+        const btnAttack = createButton('btn-touch-attack', '⚔️ SWING', 'rgba(230, 57, 70, 0.88)', 44, 118, 54);
+        const btnJump = createButton('btn-touch-jump', '⏫ JUMP', 'rgba(42, 157, 143, 0.88)', 114, 52, 52);
+        const btnBlock = createButton('btn-touch-block', '🛡️ BLOCK', 'rgba(233, 196, 106, 0.88)', 56, 4, 50);
+        const btnShop = createButton('btn-touch-shop', '🛒 SHOP', 'rgba(99, 102, 241, 0.85)', 0, 58, 46);
 
+        actionCluster.appendChild(btnRow);
         actionCluster.appendChild(btnAttack);
         actionCluster.appendChild(btnJump);
         actionCluster.appendChild(btnBlock);
         actionCluster.appendChild(btnShop);
 
+        container.appendChild(btnSettings);
         container.appendChild(leftZone);
         container.appendChild(actionCluster);
         (this.options.container || document.body).appendChild(container);
 
-        // Bind Touch Listeners
-        const maxRadius = 55;
+        // Bind Touch + Pointer Listeners on Virtual Joystick
+        const maxRadius = 50;
 
         const updateJoystickUI = (touchX, touchY, rect) => {
             const originX = rect.left + rect.width / 2;
@@ -478,7 +536,7 @@ export class InputManager {
             this.touchState.throttle = -norm.y;
 
             // Update digital directions
-            const deadzoneThresh = 0.3;
+            const deadzoneThresh = 0.26;
             this.touchState.forward = norm.y < -deadzoneThresh;
             this.touchState.backward = norm.y > deadzoneThresh;
             this.touchState.left = norm.x < -deadzoneThresh;
@@ -530,38 +588,75 @@ export class InputManager {
         leftZone.addEventListener('touchend', endJoystick);
         leftZone.addEventListener('touchcancel', endJoystick);
 
-        // Bind Action Buttons
-        const bindActionButton = (element, stateKey) => {
-            element.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                this.touchState[stateKey] = true;
-                element.style.filter = 'brightness(1.4)';
-            }, { passive: false });
+        // Pointer Events fallback for mobile browsers / hybrid touchscreens
+        let pointerDraggingStick = false;
+        leftZone.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch' && this.touchTracking.joystickTouchId !== null) return;
+            pointerDraggingStick = true;
+            leftZone.setPointerCapture?.(e.pointerId);
+            const rect = leftZone.getBoundingClientRect();
+            updateJoystickUI(e.clientX, e.clientY, rect);
+        });
+        leftZone.addEventListener('pointermove', (e) => {
+            if (!pointerDraggingStick) return;
+            const rect = leftZone.getBoundingClientRect();
+            updateJoystickUI(e.clientX, e.clientY, rect);
+        });
+        const endPointerStick = () => {
+            if (!pointerDraggingStick) return;
+            pointerDraggingStick = false;
+            resetJoystickUI();
+        };
+        leftZone.addEventListener('pointerup', endPointerStick);
+        leftZone.addEventListener('pointercancel', endPointerStick);
 
-            const endTouch = (e) => {
-                e.preventDefault();
+        // Bind Action Buttons (Touch + Pointer/Click support)
+        const bindActionButton = (element, stateKey, onTapCallback = null) => {
+            const activate = (e) => {
+                if (e?.cancelable) e.preventDefault();
+                const wasActive = this.touchState[stateKey];
+                this.touchState[stateKey] = true;
+                element.style.filter = 'brightness(1.35)';
+                if (!wasActive && onTapCallback) onTapCallback();
+            };
+            const deactivate = (e) => {
+                if (e?.cancelable) e.preventDefault();
                 this.touchState[stateKey] = false;
                 element.style.filter = 'none';
             };
-            element.addEventListener('touchend', endTouch);
-            element.addEventListener('touchcancel', endTouch);
+            element.addEventListener('touchstart', activate, { passive: false });
+            element.addEventListener('touchend', deactivate);
+            element.addEventListener('touchcancel', deactivate);
+            element.addEventListener('pointerdown', activate);
+            element.addEventListener('pointerup', deactivate);
+            element.addEventListener('pointercancel', deactivate);
+            element.addEventListener('pointerleave', deactivate);
         };
 
-        bindActionButton(btnAttack, 'attack');
-        bindActionButton(btnJump, 'jump');
+        bindActionButton(btnRow, 'row', () => this._triggerAction('row'));
+        bindActionButton(btnAttack, 'attack', () => this._triggerAction('attack'));
+        bindActionButton(btnJump, 'jump', () => this._triggerAction('jump'));
         bindActionButton(btnBlock, 'block');
-        bindActionButton(btnShop, 'shop');
+        bindActionButton(btnShop, 'shop', () => this._triggerAction('shop'));
+        bindActionButton(btnSettings, 'settings', () => this._triggerAction('settings'));
 
         this.touchElements = {
             container,
+            btnSettings,
             leftZone,
             joystickKnob,
             actionCluster,
+            btnRow,
             btnAttack,
             btnJump,
             btnBlock,
             btnShop,
         };
+    }
+
+    setTouchVisible(visible) {
+        if (!this.touchElements?.container) return;
+        this.touchElements.container.style.display = visible ? 'block' : 'none';
     }
 
     /**

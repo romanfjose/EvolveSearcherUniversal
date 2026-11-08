@@ -515,6 +515,7 @@ function buildTitleAndSettingsDOM() {
         background: radial-gradient(circle at 50% 25%, rgba(15, 23, 42, 0.45) 0%, rgba(11, 14, 19, 0.88) 100%);
         backdrop-filter: blur(8px); display: flex; flex-direction: column;
         justify-content: space-between; padding: 28px 40px; box-sizing: border-box;
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
         transition: opacity 0.3s ease;
     `;
 
@@ -557,6 +558,7 @@ function buildTitleAndSettingsDOM() {
 
     // Center Content: Mode Grid, Class & Hat Customizer, Challenge Sharing
     const centerPanel = document.createElement('div');
+    centerPanel.id = 'title-center-grid';
     centerPanel.style.cssText = `
         display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 20px 0;
         max-width: 1180px; width: 100%; align-self: center;
@@ -586,9 +588,9 @@ function buildTitleAndSettingsDOM() {
                             </div>
                         </div>
                         <div class="mode-check" style="
-                            width: 18px; height: 18px; border-radius: 50%;
+                            width: 18px; height: 18px; min-width: 18px; flex-shrink: 0; border-radius: 50%;
                             border: 2px solid rgba(255, 255, 255, 0.3); display: flex;
-                            align-items: center; justify-content: center;
+                            align-items: center; justify-content: center; margin-left: 10px;
                         "></div>
                     </div>
                 `;
@@ -706,6 +708,7 @@ function buildTitleAndSettingsDOM() {
 
     // Bottom Footer: Big Launch Button
     const footer = document.createElement('div');
+    footer.id = 'title-footer-bar';
     footer.style.cssText = `
         display: flex; justify-content: center; align-items: center; gap: 20px;
     `;
@@ -914,6 +917,43 @@ function buildTitleAndSettingsDOM() {
         .graphics-preset-card.active {
             background: rgba(14, 165, 233, 0.22) !important;
             border-color: #38bdf8 !important;
+        }
+        @media (max-width: 860px) {
+            #title-lobby-overlay {
+                padding: 12px 14px 18px !important;
+                justify-content: flex-start !important;
+                gap: 10px !important;
+            }
+            #title-lobby-overlay h1 {
+                font-size: 24px !important;
+            }
+            #title-center-grid {
+                grid-template-columns: 1fr !important;
+                gap: 12px !important;
+                margin: 4px 0 !important;
+            }
+            .mode-select-card {
+                padding: 8px 12px !important;
+            }
+            #class-selector-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            #hat-selector-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            #title-footer-bar {
+                position: sticky !important;
+                bottom: 0 !important;
+                z-index: 10 !important;
+                padding-top: 6px !important;
+                background: linear-gradient(180deg, rgba(11, 14, 19, 0) 0%, rgba(11, 14, 19, 0.95) 35%) !important;
+            }
+            #btn-start-game {
+                width: 100% !important;
+                justify-content: center !important;
+                padding: 13px 20px !important;
+                font-size: 16px !important;
+            }
         }
     `;
     root.appendChild(styleTag);

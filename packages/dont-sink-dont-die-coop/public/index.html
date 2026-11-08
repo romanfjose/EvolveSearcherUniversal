@@ -86,7 +86,14 @@
         #win { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 32px 40px; text-align: center; z-index: 10; box-shadow: 0 0 0 6px rgba(94, 234, 212, .12); }
         #win h1 { margin: 12px 0 6px; font: 700 28px/1.1 var(--sans); letter-spacing: -.02em; }
         #win p { margin: 0; color: var(--muted); }
-        @media (max-width: 860px) { #wave-panel { top: auto; bottom: 64px; left: 12px; transform: none; width: 260px; min-width: 0; } #scoreboard { display: none; } }
+        @media (max-width: 900px), (pointer: coarse) {
+            #ui { top: 8px; left: 8px; width: 146px; padding: 7px 9px; }
+            #ui .kpi b { font-size: 13px; }
+            #wave-panel { top: 8px; right: 52px; left: auto; bottom: auto; transform: none; width: min(215px, calc(100vw - 214px)); min-width: 128px; padding: 7px 9px; }
+            #wave-panel .track-legend { display: none; }
+            #scoreboard { display: none !important; }
+            #instructions { display: none !important; }
+        }
     </style>
 </head>
 <body>

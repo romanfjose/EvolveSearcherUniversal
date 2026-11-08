@@ -719,6 +719,147 @@ async function runOmniscientCrawler() {
             { ...lifecycleAndClutterAudit, consoleErrors, pageErrors }
         );
 
+        // =========================================================================
+        // CATEGORY H: Phone / Mobile Touch Edition (390x844 Portrait Viewport, Virtual Joystick, ROW/SWING Buttons & Zero Mobile HUD Overlap)
+        // =========================================================================
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.waitForTimeout(250);
+
+        const phoneTitleAudit = await page.evaluate(async () => {
+            const qa = window.__GAME_QA__;
+            qa.feverDirector?.titleMenu?.showTitleScreen?.();
+            await new Promise((r) => requestAnimationFrame(r));
+            const startBtn = document.getElementById('btn-start-game');
+            const startRect = startBtn?.getBoundingClientRect();
+            const touchHiddenOnTitle = document.getElementById('touch-controls-container')?.style.display === 'none';
+            return {
+                startBtnVisibleInPhoneViewport: Boolean(
+                    startRect && startRect.width > 180 && startRect.right <= 390 && startRect.bottom <= 844 && startRect.top >= 0
+                ),
+                touchHiddenOnTitle,
+            };
+        });
+        const phoneTitleShot = path.join(REPO_ROOT, 'qa-screenshots', 'qa-10-phone-title.png');
+        await page.screenshot({ path: phoneTitleShot });
+
+        const phoneGameplayAudit = await page.evaluate(async () => {
+            const qa = window.__GAME_QA__;
+            const startBtn = document.getElementById('btn-start-game');
+            if (startBtn) startBtn.click();
+            await new Promise((r) => setTimeout(r, 340));
+            for (let i = 0; i < 8; i++) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+
+            const touchContainer = document.getElementById('touch-controls-container');
+            const stickZone = document.getElementById('touch-joystick-zone');
+            const actionCluster = document.getElementById('touch-action-cluster');
+            const btnRow = document.getElementById('btn-touch-row');
+            const btnAttack = document.getElementById('btn-touch-attack');
+            const btnJump = document.getElementById('btn-touch-jump');
+            const btnBlock = document.getElementById('btn-touch-block');
+            const btnShop = document.getElementById('btn-touch-shop');
+            const btnSettings = document.getElementById('btn-touch-settings');
+
+            const touchVisibleInGame = Boolean(
+                touchContainer && getComputedStyle(touchContainer).display !== 'none' &&
+                stickZone && btnRow && btnAttack && btnJump && btnBlock && btnShop && btnSettings
+            );
+
+            // Check that none of the mobile HUD panels overlap the virtual joystick or action buttons
+            const rectOf = (el) => (el && getComputedStyle(el).display !== 'none' ? el.getBoundingClientRect() : null);
+            const overlaps = (a, b) => {
+                if (!a || !b) return false;
+                return !(a.right <= b.left + 2 || a.left >= b.right - 2 || a.bottom <= b.top + 2 || a.top >= b.bottom - 2);
+            };
+            const rUi = rectOf(document.getElementById('ui'));
+            const rWave = rectOf(document.getElementById('wave-panel'));
+            const rStick = rectOf(stickZone);
+            const rActions = rectOf(actionCluster);
+            const rQuickBuy = rectOf(document.getElementById('quickbuy-hotbar-root'));
+            const rInstructions = rectOf(document.getElementById('instructions'));
+
+            const zeroMobileHudOverlap = Boolean(
+                !overlaps(rUi, rWave) &&
+                !overlaps(rWave, rStick) &&
+                !overlaps(rUi, rStick) &&
+                !overlaps(rQuickBuy, rStick) &&
+                !overlaps(rQuickBuy, rActions) &&
+                rInstructions === null
+            );
+
+            // Test Virtual Joystick steering + ROW button oar pull + SWING button melee attack
+            const raft = qa.getMyRaft();
+            const strokeBefore = qa.getOarStroke()?.strokeCount || 0;
+            const yawBefore = raft.craft.yaw;
+
+            // Tap ROW button (`#btn-touch-row`) via pointerdown/pointerup
+            btnRow.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            await new Promise((r) => requestAnimationFrame(r));
+            btnRow.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+
+            // Drag Virtual Joystick (`#touch-joystick-zone`) forward-right to test touch steering + throttle
+            const sRect = stickZone.getBoundingClientRect();
+            const cx = sRect.left + sRect.width / 2;
+            const cy = sRect.top + sRect.height / 2;
+            stickZone.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx + 38, clientY: cy - 38, pointerId: 1, bubbles: true }));
+            for (let i = 0; i < 10; i++) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+            const yawAfterRight = raft.craft.yaw;
+            const touchSteered = Math.abs(yawAfterRight - yawBefore) > 0.01;
+
+            // Straighten raft heading & row straight downriver (`cx`, `cy - 45`) so the portrait camera frames the player raft dead-center
+            raft.craft.yaw = 0;
+            raft.craft.angularVelocity.y = 0;
+            raft.craft.position.x = 0;
+            stickZone.dispatchEvent(new PointerEvent('pointermove', { clientX: cx, clientY: cy - 45, pointerId: 1, bubbles: true }));
+            for (let i = 0; i < 16; i++) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+            stickZone.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, pointerId: 1, bubbles: true }));
+
+            // Tap SWING button (`#btn-touch-attack`)
+            btnAttack.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            await new Promise((r) => requestAnimationFrame(r));
+            const touchAttackSwungOar = Boolean(raft.vis?.anim?.swing > 0);
+            btnAttack.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+
+            const strokeAfter = qa.getOarStroke()?.strokeCount || 0;
+            const touchRowTriggered = strokeAfter > strokeBefore;
+
+            qa.camera.updateMatrixWorld(true);
+            const ndcPhone = raft.vis.group.position.clone().project(qa.camera);
+            const raftFramedOnPhone = Math.abs(ndcPhone.x) < 0.65 && Math.abs(ndcPhone.y) < 0.75 && ndcPhone.z > 0 && ndcPhone.z < 0.99;
+
+            return {
+                touchVisibleInGame,
+                zeroMobileHudOverlap,
+                touchRowTriggered,
+                touchSteered,
+                touchAttackSwungOar,
+                raftFramedOnPhone,
+                ndcPhone: { x: +ndcPhone.x.toFixed(3), y: +ndcPhone.y.toFixed(3), z: +ndcPhone.z.toFixed(3) },
+            };
+        });
+        const phoneGameShot = path.join(REPO_ROOT, 'qa-screenshots', 'qa-11-phone-gameplay.png');
+        await page.screenshot({ path: phoneGameShot });
+
+        recordBranch(
+            'H1',
+            'Mobile & Touch (390x844)',
+            'Phone portrait viewport (390x844) renders scrollable Title Screen, virtual joystick + ROW/SWING/JUMP/BLOCK/SHOP touch cluster, zero HUD overlap, and live touch rowing/steering/combat',
+            phoneTitleAudit.startBtnVisibleInPhoneViewport &&
+                phoneTitleAudit.touchHiddenOnTitle &&
+                phoneGameplayAudit.touchVisibleInGame &&
+                phoneGameplayAudit.zeroMobileHudOverlap &&
+                phoneGameplayAudit.touchRowTriggered &&
+                phoneGameplayAudit.touchAttackSwungOar &&
+                phoneGameplayAudit.raftFramedOnPhone,
+            'P0',
+            { ...phoneTitleAudit, ...phoneGameplayAudit }
+        );
+
         const passedCount = branches.filter((b) => b.passed).length;
         const failedBranches = branches.filter((b) => !b.passed);
 

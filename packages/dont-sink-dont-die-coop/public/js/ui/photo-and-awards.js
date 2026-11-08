@@ -489,6 +489,12 @@ export function createPhotoAndAwardsDirector({
         return awardsReport;
     }
 
+    function hideVictoryAwards() {
+        if (awardsDom?.root) {
+            awardsDom.root.style.display = 'none';
+        }
+    }
+
     return {
         isActive: () => isActive,
         enterPhotoMode,
@@ -497,6 +503,7 @@ export function createPhotoAndAwardsDirector({
         applyLightingPreset,
         captureScreenshot,
         showVictoryAwards,
+        hideVictoryAwards,
         update,
         getTransform: () => ({ ...camTransform }),
         getCurrentPreset: () => currentPresetName,

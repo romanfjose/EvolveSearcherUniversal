@@ -450,7 +450,8 @@ function emitWake(vis, dt) {
 // --- Players ---
 const otherPlayers = {};
 const botAlivenessStates = {};
-let myRaft = null; // { vis, body }
+let myRaft = null; // { vis, craft }
+let p2Raft = null; // { vis, craft, oarStroke, onSolid, wasAirborne, isAttacking, isBlocking, keys } for 2-Player Split-Screen Co-Op
 let isDead = false;
 let myHealth = 100;
 let baseFov = 72;
@@ -516,7 +517,7 @@ const feverDirector = createAAAFeverDirector({
         const winEl = document.getElementById('win');
         if (winEl) winEl.hidden = true;
         hud.setStatus('');
-        inIntroSequence = true;
+        inIntroSequence = cfg.mode !== 'splitscreen';
         introTime = 0;
 
         for (const cp of checkpoints) {
@@ -582,6 +583,9 @@ const feverDirector = createAAAFeverDirector({
         if (myRaft?.craft) {
             reRenderMyRaft({ color: myColor, upgrades: myStats.upgrades, position: myRaft.craft.position, quaternion: myRaft.craft.quaternion });
         }
+        if (p2Raft?.craft && feverDirector.getActiveMode?.() === 'splitscreen') {
+            reRenderP2Raft({ color: 0x38bdf8, upgrades: myStats.upgrades, position: p2Raft.craft.position, quaternion: p2Raft.craft.quaternion });
+        }
     },
 });
 
@@ -603,6 +607,16 @@ function createRaftMesh(color, upgrades = []) {
     return vis;
 }
 
+const SHARED_MATERIALS = new Set([
+    vegetationMaterial,
+    woodMaterial,
+    paddleMaterial,
+    hammerMaterial,
+    skinMaterial,
+    motorMaterial,
+    propMaterial,
+]);
+
 function disposeObject3DTree(root) {
     if (!root || typeof root.traverse !== 'function') return;
     root.traverse((node) => {
@@ -611,8 +625,8 @@ function disposeObject3DTree(root) {
         }
         if (node.material && !node.userData?.sharedMaterial) {
             if (Array.isArray(node.material)) {
-                node.material.forEach((m) => m && typeof m.dispose === 'function' && m.dispose());
-            } else if (typeof node.material.dispose === 'function') {
+                node.material.forEach((m) => m && !SHARED_MATERIALS.has(m) && typeof m.dispose === 'function' && m.dispose());
+            } else if (!SHARED_MATERIALS.has(node.material) && typeof node.material.dispose === 'function') {
                 node.material.dispose();
             }
         }
@@ -882,6 +896,67 @@ function reRenderMyRaft(p) {
     );
 }
 
+function disposeP2Raft() {
+    if (p2Raft?.vis?.group) {
+        scene.remove(p2Raft.vis.group);
+        disposeObject3DTree(p2Raft.vis.group);
+    }
+    p2Raft = null;
+}
+
+function reRenderP2Raft(p = {}) {
+    const prevCraft = p2Raft?.craft;
+    const prevOarStroke = p2Raft?.oarStroke;
+    if (p2Raft?.vis?.group) {
+        scene.remove(p2Raft.vis.group);
+        disposeObject3DTree(p2Raft.vis.group);
+    }
+    const startPos = p.position || prevCraft?.position || { x: 3.2, y: WATER_SURFACE_Y, z: -5.5 };
+    const vis = createRaftMesh(p.color ?? 0x38bdf8, p.upgrades ?? myStats.upgrades);
+    const craft = prevCraft ?? {
+        position: new THREE.Vector3(startPos.x, startPos.y, startPos.z),
+        velocity: new THREE.Vector3(0, 0, 0),
+        angularVelocity: { x: 0, y: 0, z: 0 },
+        yaw: yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 }),
+        quaternion: new THREE.Quaternion(p.quaternion?.x ?? 0, p.quaternion?.y ?? 0, p.quaternion?.z ?? 0, p.quaternion?.w ?? 1),
+        channelHalfWidth: playableHalfWidth,
+    };
+    craft.channelHalfWidth = playableHalfWidth;
+    vis.group.position.copy(craft.position);
+    vis.group.quaternion.setFromAxisAngle(yAxis, craft.yaw);
+    vis.group.visible = !isDead;
+    p2Raft = {
+        vis,
+        craft,
+        onSolid: p2Raft?.onSolid ?? false,
+        wasAirborne: p2Raft?.wasAirborne ?? false,
+        isAttacking: false,
+        isBlocking: false,
+        oarStroke: prevOarStroke ?? {
+            active: false,
+            elapsed: 0,
+            duration: 0.84,
+            pullStart: 0.05,
+            pullEnd: 0.62,
+            cancelThreshold: 0.48,
+            chokedTimer: 0,
+            strokeCount: 0,
+            chokedCount: 0,
+            lastPowerRatio: 0,
+        },
+    };
+    feverDirector?.applyCrewCosmetics?.(p.classId || 'bruiser', p.hatId || 'viking_horns', p2Raft);
+    const splitMgr = feverDirector?.getSplitScreenManager?.();
+    if (splitMgr) {
+        splitMgr.player2.mesh = vis.group;
+        splitMgr.player2.craft.position.x = craft.position.x;
+        splitMgr.player2.craft.position.y = craft.position.y;
+        splitMgr.player2.craft.position.z = craft.position.z;
+        splitMgr.player2.craft.yaw = craft.yaw;
+    }
+    return p2Raft;
+}
+
 function setRemoteTarget(vis, p) {
     vis.target = { x: p.position.x, y: p.position.y, z: p.position.z, yaw: yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 }), at: performance.now() };
 }
@@ -944,8 +1019,9 @@ socket.on('currentPlayers', (players) => {
         hud.setHealth(p.health, p.maxHealth);
 
         const yaw = yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 });
-        // Start in the rear staggered slot (z = -5.5) so the White Guy in the Wizard Hat spawns from the beginning and targets last place!
-        const startPos = { x: 1.8, y: WATER_SURFACE_Y, z: -5.5 };
+        const isSplitMode = feverDirector?.getActiveMode?.() === 'splitscreen';
+        // Start in the rear staggered slot (z = -5.5); in 2-Player Split-Screen, place P1 on the left (-3.2) and P2 on the right (+3.2)!
+        const startPos = { x: isSplitMode ? -3.2 : 1.8, y: WATER_SURFACE_Y, z: -5.5 };
         const craft = {
             position: new THREE.Vector3(startPos.x, startPos.y, startPos.z),
             velocity: new THREE.Vector3(0, 0, 0),
@@ -954,8 +1030,26 @@ socket.on('currentPlayers', (players) => {
             quaternion: new THREE.Quaternion().setFromAxisAngle(yAxis, yaw),
             channelHalfWidth: playableHalfWidth,
         };
-        myRaft = { vis: null, craft };
+        // Preserve existing `myRaft.vis` so `reRenderMyRaft` removes the previous 3D raft group from `scene` (preventing ghost rafts on mode switch!)
+        myRaft = { vis: myRaft?.vis ?? null, craft };
         reRenderMyRaft({ ...p, position: startPos });
+        if (isSplitMode) {
+            p2Raft = null;
+            reRenderP2Raft({ color: 0x38bdf8, upgrades: myStats.upgrades, position: { x: 3.2, y: WATER_SURFACE_Y, z: -5.5 } });
+            const splitMgr = feverDirector?.getSplitScreenManager?.();
+            if (splitMgr) {
+                splitMgr.player1.mesh = myRaft.vis.group;
+                splitMgr.player1.craft.position.x = myRaft.craft.position.x;
+                splitMgr.player1.craft.position.y = myRaft.craft.position.y;
+                splitMgr.player1.craft.position.z = myRaft.craft.position.z;
+                splitMgr.player1.craft.yaw = myRaft.craft.yaw;
+                splitMgr.camState1.live = false;
+                splitMgr.camState2.live = false;
+                splitMgr.update(1 / 60);
+            }
+        } else {
+            disposeP2Raft();
+        }
         socket.emit('playerMovement', {
             position: startPos,
             quaternion: { x: craft.quaternion.x, y: craft.quaternion.y, z: craft.quaternion.z, w: craft.quaternion.w },
@@ -1303,16 +1397,94 @@ function triggerAttack(preferredSide = null) {
     setTimeout(() => { isAttacking = false; }, 220);
 }
 
+function triggerP2OarStroke() {
+    if (isDead || shopOpen || !p2Raft?.craft) return;
+    inIntroSequence = false;
+    if (hasMotorUpgrade() || p2Raft.onSolid) return;
+    const os = p2Raft.oarStroke;
+    if (os.active && os.elapsed < os.cancelThreshold) {
+        os.lastPowerRatio = os.elapsed / os.pullEnd;
+        os.chokedCount++;
+        os.chokedTimer = 0.26;
+        os.elapsed = 0;
+        p2Raft.craft.velocity.x *= 0.68;
+        p2Raft.craft.velocity.z *= 0.68;
+        splash(p2Raft.craft.position.x, p2Raft.craft.position.z, 0.32);
+        return;
+    }
+    os.active = true;
+    os.elapsed = 0;
+    os.chokedTimer = 0;
+    os.strokeCount++;
+    os.lastPowerRatio = 1.0;
+    sfx.splash?.(0.28);
+}
+
+function triggerP2Attack(preferredSide = null) {
+    if (isDead || shopOpen || !p2Raft || p2Raft.isBlocking) return;
+    inIntroSequence = false;
+    p2Raft.isAttacking = true;
+    const p2Pos = p2Raft.vis.group.position;
+    const yaw = p2Raft.craft?.yaw || 0;
+    const p2In = feverDirector.getSplitScreenManager?.()?.getP2Input?.() || {};
+    const fallbackSide = p2In.a && !p2In.d ? 'left' : 'right';
+    const swingSide = preferredSide === 'left' || preferredSide === 'right'
+        ? preferredSide
+        : evaluateSideAwareOarTarget(p2Pos, yaw, enemiesData, fallbackSide);
+    p2Raft.vis.anim.swingSide = swingSide;
+    p2Raft.vis.anim.swing = SWING_S;
+    if (!p2Raft.onSolid) {
+        const slap = computeOarAttackWaterSlap({ raftPos: p2Pos, raftYaw: yaw, swingSide, swingProgress: 0.5 });
+        if (slap?.origin) {
+            emitFoam(slap.origin.x, FOAM_Y + 0.05, slap.origin.z, (slap.sprayVelocity?.x || 0) * 0.5, 1.1, (slap.sprayVelocity?.z || 0) * 0.5, 0.5, 0.24);
+        }
+    }
+    feverDirector.onPlayerAttack();
+    if (enemiesData) {
+        for (const key in enemiesData) {
+            const eMesh = enemyMeshes[key];
+            if (enemiesData[key].health > 0 && eMesh && p2Pos.distanceTo(eMesh.position) < (PLAYER.attackRange + 1.4)) {
+                socket.emit('playerHitEnemy', { enemyId: key });
+                const dx = eMesh.position.x - p2Pos.x;
+                const dz = eMesh.position.z - p2Pos.z;
+                const dLen = Math.hypot(dx, dz) || 1;
+                eMesh.position.x += (dx / dLen) * 2.4;
+                eMesh.position.z += (dz / dLen) * 2.4;
+                enemiesData[key].position.x = eMesh.position.x;
+                enemiesData[key].position.z = eMesh.position.z;
+                hitPulse[key] = 1.0;
+                if (enemyTelegraphs[key]) enemyTelegraphs[key].windup = 0;
+            }
+        }
+    }
+    setTimeout(() => { if (p2Raft) p2Raft.isAttacking = false; }, 220);
+}
+
 window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
+    const isSplitMode = feverDirector?.getActiveMode?.() === 'splitscreen';
     if (k === 'm') hud.toast(sfx.toggle() ? 'SOUND OFF' : 'SOUND ON', 800);
-    if ((k === 'w' || k === 'arrowup') && !e.repeat) {
-        triggerOarStroke();
+    if (isSplitMode) {
+        if (k === 'w' && !e.repeat) triggerOarStroke();
+        if (k === 'arrowup' && !e.repeat) {
+            e.preventDefault();
+            triggerP2OarStroke();
+        }
+        if (k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright') {
+            e.preventDefault();
+        }
+        if (e.code === 'ShiftRight' || k === 'k') {
+            triggerP2Attack();
+        }
+    } else {
+        if ((k === 'w' || k === 'arrowup') && !e.repeat) {
+            triggerOarStroke();
+        }
+        if (k === 'arrowup') keys.w = true;
+        if (k === 'arrowdown') keys.s = true;
+        if (k === 'arrowleft') keys.a = true;
+        if (k === 'arrowright') keys.d = true;
     }
-    if (k === 'arrowup') keys.w = true;
-    if (k === 'arrowdown') keys.s = true;
-    if (k === 'arrowleft') keys.a = true;
-    if (k === 'arrowright') keys.d = true;
     if (Object.hasOwn(keys, k)) {
         keys[k] = true;
         inIntroSequence = false;
@@ -1323,7 +1495,7 @@ window.addEventListener('keydown', (e) => {
         e.preventDefault();
     }
     if (k === 'f') triggerAttack();
-    if (k === 'shift') {
+    if (k === 'shift' && (!isSplitMode || e.code !== 'ShiftRight')) {
         if (!isBlocking) feverDirector.onBlockPressed(performance.now());
         isBlocking = true;
     }
@@ -1388,13 +1560,16 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => {
     const k = e.key.toLowerCase();
-    if (k === 'arrowup') keys.w = false;
-    if (k === 'arrowdown') keys.s = false;
-    if (k === 'arrowleft') keys.a = false;
-    if (k === 'arrowright') keys.d = false;
+    const isSplitMode = feverDirector?.getActiveMode?.() === 'splitscreen';
+    if (!isSplitMode) {
+        if (k === 'arrowup') keys.w = false;
+        if (k === 'arrowdown') keys.s = false;
+        if (k === 'arrowleft') keys.a = false;
+        if (k === 'arrowright') keys.d = false;
+    }
     if (Object.hasOwn(keys, k)) keys[k] = false;
     if (e.key === ' ') keys.space = false;
-    if (k === 'shift') isBlocking = false;
+    if (k === 'shift' && (!isSplitMode || e.code !== 'ShiftRight')) isBlocking = false;
 });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; isBlocking = false; });
 
@@ -1735,6 +1910,139 @@ function fixedStep() {
         feverDirector.fixedStep(FIXED_DT, performance.now());
     }
 
+    // 2-Player Local Split-Screen Co-Op (`splitscreen`): Step Player 2's physical raft, dual-oar strokes, steering, jump & river hazards!
+    if (feverDirector.getActiveMode?.() === 'splitscreen') {
+        if (!p2Raft?.craft || !p2Raft?.vis) {
+            reRenderP2Raft({ color: 0x38bdf8, upgrades: myStats.upgrades, position: { x: 3.2, y: WATER_SURFACE_Y, z: craft.position.z } });
+        }
+        const splitMgr = feverDirector.getSplitScreenManager?.();
+        const p2In = splitMgr?.getP2Input?.() || { w: false, a: false, s: false, d: false, space: false, attacking: false, blocking: false };
+        const p2c = p2Raft.craft;
+        p2Raft.isBlocking = Boolean(p2In.blocking);
+        if (inIntroSequence) {
+            p2c.velocity.set(0, 0, 0);
+            p2c.angularVelocity.y = 0;
+        }
+        const p2InCalmHarbor = p2c.position.z < -135 && p2c.position.z > -275;
+        const p2DockedAtPier = p2InCalmHarbor && p2c.position.x > 10;
+        const p2CurrentScale = p2DockedAtPier || p2Raft.onSolid || shopOpen ? 0 : (hasMotor ? 0.28 : 0.14);
+        const p2ContinuousW = (hasMotor || p2Raft.onSolid) ? p2In.w : false;
+        const p2PrevVx = p2c.velocity.x;
+        const p2PrevVz = p2c.velocity.z;
+        const p2StepInput = live
+            ? { w: p2ContinuousW, a: p2In.a, s: p2In.s, d: p2In.d, space: p2In.space, upgrades: myStats.upgrades, attacking: p2Raft.isAttacking, onSolid: p2Raft.onSolid, currentScale: p2CurrentScale }
+            : { onSolid: p2Raft.onSolid, currentScale: 0 };
+        const { jumped: p2Jumped, impact: p2Impact } = stepWatercraftKinematics(p2c, p2StepInput, FIXED_DT);
+
+        if (live) {
+            const clsDef = feverDirector.getCrewClassDef?.();
+            const turnPerkMult = clsDef?.perks?.turnResponsivenessMultiplier || 1.0;
+            const motorPerkMult = clsDef?.perks?.motorSpeedMultiplier || 1.0;
+            if (p2In.a || p2In.d) {
+                const steerSign = (p2In.a ? 1 : 0) - (p2In.d ? 1 : 0);
+                p2c.yaw += steerSign * (p2Raft.onSolid ? 0.85 : 0.45 * turnPerkMult) * FIXED_DT;
+            }
+            if ((hasMotor || p2Raft.onSolid) && p2In.w) {
+                const f2 = headingOf(p2c.yaw);
+                const thrustAccel = p2Raft.onSolid ? 4.4 : 4.2 * motorPerkMult;
+                p2c.velocity.x += f2.x * thrustAccel * FIXED_DT;
+                p2c.velocity.z += f2.z * thrustAccel * FIXED_DT;
+            } else if (!hasMotor && !p2Raft.onSolid && p2c.position.y <= WATER_SURFACE_Y + PHYSICS.surfaceSnap) {
+                const os2 = p2Raft.oarStroke;
+                if (os2.chokedTimer > 0) {
+                    os2.chokedTimer = Math.max(0, os2.chokedTimer - FIXED_DT);
+                }
+                const tarotMults = feverDirector.getTarotMultipliers?.() || {};
+                const oarThrustMult = tarotMults.oarThrustMultiplier || 1.0;
+                const oarCadenceMult = tarotMults.oarCadenceMultiplier || 1.0;
+                let pullCurve2 = 0;
+                if (os2.active) {
+                    os2.elapsed += FIXED_DT * oarCadenceMult;
+                    if (os2.chokedTimer <= 0 && os2.elapsed >= os2.pullStart && os2.elapsed <= os2.pullEnd) {
+                        const u2 = (os2.elapsed - os2.pullStart) / (os2.pullEnd - os2.pullStart);
+                        pullCurve2 = Math.sin(u2 * Math.PI) ** 1.15;
+                        const f2 = headingOf(p2c.yaw);
+                        if (u2 > 0.15 && u2 < 0.88 && Math.random() < 0.48) {
+                            const rx2 = Math.cos(p2c.yaw);
+                            const rz2 = -Math.sin(p2c.yaw);
+                            for (const side of [-1, 1]) {
+                                emitFoam(
+                                    p2c.position.x + rx2 * side * 1.35 - f2.x * 0.25,
+                                    FOAM_Y + 0.04,
+                                    p2c.position.z + rz2 * side * 1.35 - f2.z * 0.25,
+                                    -f2.x * 2.2 + (Math.random() - 0.5) * 0.7,
+                                    0.85 + Math.random() * 0.55,
+                                    -f2.z * 2.2 + (Math.random() - 0.5) * 0.7,
+                                    0.55,
+                                    0.22
+                                );
+                            }
+                        }
+                    }
+                    if (os2.elapsed >= os2.duration) {
+                        os2.active = false;
+                        os2.elapsed = 0;
+                    }
+                }
+                const stepVx2 = p2c.velocity.x;
+                const stepVz2 = p2c.velocity.z;
+                const f2 = headingOf(p2c.yaw);
+                const r2 = { x: -f2.z, z: f2.x };
+                const eddyRelief2 = computeCostadoEddyRelief(p2c.position.x, p2c.position.z, playableHalfWidth);
+                const eddyScale2 = Number.isFinite(eddyRelief2?.currentMultiplier) ? eddyRelief2.currentMultiplier : 1.0;
+                const driftVz2 = (p2DockedAtPier || shopOpen) ? 0 : -0.95 * eddyScale2;
+                const driftF2 = driftVz2 * f2.z;
+                const driftL2 = driftVz2 * r2.z;
+                let vF2 = p2PrevVx * f2.x + p2PrevVz * f2.z;
+                let vL2 = p2PrevVx * r2.x + p2PrevVz * r2.z;
+                const pullAccel2 = (p2Raft.isAttacking ? 12.5 : 22.0) * pullCurve2 * oarThrustMult;
+                const backAccel2 = p2In.s ? -5.8 : 0;
+                const kWater2 = 1.35;
+                const kKeel2 = 6.0;
+                vF2 += (pullAccel2 + backAccel2 - kWater2 * (vF2 - driftF2)) * FIXED_DT;
+                vL2 += (-kKeel2 * (vL2 - driftL2)) * FIXED_DT;
+                if (os2.chokedTimer > 0) vF2 *= 0.94;
+                p2c.velocity.x = vF2 * f2.x + vL2 * r2.x;
+                p2c.velocity.z = vF2 * f2.z + vL2 * r2.z;
+                p2c.position.x += (p2c.velocity.x - stepVx2) * FIXED_DT;
+                p2c.position.z += (p2c.velocity.z - stepVz2) * FIXED_DT;
+            }
+        }
+        const col2 = resolveWorldBoundsAndObstacles(p2c, obstacles, { channelHalfWidth: playableHalfWidth });
+        p2Raft.onSolid = col2.onSolid;
+        const onCityPromenade2 = p2c.position.z < -145 && p2c.position.z > -255 && p2c.position.x >= 13.5;
+        if (onCityPromenade2 && p2Raft.onSolid && p2c.position.y > 0.88) {
+            p2c.position.y = 0.85;
+        }
+        p2c.quaternion.setFromAxisAngle(yAxis, p2c.yaw);
+        if (p2Jumped) { splash(p2c.position.x, p2c.position.z, 0.8); sfx.splash(0.6); }
+        if (p2Impact !== null && p2Raft.wasAirborne && p2Impact > 4) {
+            const s2 = Math.min(1.5, p2Impact / 15);
+            splash(p2c.position.x, p2c.position.z, s2);
+            sfx.splash(s2);
+        }
+        p2Raft.wasAirborne = p2c.position.y > WATER_SURFACE_Y + PHYSICS.surfaceSnap && !p2Raft.onSolid;
+        // Soft co-op rubber-band tether only if players drift more than 65m apart
+        if (Math.abs(p2c.position.z - craft.position.z) > 65) {
+            p2c.position.z = craft.position.z + (p2c.position.z > craft.position.z ? 12 : -12);
+            p2c.position.x = THREE.MathUtils.clamp(craft.position.x + 3.8, -playableHalfWidth + 4, playableHalfWidth - 4);
+        }
+        if (splitMgr) {
+            splitMgr.player1.craft.position.x = craft.position.x;
+            splitMgr.player1.craft.position.y = craft.position.y;
+            splitMgr.player1.craft.position.z = craft.position.z;
+            splitMgr.player1.craft.velocity.x = craft.velocity.x;
+            splitMgr.player1.craft.velocity.z = craft.velocity.z;
+            splitMgr.player1.craft.yaw = craft.yaw;
+            splitMgr.player2.craft.position.x = p2c.position.x;
+            splitMgr.player2.craft.position.y = p2c.position.y;
+            splitMgr.player2.craft.position.z = p2c.position.z;
+            splitMgr.player2.craft.velocity.x = p2c.velocity.x;
+            splitMgr.player2.craft.velocity.z = p2c.velocity.z;
+            splitMgr.player2.craft.yaw = p2c.yaw;
+        }
+    }
+
     if (jumped) { splash(craft.position.x, craft.position.z, 0.8); sfx.splash(0.6); }
     if (impact !== null && wasAirborne && impact > 4) {
         const s = Math.min(1.5, impact / 15);
@@ -1998,6 +2306,37 @@ function animate() {
         updateLocalRaft(delta, now);
         animateRaft(myRaft.vis, delta, t);
     }
+    if (feverDirector.getActiveMode?.() === 'splitscreen' && p2Raft?.craft && p2Raft?.vis) {
+        const c2 = p2Raft.craft;
+        const v2 = p2Raft.vis;
+        const yaw2 = c2.yaw;
+        const f2 = headingOf(yaw2);
+        v2.group.position.copy(c2.position);
+        if (p2Raft.onSolid && c2.position.z < -145 && c2.position.z > -255 && c2.position.x >= 13.5) {
+            v2.group.position.y = Math.max(c2.position.y, 1.12);
+        }
+        v2.group.quaternion.copy(c2.quaternion);
+        const hasMotor2 = hasMotorUpgrade();
+        const p2In = feverDirector.getSplitScreenManager?.()?.getP2Input?.() || {};
+        const os2 = p2Raft.oarStroke;
+        const activeThrust2 = isDead
+            ? 0
+            : hasMotor2 || p2Raft.onSolid
+                ? Math.sign(watercraftThrust(p2In, myStats.upgrades, p2Raft.isAttacking))
+                : (os2.active && os2.elapsed >= os2.pullStart && os2.elapsed <= os2.pullEnd ? 1 : (p2In.s ? -1 : 0));
+        Object.assign(v2.anim, {
+            yaw: yaw2,
+            speed: c2.velocity.x * f2.x + c2.velocity.z * f2.z,
+            turn: c2.angularVelocity.y,
+            thrust: activeThrust2,
+            strokePhase: (!hasMotor2 && !p2Raft.onSolid && os2.active) ? Math.min(1, os2.elapsed / os2.duration) : 0,
+            strokeChoked: os2.chokedTimer,
+            airborne: p2Raft.wasAirborne,
+            onSolid: p2Raft.onSolid,
+            block: p2Raft.isBlocking,
+        });
+        animateRaft(v2, delta, t);
+    }
     for (const vis of Object.values(otherPlayers)) {
         updateRemote(vis, delta);
         animateRaft(vis, delta, t);
@@ -2037,9 +2376,27 @@ function animate() {
     updateHud(now);
     const splitMgr = feverDirector.getSplitScreenManager?.();
     if (feverDirector.getActiveMode?.() === 'splitscreen' && splitMgr) {
+        if (myRaft?.craft) {
+            splitMgr.player1.craft.position.x = myRaft.craft.position.x;
+            splitMgr.player1.craft.position.y = myRaft.craft.position.y;
+            splitMgr.player1.craft.position.z = myRaft.craft.position.z;
+            splitMgr.player1.craft.velocity.x = myRaft.craft.velocity.x;
+            splitMgr.player1.craft.velocity.z = myRaft.craft.velocity.z;
+            splitMgr.player1.craft.yaw = myRaft.craft.yaw;
+        }
+        if (p2Raft?.craft) {
+            splitMgr.player2.craft.position.x = p2Raft.craft.position.x;
+            splitMgr.player2.craft.position.y = p2Raft.craft.position.y;
+            splitMgr.player2.craft.position.z = p2Raft.craft.position.z;
+            splitMgr.player2.craft.velocity.x = p2Raft.craft.velocity.x;
+            splitMgr.player2.craft.velocity.z = p2Raft.craft.velocity.z;
+            splitMgr.player2.craft.yaw = p2Raft.craft.yaw;
+        }
+        splitMgr.update(delta);
         splitMgr.render();
     } else {
         renderer.setScissorTest?.(false);
+        renderer.setViewport?.(0, 0, window.innerWidth, window.innerHeight);
         renderer.render(scene, camera);
     }
 }
@@ -2048,6 +2405,7 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    feverDirector.getSplitScreenManager?.()?.setSize(window.innerWidth, window.innerHeight);
     riverParticles.setScale(window.innerHeight / 2);
 });
 
@@ -2058,13 +2416,16 @@ if (typeof window !== 'undefined') {
         camera,
         renderer,
         getMyRaft: () => myRaft,
+        getP2Raft: () => p2Raft,
         getOtherPlayers: () => otherPlayers,
         getEnemiesData: () => enemiesData,
         getMyStats: () => myStats,
         getMageGrab: () => mageGrab,
         getOarStroke: () => oarStroke,
         triggerOarStroke,
+        triggerP2OarStroke,
         triggerAttack,
+        triggerP2Attack,
         feverDirector,
     };
 }

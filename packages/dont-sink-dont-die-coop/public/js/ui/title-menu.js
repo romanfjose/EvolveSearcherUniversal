@@ -316,6 +316,9 @@ export function createTitleMenuDirector({
         if (dom.doneDrawerBtn) {
             dom.doneDrawerBtn.addEventListener('click', () => closeSettingsDrawer());
         }
+        if (dom.returnTitleBtn) {
+            dom.returnTitleBtn.addEventListener('click', () => showTitleScreen());
+        }
         if (dom.drawerBackdrop) {
             dom.drawerBackdrop.addEventListener('click', () => closeSettingsDrawer());
         }
@@ -403,14 +406,23 @@ export function createTitleMenuDirector({
         }
     }
 
+    let hideTitleTimer = null;
+
     function startGame() {
         isTitleVisible = false;
         closeSettingsDrawer();
+        if (hideTitleTimer) {
+            clearTimeout(hideTitleTimer);
+            hideTitleTimer = null;
+        }
         if (dom.titleOverlay) {
             dom.titleOverlay.style.opacity = '0';
             dom.titleOverlay.style.pointerEvents = 'none';
-            setTimeout(() => {
-                dom.titleOverlay.style.display = 'none';
+            hideTitleTimer = setTimeout(() => {
+                if (!isTitleVisible && dom.titleOverlay) {
+                    dom.titleOverlay.style.display = 'none';
+                }
+                hideTitleTimer = null;
             }, 300);
         }
         if (typeof onStartGame === 'function') {
@@ -444,6 +456,20 @@ export function createTitleMenuDirector({
         }
     }
 
+    function showTitleScreen() {
+        isTitleVisible = true;
+        closeSettingsDrawer();
+        if (hideTitleTimer) {
+            clearTimeout(hideTitleTimer);
+            hideTitleTimer = null;
+        }
+        if (dom.titleOverlay) {
+            dom.titleOverlay.style.display = 'flex';
+            dom.titleOverlay.style.opacity = '1';
+            dom.titleOverlay.style.pointerEvents = 'auto';
+        }
+    }
+
     function toggleSettingsDrawer() {
         if (isSettingsDrawerOpen) closeSettingsDrawer();
         else openSettingsDrawer();
@@ -460,6 +486,7 @@ export function createTitleMenuDirector({
         openSettingsDrawer,
         closeSettingsDrawer,
         toggleSettingsDrawer,
+        showTitleScreen,
         startGame,
         isTitleVisible: () => isTitleVisible,
         isSettingsDrawerOpen: () => isSettingsDrawerOpen,
@@ -833,16 +860,23 @@ function buildTitleAndSettingsDOM() {
         </div>
 
         <!-- Drawer Footer -->
-        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
             <button id="btn-reset-settings" style="
                 background: transparent; border: 1px solid rgba(248, 113, 113, 0.4);
-                color: #f87171; border-radius: 8px; padding: 8px 14px; font-size: 12px;
+                color: #f87171; border-radius: 8px; padding: 8px 12px; font-size: 12px;
                 font-weight: 700; cursor: pointer;
             ">Reset to Defaults</button>
-            <button id="btn-drawer-done" style="
-                background: #0284c7; border: none; color: #fff; border-radius: 8px;
-                padding: 8px 20px; font-size: 12px; font-weight: 700; cursor: pointer;
-            ">Done [Esc]</button>
+            <div style="display: flex; gap: 8px;">
+                <button id="btn-return-title" style="
+                    background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.45);
+                    color: #7dd3fc; border-radius: 8px; padding: 8px 14px; font-size: 12px;
+                    font-weight: 700; cursor: pointer;
+                ">🏠 Title Screen</button>
+                <button id="btn-drawer-done" style="
+                    background: #0284c7; border: none; color: #fff; border-radius: 8px;
+                    padding: 8px 18px; font-size: 12px; font-weight: 700; cursor: pointer;
+                ">Done [Esc]</button>
+            </div>
         </div>
     `;
 
@@ -898,6 +932,7 @@ function buildTitleAndSettingsDOM() {
         openSettingsBtn: header.querySelector('#btn-open-settings'),
         closeDrawerBtn: settingsDrawer.querySelector('#btn-close-drawer'),
         resetSettingsBtn: settingsDrawer.querySelector('#btn-reset-settings'),
+        returnTitleBtn: settingsDrawer.querySelector('#btn-return-title'),
         doneDrawerBtn: settingsDrawer.querySelector('#btn-drawer-done'),
         modeCards: leftCol.querySelectorAll('.mode-select-card'),
         classCards: rightCol.querySelectorAll('.class-select-card'),

@@ -969,21 +969,6 @@ export function createAAAFeverDirector({
                 splitScreenManager.player1.craft.velocity.x = craft.velocity.x;
                 splitScreenManager.player1.craft.velocity.z = craft.velocity.z;
                 splitScreenManager.player1.craft.yaw = craft.yaw;
-                // Keep P2 craft advancing alongside P1 if no P2 keys are pressed
-                const p2In = splitScreenManager.getP2Input();
-                const p2c = splitScreenManager.player2.craft;
-                const p2Steer = (p2In.a ? 1 : 0) - (p2In.d ? 1 : 0);
-                p2c.yaw += p2Steer * 2.0 * fixedDt;
-                const p2Fwd = p2In.w ? 14 : (p2In.s ? -6 : 0);
-                p2c.velocity.x = -Math.sin(p2c.yaw) * p2Fwd;
-                p2c.velocity.z = -Math.cos(p2c.yaw) * p2Fwd - 4.5;
-                p2c.position.x = Math.max(-36, Math.min(36, p2c.position.x + p2c.velocity.x * fixedDt));
-                p2c.position.z = p2c.position.z + p2c.velocity.z * fixedDt;
-                if (Math.abs(p2c.position.z - craft.position.z) > 35) {
-                    p2c.position.z = craft.position.z + 4;
-                    p2c.position.x = craft.position.x + 5;
-                }
-                splitScreenManager.update(fixedDt);
             }
 
             // 9. Record Ghost Frame (Helmet 06: hard ring-buffer cap of 7200 frames so 8-hour runs use constant RAM)

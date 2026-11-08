@@ -23,12 +23,12 @@ export const DEFAULT_SPLITSCREEN_CONFIG = {
     fov: 72,
     near: 0.1,
     far: 1400,
-    camDistance: 11,
-    camPitch: 0.3,
-    minPitch: -0.15,
-    maxPitch: 1.2,
-    camStiffness: 9,
-    camFollow: 3.5,
+    camDistance: 10.5,
+    camPitch: 0.25,
+    minPitch: 0.14,
+    maxPitch: 0.65,
+    camStiffness: 11,
+    camFollow: 5.5,
 };
 
 /**
@@ -217,16 +217,21 @@ export function stepChaseCamera(camState, targetPos, targetYaw, speed, dt, optio
     const pitch = camState.pitch;
 
     const desiredX = targetPos.x + dist * Math.cos(pitch) * Math.sin(yaw);
-    const desiredY = Math.max(0.8, targetPos.y + 1.5 + dist * Math.sin(pitch));
+    const desiredY = Math.max(0.8, targetPos.y + 1.85 + dist * Math.sin(pitch));
     const desiredZ = targetPos.z + dist * Math.cos(pitch) * Math.cos(yaw);
 
     const fwdX = -Math.sin(targetYaw);
     const fwdZ = -Math.cos(targetYaw);
-    const lookX = targetPos.x + fwdX * 3;
-    const lookY = targetPos.y + 1.2;
-    const lookZ = targetPos.z + fwdZ * 3;
+    const lookX = targetPos.x + fwdX * 15;
+    const lookY = targetPos.y + 1.15;
+    const lookZ = targetPos.z + fwdZ * 15;
 
-    if (!camState.live) {
+    const distToDesired = Math.hypot(
+        desiredX - camState.pos.x,
+        desiredY - camState.pos.y,
+        desiredZ - camState.pos.z
+    );
+    if (!camState.live || !Number.isFinite(distToDesired) || distToDesired > 55) {
         camState.pos.x = desiredX;
         camState.pos.y = desiredY;
         camState.pos.z = desiredZ;
@@ -240,21 +245,26 @@ export function stepChaseCamera(camState, targetPos, targetYaw, speed, dt, optio
         return camState;
     }
 
-    // Spring damping
-    const ax = stiffness * stiffness * (desiredX - camState.pos.x) - 2 * stiffness * camState.vel.x;
-    const ay = stiffness * stiffness * (desiredY - camState.pos.y) - 2 * stiffness * camState.vel.y;
-    const az = stiffness * stiffness * (desiredZ - camState.pos.z) - 2 * stiffness * camState.vel.z;
+    // Substepped spring damping (120Hz substeps prevent Euler blowup when dt > 1 / stiffness)
+    const safeDt = Math.min(Math.max(0, dt || 0), 0.25);
+    for (let left = safeDt; left > 1e-6; left -= 1 / 120) {
+        const h = Math.min(left, 1 / 120);
+        const ax = stiffness * stiffness * (desiredX - camState.pos.x) - 2 * stiffness * camState.vel.x;
+        const ay = stiffness * stiffness * (desiredY - camState.pos.y) - 2 * stiffness * camState.vel.y;
+        const az = stiffness * stiffness * (desiredZ - camState.pos.z) - 2 * stiffness * camState.vel.z;
 
-    camState.vel.x += ax * dt;
-    camState.vel.y += ay * dt;
-    camState.vel.z += az * dt;
+        camState.vel.x += ax * h;
+        camState.vel.y += ay * h;
+        camState.vel.z += az * h;
 
-    camState.pos.x += camState.vel.x * dt;
-    camState.pos.y += camState.vel.y * dt;
-    camState.pos.z += camState.vel.z * dt;
+        camState.pos.x += camState.vel.x * h;
+        camState.pos.y += camState.vel.y * h;
+        camState.pos.z += camState.vel.z * h;
+    }
+    camState.pos.y = Math.max(0.8, camState.pos.y);
 
     // Smooth look target
-    const easeLook = 1 - Math.exp(-12 * dt);
+    const easeLook = 1 - Math.exp(-12 * safeDt);
     camState.look.x += (lookX - camState.look.x) * easeLook;
     camState.look.y += (lookY - camState.look.y) * easeLook;
     camState.look.z += (lookZ - camState.look.z) * easeLook;
@@ -362,40 +372,44 @@ export function createSplitScreenManager(THREE, renderer, scene, options = {}) {
         `;
         overlayContainer.appendChild(dividerElement);
 
-        // Player Labels in their respective viewports
+        // Player Labels in their respective viewports (bottom-aligned inside each viewport to avoid overlapping top HUD panels)
         const p1Badge = document.createElement('div');
         p1Badge.id = 'p1-badge';
-        p1Badge.innerText = 'P1 (WASD)';
+        p1Badge.innerText = 'P1 · WASD + F (Attack) + SPACE (Jump)';
         p1Badge.style.cssText = `
             position: absolute;
-            top: 12px;
-            left: 12px;
-            color: #ff8888;
-            font-family: sans-serif;
-            font-weight: bold;
-            font-size: 14px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 4px 8px;
-            border-radius: 4px;
+            bottom: 58px;
+            left: 16px;
+            color: #ff9999;
+            font-family: system-ui, sans-serif;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 0.04em;
+            background: rgba(8, 15, 28, 0.78);
+            padding: 5px 10px;
+            border-radius: 6px;
             border-left: 3px solid #ff4444;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
         `;
         overlayContainer.appendChild(p1Badge);
 
         const p2Badge = document.createElement('div');
         p2Badge.id = 'p2-badge';
-        p2Badge.innerText = 'P2 (ARROWS)';
+        p2Badge.innerText = 'P2 · ARROWS + R-SHIFT/K (Attack) + ENTER (Jump)';
         p2Badge.style.cssText = `
             position: absolute;
-            top: 12px;
-            right: 12px;
-            color: #88c0ff;
-            font-family: sans-serif;
-            font-weight: bold;
-            font-size: 14px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 4px 8px;
-            border-radius: 4px;
-            border-right: 3px solid #4488ff;
+            bottom: 58px;
+            right: 16px;
+            color: #7dd3fc;
+            font-family: system-ui, sans-serif;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 0.04em;
+            background: rgba(8, 15, 28, 0.78);
+            padding: 5px 10px;
+            border-radius: 6px;
+            border-right: 3px solid #38bdf8;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
         `;
         overlayContainer.appendChild(p2Badge);
 

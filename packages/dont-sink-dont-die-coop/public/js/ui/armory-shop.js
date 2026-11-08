@@ -422,7 +422,9 @@ export function createArmoryShopUI({
         if (!isOpen) return;
         const key = e.key;
         if (key === 'Escape' || key === 'e' || key === 'E') {
+            if (rootEl) rootEl.dataset.justClosedAt = String(Date.now());
             closeShop();
+            e.stopImmediatePropagation?.();
             return;
         }
         if (['1', '2', '3', '4'].includes(key)) {
@@ -435,6 +437,52 @@ export function createArmoryShopUI({
 
     if (typeof window !== 'undefined') {
         window.addEventListener('keydown', handleKeyDown);
+    }
+
+    function buildCraftSchematicSvg(upgrades = [], hoveredItem = null) {
+        const motorTier = getSlotCurrentTier(upgrades, UPGRADE_SLOTS.MOTOR);
+        const weaponTier = getSlotCurrentTier(upgrades, UPGRADE_SLOTS.WEAPON);
+        const armorTier = getSlotCurrentTier(upgrades, UPGRADE_SLOTS.ARMOR);
+        const hovSlot = hoveredItem?.slot || null;
+
+        const hullStroke = hovSlot === 'armor' ? '#4ade80' : (armorTier > 0 ? '#5eead4' : '#38bdf8');
+        const motorCol = hovSlot === 'motor' ? '#4ade80' : (motorTier > 0 ? '#fbbf24' : '#475569');
+        const weaponCol = hovSlot === 'weapon' ? '#4ade80' : (weaponTier > 0 ? '#f43f5e' : '#94a3b8');
+
+        return `
+            <svg viewBox="0 0 260 96" width="100%" height="100%" style="max-height:106px;pointer-events:none;">
+                <defs>
+                    <radialGradient id="armoryGridGlow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="rgba(94,234,212,0.16)"/>
+                        <stop offset="100%" stop-color="rgba(12,18,26,0)"/>
+                    </radialGradient>
+                </defs>
+                <rect width="260" height="96" fill="url(#armoryGridGlow)"/>
+                <!-- Wake Lines -->
+                <path d="M 52 32 L 18 22 M 52 64 L 18 74" stroke="rgba(56,189,248,0.28)" stroke-width="1.5" stroke-dasharray="4 3"/>
+                <!-- Port & Starboard Oars / Weapon -->
+                <line x1="125" y1="24" x2="108" y2="6" stroke="${weaponCol}" stroke-width="3" stroke-linecap="round"/>
+                <line x1="125" y1="72" x2="108" y2="90" stroke="${weaponCol}" stroke-width="3" stroke-linecap="round"/>
+                ${weaponTier > 0 || hovSlot === 'weapon' ? `
+                    <rect x="99" y="2" width="16" height="8" rx="2" fill="${weaponCol}"/>
+                    <rect x="99" y="86" width="16" height="8" rx="2" fill="${weaponCol}"/>
+                ` : ''}
+                <!-- Inflatable Raft Hull -->
+                <rect x="74" y="22" width="96" height="52" rx="22" fill="rgba(200,40,30,0.28)" stroke="${hullStroke}" stroke-width="${armorTier > 0 || hovSlot === 'armor' ? '3.5' : '2'}"/>
+                <rect x="86" y="30" width="72" height="36" rx="12" fill="rgba(15,23,42,0.75)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <!-- Armor Bulwark Plates -->
+                ${armorTier > 0 || hovSlot === 'armor' ? `
+                    <path d="M 152 20 L 178 48 L 152 76" fill="none" stroke="${hullStroke}" stroke-width="3"/>
+                ` : ''}
+                <!-- Stern Outboard Motor -->
+                <rect x="56" y="37" width="18" height="22" rx="4" fill="${motorCol}" stroke="#0f172a" stroke-width="1.5"/>
+                <circle cx="52" cy="48" r="5" fill="none" stroke="${motorCol}" stroke-width="2"/>
+                <!-- Tier Readout Pill -->
+                <text x="122" y="52" fill="#e2e8f0" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">
+                    M${motorTier} · W${weaponTier} · A${armorTier}
+                </text>
+            </svg>
+        `;
     }
 
     function init3DPreview() {
@@ -669,6 +717,7 @@ export function createArmoryShopUI({
                             </div>
                             <div class="armory-3d-canvas-box" id="armory-3d-box">
                                 <span class="armory-3d-label">${hoveredUpgrade ? hoveredUpgrade.name : 'Craft Rig'}</span>
+                                ${buildCraftSchematicSvg(localPlayer.upgrades, hoveredUpgrade)}
                             </div>
                             ${statsHtml}
                         </div>
@@ -714,8 +763,13 @@ export function createArmoryShopUI({
                 { key: 'maxHp', label: 'Max HP', unit: 'hp', cur: comp.current.maxHp, d: comp.deltas.maxHp, curPct: comp.currentBars.maxHpPct, prjPct: comp.projectedBars.maxHpPct },
             ];
 
-            const previewLabel = sidebar.querySelector('.armory-3d-label');
-            if (previewLabel) previewLabel.textContent = hoveredUpgrade ? hoveredUpgrade.name : 'Craft Rig';
+            const previewBox = sidebar.querySelector('#armory-3d-box');
+            if (previewBox) {
+                previewBox.innerHTML = `
+                    <span class="armory-3d-label">${hoveredUpgrade ? hoveredUpgrade.name : 'Craft Rig'}</span>
+                    ${buildCraftSchematicSvg(localPlayer.upgrades, hoveredUpgrade)}
+                `;
+            }
 
             const cardSub = sidebar.querySelector('.armory-card-title span:last-child');
             if (cardSub) cardSub.textContent = hoveredUpgrade ? hoveredUpgrade.name : 'Current';

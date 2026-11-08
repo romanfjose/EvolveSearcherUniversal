@@ -346,7 +346,7 @@ export function parseChallengeSeedUrl(urlStringOrSearch) {
         const result = {};
         if (seed) result.seed = seed.slice(0, 32);
         if (mode && isValidGameMode(mode)) result.mode = mode.toLowerCase();
-        if (bots !== null && !Number.isNaN(Number(bots))) result.botCount = clampBotCount(bots);
+        if (bots !== null && bots.trim() !== '' && !Number.isNaN(Number(bots))) result.botCount = clampBotCount(bots);
         if (classId && ['helmsman', 'bruiser', 'tinkerer', 'mystic'].includes(classId.toLowerCase())) {
             result.classId = classId.toLowerCase();
         }

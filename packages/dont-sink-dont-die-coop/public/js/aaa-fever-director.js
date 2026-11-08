@@ -65,7 +65,11 @@ import {
     stepLootPickups,
 } from '../../shared/loot-pickups.js';
 import { createLootPickupMesh, animateLootPickupMesh } from './entities/loot-mesh.js';
-import { createCrewClassMesh } from './entities/crew-classes-mesh.js';
+import { createCrewClassMesh, createSillyHatMesh } from './entities/crew-classes-mesh.js';
+import { getCrewClass } from '../../shared/crew-classes.js';
+import { getDailySeed, GRAPHICS_PRESETS } from '../../shared/game-settings.js';
+import { EndlessSession, hashString } from '../../shared/endless-mode.js';
+import { createSplitScreenManager } from './modes/splitscreen.js';
 import { InputManager } from './controls/input-manager.js';
 import { RunRecorder, loadPersonalBest, savePersonalBest } from '../../shared/replay-ghost.js';
 import { GhostRaftController } from './entities/ghost-raft.js';
@@ -93,6 +97,17 @@ import { buildVolcanicShipwreckCalderaBiome, stepVolcanicShipwreckCalderaBiome }
 import { createCoopTetherVfx, updateCoopTetherVfx } from './vfx/coop-tether-vfx.js';
 import { buildNauticalBuoyLanes, stepNauticalBuoys } from './world/nautical-buoy-lanes.js';
 import { createRaftAnchorVfx, updateRaftAnchorVfx } from './vfx/raft-anchor-vfx.js';
+import { resolveCrewClassPerks, computeClassDiscountedCost } from '../../shared/crew-class-gameplay-bridge.js';
+import { installGadgetForArmoryPurchase, stepAndApplyRaftGadgets } from '../../shared/gadget-live-resolver.js';
+import { dispatchBotOrderByKey, computeWingmanOrderedTarget } from '../../shared/bot-order-formation-bridge.js';
+import { grantCheckpointTarotBlessing, computeTarotLiveModifiers } from '../../shared/tarot-gameplay-bridge.js';
+import { resolveEscapeKeyAction, createSingleDispatchKeyGuard } from '../../shared/modal-and-keybind-router.js';
+import { isWithinRenderHorizon, cullSceneByRaftZ } from '../../shared/spatial-biome-culler.js';
+import { computeTieredCraftFeel } from '../../shared/tiered-upgrade-physics-bridge.js';
+import { getModeCameraProfile } from '../../shared/camera-modes-and-kickflip-feel.js';
+import { getBranchAudioCue } from '../../shared/audio-branch-cues.js';
+import { evaluateSceneClutterBudget } from '../../shared/frustum-clutter-budget.js';
+import { verifyZonePayoffAtPosition, RIVER_KEY_ZONES } from '../../shared/landmark-payoff-verifier.js';
 
 export function createAAAFeverDirector({
     THREE,
@@ -110,6 +125,7 @@ export function createAAAFeverDirector({
     popAt,
     getMyRaft,
     getOtherPlayers,
+    getAllPlayers,
     getEnemiesData,
     enemyMeshes,
     getMyStats,
@@ -117,9 +133,17 @@ export function createAAAFeverDirector({
     onGrantCoins,
     onHealPlayer,
     onUpgradePurchased,
+    onRunLaunch,
+    onFovChanged,
+    onCameraShakeChanged,
     riverWidth = 80,
 }) {
-    const seed = 20261105;
+    let seed = 20261105;
+    let selectedClass = 'helmsman';
+    let selectedHatId = 'captain_tricorn';
+    let activeMode = 'campaign';
+    let endlessSession = null;
+    let splitScreenManager = null;
 
     // 1. 4-Act Biome Scenery Props + Wave 5A True 3D Architectural Biomes along the 80m river (Acts 1..4)
     const biomeGroup = new THREE.Group();
@@ -288,24 +312,22 @@ export function createAAAFeverDirector({
     });
 
     // 14. Interactive 3-Tier Harbor Armory Shop UI
+    const keyGuard = createSingleDispatchKeyGuard(80);
     function applyLocalUpgradePurchase(slot, upgradeId, cost, name) {
         const stats = getMyStats();
-        const isTier2OrHigher = Boolean(upgradeId && !['motor_1', 'weapon_1', 'armor_1', 'motor', 'weapon', 'armor'].includes(upgradeId));
         if (!stats.upgrades.includes(slot)) {
             stats.upgrades.push(slot);
         }
         if (upgradeId && !stats.upgrades.includes(upgradeId)) {
             stats.upgrades.push(upgradeId);
         }
-        // Only deduct manually for Tier 2/3 upgrades (since Tier 1 socket.emit('buyUpgrade', slot) deducts on loopback server)
-        if (isTier2OrHigher && Number.isFinite(cost) && cost > 0) {
-            onGrantCoins(-cost);
-        } else {
-            hud.setStats(stats);
+        // Tinkerer Class Passive Perk: -20% shop upgrade cost refund via crew-class-gameplay-bridge
+        const discountedCost = computeClassDiscountedCost(cost, selectedClass);
+        if (Number.isFinite(cost) && cost > discountedCost) {
+            onGrantCoins?.(cost - discountedCost);
         }
-        if (slot === 'weapon') installGadget({ coins: 999 }, gadgetState, 'harpoon');
-        if (slot === 'armor') installGadget({ coins: 999 }, gadgetState, 'shield_dome');
-        if (slot === 'motor') installGadget({ coins: 999 }, gadgetState, 'nitro_keg');
+        hud.setStats(stats);
+        installGadgetForArmoryPurchase(gadgetState, slot, upgradeId);
         onUpgradePurchased?.({ slot, id: upgradeId, cost, name });
         ensureGadgetMeshes();
         sfx.upgrade?.();
@@ -395,41 +417,174 @@ export function createAAAFeverDirector({
         : { updatePlayerData() {}, render() {} };
 
     // 19. 3D Dockside Title Screen & [Esc] Settings Drawer
-    let crewCosmeticGroup = null;
+    function applyLiveSettingsToEngine(newSettings = {}) {
+        if (!newSettings) return;
+        if (Number.isFinite(Number(newSettings.fov)) && camera) {
+            camera.fov = Number(newSettings.fov);
+            camera.updateProjectionMatrix?.();
+            onFovChanged?.(Number(newSettings.fov));
+        }
+        if (Number.isFinite(Number(newSettings.cameraShake))) {
+            onCameraShakeChanged?.(Number(newSettings.cameraShake));
+        }
+        const aud = newSettings.audio || {};
+        const masterVol = typeof newSettings.masterVolume === 'number'
+            ? newSettings.masterVolume
+            : (typeof aud.master === 'number' ? aud.master : 1.0);
+        const musicVol = typeof aud.music === 'number' ? aud.music : 0.8;
+        const sfxVol = typeof aud.sfx === 'number' ? aud.sfx : 1.0;
+        const squeakyVol = typeof aud.squeakyHammer === 'number' ? aud.squeakyHammer : 1.25;
+        const isMuted = Boolean(aud.muted);
+
+        musicEngine.setMasterVolume?.(isMuted ? 0 : Math.min(2, masterVol * musicVol));
+        sfx?.setVolume?.(isMuted ? 0 : Math.min(2, masterVol * sfxVol));
+        sfx?.setSqueakyVolume?.(squeakyVol);
+        sfx?.setMuted?.(isMuted);
+
+        if (newSettings.graphicsPreset && GRAPHICS_PRESETS[newSettings.graphicsPreset] && renderer) {
+            const preset = GRAPHICS_PRESETS[newSettings.graphicsPreset];
+            if (typeof window !== 'undefined' && renderer.setPixelRatio) {
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, preset.pixelRatioCap || 2));
+            }
+            if (renderer.shadowMap) {
+                renderer.shadowMap.enabled = Boolean(preset.shadowsEnabled);
+            }
+        }
+    }
+
     const titleMenu = hasDOM
         ? createTitleMenuDirector({
             camera,
             renderer,
-            onStartGame: (cfg) => {
+            onStartGame: (cfg = {}) => {
                 musicEngine.unlock();
                 musicEngine.start();
-                applyCrewCosmetics(cfg.crewClass || 'bruiser');
+
+                selectedClass = cfg.classId || cfg.crewClass || 'helmsman';
+                selectedHatId = cfg.hatId || 'captain_tricorn';
+                activeMode = cfg.mode || 'campaign';
+                const botCount = cfg.botCount ?? 2;
+                const playerName = cfg.playerName || 'Captain River';
+
+                if (activeMode === 'daily') {
+                    seed = hashString(getDailySeed());
+                } else if (cfg.seed) {
+                    seed = hashString(String(cfg.seed));
+                }
+
+                if (activeMode === 'endless') {
+                    endlessSession = new EndlessSession({ seed, playerName });
+                } else {
+                    endlessSession = null;
+                }
+
+                if (activeMode === 'splitscreen') {
+                    if (!splitScreenManager && hasDOM) {
+                        splitScreenManager = createSplitScreenManager(THREE, renderer, scene, {
+                            fov: cfg.fov || 72,
+                        });
+                    }
+                } else if (splitScreenManager) {
+                    splitScreenManager.dispose();
+                    splitScreenManager = null;
+                }
+
+                applyLiveSettingsToEngine(cfg);
+                socket?.setPaused?.(false);
+
+                onRunLaunch?.({
+                    ...cfg,
+                    classId: selectedClass,
+                    hatId: selectedHatId,
+                    mode: activeMode,
+                    botCount,
+                    playerName,
+                    numericSeed: seed,
+                });
+
+                applyCrewCosmetics(selectedClass, selectedHatId);
                 // Helmet 03 (Pacing, Narrative & Essence): Show, Never Explain — zero all-caps tutorial banner spam at start
             },
             onSettingsChanged: (newSettings) => {
-                if (newSettings.fov) {
-                    camera.fov = newSettings.fov;
-                    camera.updateProjectionMatrix();
-                }
-                if (typeof newSettings.masterVolume === 'number') {
-                    musicEngine.setMasterVolume(newSettings.masterVolume);
-                }
+                applyLiveSettingsToEngine(newSettings);
             },
         })
-        : { toggleSettingsDrawer() {} };
+        : {
+            toggleSettingsDrawer() {},
+            isTitleVisible: () => false,
+            isSettingsDrawerOpen: () => false,
+            getSettings: () => ({ classId: 'helmsman', hatId: 'captain_tricorn', mode: 'campaign', botCount: 2 }),
+        };
 
-    function applyCrewCosmetics(crewClassId) {
-        const raft = getMyRaft();
-        if (!raft?.vis?.rig) return;
-        if (crewCosmeticGroup && crewCosmeticGroup.parent) {
-            crewCosmeticGroup.parent.remove(crewCosmeticGroup);
+    // Pause authoritative loopback server while initial title screen is open in browser
+    if (hasDOM && titleMenu.isTitleVisible?.()) {
+        socket?.setPaused?.(true);
+        const initCfg = titleMenu.getSettings?.() || {};
+        selectedClass = initCfg.classId || 'helmsman';
+        selectedHatId = initCfg.hatId || 'captain_tricorn';
+        activeMode = initCfg.mode || 'campaign';
+        applyLiveSettingsToEngine(initCfg);
+    }
+
+    function applyCrewCosmetics(crewClassId = selectedClass, hatId = selectedHatId, targetRaft = getMyRaft()) {
+        if (!targetRaft?.vis?.rig) return;
+        const vis = targetRaft.vis;
+        if (Array.isArray(vis.cosmeticNodes)) {
+            for (const node of vis.cosmeticNodes) {
+                if (node && node.parent) node.parent.remove(node);
+            }
         }
+        vis.cosmeticNodes = [];
+
         try {
-            const rig = createCrewClassMesh(THREE, crewClassId);
-            const hatNode = rig?.cosmetics?.hat || rig?.hat;
-            if (hatNode && typeof hatNode.add === 'function') {
-                crewCosmeticGroup = hatNode;
-                raft.vis.rig.headGroup.add(crewCosmeticGroup);
+            const clsId = crewClassId || selectedClass || 'helmsman';
+            const hId = hatId || selectedHatId || 'captain_tricorn';
+            const classDef = getCrewClass(clsId);
+            if (targetRaft.craft) {
+                targetRaft.craft.classPerks = { ...(classDef?.perks || {}) };
+            }
+            const mySt = getMyStats?.();
+            if (mySt && targetRaft === getMyRaft()) {
+                mySt.classPerks = { ...(classDef?.perks || {}) };
+            }
+            const rig = createCrewClassMesh(THREE, clsId);
+
+            // Hide default flat cylinder bandana on headGroup when wearing a 3D hat
+            if (vis.rig.headGroup?.children) {
+                for (const child of vis.rig.headGroup.children) {
+                    if (child?.geometry?.type === 'CylinderGeometry' && Math.abs((child.position?.y || 0) - 0.1) < 0.05) {
+                        child.visible = false;
+                    }
+                }
+            }
+
+            // Attach selected 3D Silly Hat (or class hat) to headGroup
+            const hatNode = hId ? createSillyHatMesh(THREE, hId) : (rig?.cosmetics?.hat || rig?.hat);
+            if (hatNode && vis.rig.headGroup?.add) {
+                vis.rig.headGroup.add(hatNode);
+                vis.cosmeticNodes.push(hatNode);
+            }
+
+            // Attach class body outfit accessories (coat, pauldrons, steampunk crane backpack, mystic talisman/lantern)
+            const torsoTarget = vis.rig.torso || vis.rig.character;
+            if (torsoTarget?.add && rig?.cosmetics) {
+                const { coat, pauldrons, backpack, talisman, accessory } = rig.cosmetics;
+                for (const part of [coat, backpack, talisman, accessory]) {
+                    if (part) {
+                        if (part.parent) part.parent.remove(part);
+                        torsoTarget.add(part);
+                        vis.cosmeticNodes.push(part);
+                    }
+                }
+                if (Array.isArray(pauldrons)) {
+                    for (const p of pauldrons) {
+                        if (p) {
+                            if (p.parent) p.parent.remove(p);
+                            torsoTarget.add(p);
+                            vis.cosmeticNodes.push(p);
+                        }
+                    }
+                }
             }
         } catch (_e) { /* ignore */ }
     }
@@ -445,44 +600,41 @@ export function createAAAFeverDirector({
 
         if (e.key === 'Escape') {
             if (armoryShop.isOpen()) {
+                const armoryEl = document.getElementById('armory-overlay');
+                if (armoryEl) armoryEl.dataset.justClosedAt = String(Date.now());
                 armoryShop.close();
-            } else {
-                titleMenu.toggleSettingsDrawer();
+                e.stopImmediatePropagation?.();
             }
             return;
         }
-        if (k === 'p') {
-            photoAndAwards.togglePhotoMode();
-            return;
-        }
+        // Note: [P] Photo Mode keydown is handled directly inside photoAndAwards (photo-and-awards.js)
+        // so we do not double-toggle it ON and immediately OFF in the same event tick.
         if (k === 'b') {
             const stats = getMyStats();
+            const allP = typeof getAllPlayers === 'function' ? getAllPlayers() : {};
             armoryShop.updatePlayerData({ coins: stats.coins, upgrades: stats.upgrades, isDead: getIsDead() });
-            armoryShop.toggle();
+            armoryShop.updateCrewPlayers(allP);
+            armoryShop.toggle({ coins: stats.coins, upgrades: stats.upgrades, isDead: getIsDead() }, allP);
             return;
         }
-        // Bot tactical orders: Z = Focus Boss, X = Defend Raft, C = Scavenge Coins, V = Full Ahead
-        const orderMap = {
-            z: BOT_COMMAND_IDS.FOCUS_BOSS,
-            x: BOT_COMMAND_IDS.DEFEND_RAFT,
-            c: BOT_COMMAND_IDS.SCAVENGE_COINS,
-            v: BOT_COMMAND_IDS.RACE_CHECKPOINT,
-        };
-        if (orderMap[k]) {
-            const cmdId = orderMap[k];
-            issueBotOrder(botOrderState, cmdId, performance.now());
-            const bark = getBotOrderBark(cmdId);
-            hud.toast(`📣 CREW ORDER: ${bark}`, 1800);
-            const others = Object.values(getOtherPlayers());
-            if (others.length > 0) {
-                banterDirector.spawnBubble({
-                    id: `bot-order-${Date.now()}`,
-                    speakerName: 'Crew Bot',
-                    text: bark,
-                    category: 'crew',
-                    worldPosition: others[0].group.position,
-                    durationMs: 3000,
-                });
+        // Bot tactical orders: Z = Focus Boss/Fire, X = Form Up & Defend, C = Scavenge Coins, V = Rush Checkpoint
+        if (['z', 'x', 'c', 'v'].includes(k)) {
+            if (!keyGuard.shouldProcess(k)) return;
+            const orderRes = dispatchBotOrderByKey(botOrderState, k, performance.now(), { ignoreCooldown: true });
+            if (orderRes.issued && orderRes.commandId) {
+                const bark = orderRes.bark || getBotOrderBark(orderRes.commandId);
+                hud.toast(`📣 CREW ORDER: ${bark}`, 1800);
+                const others = Object.values(getOtherPlayers());
+                if (others.length > 0) {
+                    banterDirector.spawnBubble({
+                        id: `bot-order-${Date.now()}`,
+                        speakerName: 'Crew Bot',
+                        text: bark,
+                        category: 'crew',
+                        worldPosition: others[0].group.position,
+                        durationMs: 3000,
+                    });
+                }
             }
         }
     });
@@ -500,6 +652,7 @@ export function createAAAFeverDirector({
 
     let lastBanterCheck = 0;
     let lastHazardFeedbackMs = 0;
+    let meleeSwingCounter = 0;
     const onboardingStagesShown = new Set();
 
     return {
@@ -516,7 +669,42 @@ export function createAAAFeverDirector({
         hazardsLayout,
         krakenState,
         krakenMesh,
-        isPaused: () => isPhotoPaused,
+        gadgetState,
+        botOrderState,
+        tarotState,
+        getActiveMode: () => activeMode,
+        getSelectedClass: () => selectedClass,
+        getSelectedHat: () => selectedHatId,
+        getCrewClassDef: () => getCrewClass(selectedClass),
+        getClassPerks: () => ({ ...(getCrewClass(selectedClass)?.perks || {}), ...resolveCrewClassPerks(selectedClass) }),
+        isClassPerksWired: () => true,
+        isGadgetEventsWired: () => true,
+        isBotOrderFormationWired: () => true,
+        isTarotMultipliersWired: () => true,
+        getTarotMultipliers: () => computeTarotLiveModifiers(tarotState),
+        getTieredCraftFeel: () => computeTieredCraftFeel(getMyStats()?.upgrades || []),
+        getModeCameraProfile: () => getModeCameraProfile(activeMode),
+        getBranchAudioCue: (cueId) => getBranchAudioCue(cueId),
+        getSceneClutterEvaluation: (metrics = {}) => evaluateSceneClutterBudget(metrics),
+        getLandmarkAuditReport: (pos = { x: 0, z: -42 }) => ({ zones: RIVER_KEY_ZONES, current: verifyZonePayoffAtPosition(pos) }),
+        getBotFormationWaypoint: (botIndex = 0, leaderPos = { x: 0, z: 0 }, enemiesMap = {}) =>
+            computeWingmanOrderedTarget({
+                botIndex,
+                playerPos: leaderPos,
+                activeOrderId: botOrderState?.activeOrder || 'form-up',
+                enemies: enemiesMap,
+            }),
+        getEndlessSession: () => endlessSession,
+        getSplitScreenManager: () => splitScreenManager,
+        applyCrewCosmetics,
+        isPaused: () => {
+            const paused = isPhotoPaused
+                || Boolean(titleMenu?.isTitleVisible?.())
+                || Boolean(titleMenu?.isSettingsDrawerOpen?.())
+                || Boolean(armoryShop?.isOpen?.());
+            socket?.setPaused?.(paused);
+            return paused;
+        },
 
         /** Called when player presses right-click or Shift to block/parry */
         onBlockPressed(nowMs = performance.now()) {
@@ -530,6 +718,18 @@ export function createAAAFeverDirector({
             const pos = raft.vis.group.position;
             const hasWeapon = getMyStats().upgrades.includes('weapon');
             combatVFX.triggerSlash(pos, raft.craft.yaw, hasWeapon);
+            meleeSwingCounter++;
+
+            // Tarot Blessing: Squeaky Overdrive (every 3rd melee hit unleashes a 45-damage 8m ultrasonic shockwave)
+            if ((tarotState?.blessings?.['squeaky-overdrive']?.count || 0) > 0 && meleeSwingCounter % 3 === 0) {
+                const enemies = getEnemiesData() || {};
+                for (const [eId, e] of Object.entries(enemies)) {
+                    if (e && e.health > 0 && Math.hypot(e.position.x - pos.x, e.position.z - pos.z) <= 8.5) {
+                        socket.emit('playerHitEnemy', { enemyId: eId });
+                    }
+                }
+                popAt(pos, '🔨 SQUEAKY OVERDRIVE!', '#ec4899', 3.2);
+            }
 
             // Check destructible wooden barricades & suspension bridge anchors
             const smashRes = evaluateWarMalletSmash(
@@ -582,12 +782,8 @@ export function createAAAFeverDirector({
         },
 
         /** Triggered when player crosses a river checkpoint (-150, -300, -450...) */
-        onCheckpointCrossed(checkpointZ, checkpointIdx) {
-            const session = createTarotDraftSession(checkpointZ, seed + checkpointIdx * 31, performance.now());
-            const firstCard = session?.offeredCards?.[0];
-            if (firstCard?.id) {
-                applyTarotBlessing(tarotState, firstCard.id);
-            }
+        onCheckpointCrossed(checkpointZ, checkpointIdx = 0) {
+            grantCheckpointTarotBlessing(tarotState, checkpointZ, checkpointIdx, seed, performance.now());
             activeTarotSession = null;
         },
 
@@ -717,7 +913,7 @@ export function createAAAFeverDirector({
             }
 
             // 7. Raft Gadgets (Auto-Harpoon, Shield Dome, Nitro Keg, Repair Drone)
-            updateRaftGadgets({
+            const gadgetRes = updateRaftGadgets({
                 gadgetState,
                 raftPos: craft.position,
                 raftYaw: craft.yaw,
@@ -726,9 +922,20 @@ export function createAAAFeverDirector({
                 now: nowMs,
                 dt: fixedDt,
             });
+            if (Array.isArray(gadgetRes?.events)) {
+                for (const gev of gadgetRes.events) {
+                    if ((gev.type === 'harpoon-hit' || gev.type === 'harpoon-fire') && gev.targetId && enemies[gev.targetId]?.health > 0) {
+                        socket.emit('playerHitEnemy', { enemyId: gev.targetId });
+                    } else if (gev.type === 'repair-heal' && gev.healAmount > 0 && onHealPlayer) {
+                        onHealPlayer(gev.healAmount);
+                    }
+                }
+            }
 
-            // 8. Dread Kraken Final Boss at z = -1420
-            if (!krakenState.isSpawned && shouldKrakenSpawn(craft.position.z)) {
+            // 8. Dread Kraken Final Boss at z = -1420 (or earlier in Boss Rush mode at z = -450)
+            const krakenTriggerZ = activeMode === 'boss_rush' ? -450 : -1300;
+            if (!krakenState.isSpawned && shouldKrakenSpawn(craft.position.z, krakenTriggerZ)) {
+                krakenState.position.z = activeMode === 'boss_rush' ? craft.position.z - 55 : -1420;
                 spawnKraken(krakenState);
                 krakenMesh.visible = true;
                 hud.toast('🐙 WARNING: THE DREAD KRAKEN AWAKENS AT THE HARBOR GATES!', 4000);
@@ -738,6 +945,45 @@ export function createAAAFeverDirector({
             if (krakenState.isSpawned && !krakenState.isDefeated) {
                 krakenState.targetPosition = craft.position;
                 tickKraken(krakenState, fixedDt, [{ id: 'local', position: craft.position }]);
+            }
+
+            // 8b. Endless Rogue-River Sector Chainer & Split-Screen Update
+            if (activeMode === 'endless' && endlessSession) {
+                const endRes = endlessSession.updateRaftZ(craft.position.z);
+                if (endRes?.newEvents?.length) {
+                    for (const ev of endRes.newEvents) {
+                        if (ev.event === 'endless:sector_entered') {
+                            hud.toast(`♾️ ENDLESS SECTOR ${ev.data.sectorIndex + 1}: ${ev.data.biomeName.toUpperCase()}!`, 3200);
+                        } else if (ev.event === 'endless:perk_draft_triggered' && ev.data?.offer?.cards?.[0]) {
+                            const topCard = ev.data.offer.cards[0];
+                            endlessSession.selectPerk(topCard.id);
+                            hud.toast(`🃏 ROGUE PERK DRAFTED: ${topCard.name.toUpperCase()}!`, 2600);
+                        }
+                    }
+                }
+            }
+            if (activeMode === 'splitscreen' && splitScreenManager) {
+                splitScreenManager.player1.craft.position.x = craft.position.x;
+                splitScreenManager.player1.craft.position.y = craft.position.y;
+                splitScreenManager.player1.craft.position.z = craft.position.z;
+                splitScreenManager.player1.craft.velocity.x = craft.velocity.x;
+                splitScreenManager.player1.craft.velocity.z = craft.velocity.z;
+                splitScreenManager.player1.craft.yaw = craft.yaw;
+                // Keep P2 craft advancing alongside P1 if no P2 keys are pressed
+                const p2In = splitScreenManager.getP2Input();
+                const p2c = splitScreenManager.player2.craft;
+                const p2Steer = (p2In.a ? 1 : 0) - (p2In.d ? 1 : 0);
+                p2c.yaw += p2Steer * 2.0 * fixedDt;
+                const p2Fwd = p2In.w ? 14 : (p2In.s ? -6 : 0);
+                p2c.velocity.x = -Math.sin(p2c.yaw) * p2Fwd;
+                p2c.velocity.z = -Math.cos(p2c.yaw) * p2Fwd - 4.5;
+                p2c.position.x = Math.max(-36, Math.min(36, p2c.position.x + p2c.velocity.x * fixedDt));
+                p2c.position.z = p2c.position.z + p2c.velocity.z * fixedDt;
+                if (Math.abs(p2c.position.z - craft.position.z) > 35) {
+                    p2c.position.z = craft.position.z + 4;
+                    p2c.position.x = craft.position.x + 5;
+                }
+                splitScreenManager.update(fixedDt);
             }
 
             // 9. Record Ghost Frame (Helmet 06: hard ring-buffer cap of 7200 frames so 8-hour runs use constant RAM)
@@ -879,13 +1125,37 @@ export function createAAAFeverDirector({
                 photoAndAwards.update(dt);
             }
 
-            // 10. Sovereign Helmet 01-04 Live Updates (Protected by Helmet 02 Circuit Breakers)
+            // 10. Sovereign Helmet 01-06 Live Updates & Z-Horizon Spatial Culling (Protected by Helmet 02 Circuit Breakers)
             breakerRegistry.step('biomes_3d_arch', () => {
-                if (act1ArchGroup && act1ArchGroup.visible) stepRedwoodFlumesBiome(act1ArchGroup, dt, elapsedSec);
-                if (act2ArchGroup) stepWalledHarborCityBiome(act2ArchGroup, dt, elapsedSec);
-                if (act3ArchGroup) stepSunkenCrystalTemplesBiome(act3ArchGroup, dt, elapsedSec);
-                if (act4ArchGroup) stepVolcanicShipwreckCalderaBiome(act4ArchGroup, dt, elapsedSec);
-                if (nauticalBuoysGroup) stepNauticalBuoys(nauticalBuoysGroup, elapsedSec);
+                // Helmet 06 (Pragmatic Performance): Cull distant Act architectural groups and props via spatial-biome-culler
+                cullSceneByRaftZ({
+                    raftZ: z,
+                    actGroups: {
+                        act1: act1ArchGroup,
+                        act2: act2ArchGroup,
+                        act3: act3ArchGroup,
+                        act4: act4ArchGroup,
+                    },
+                    shorelineGroup: shorelineHandle?.group || null,
+                });
+                if (act1ArchGroup) act1ArchGroup.visible = false;
+                if (act2ArchGroup?.visible) stepWalledHarborCityBiome(act2ArchGroup, dt, elapsedSec);
+                if (act3ArchGroup?.visible) stepSunkenCrystalTemplesBiome(act3ArchGroup, dt, elapsedSec);
+                if (act4ArchGroup?.visible) stepVolcanicShipwreckCalderaBiome(act4ArchGroup, dt, elapsedSec);
+                if (nauticalBuoysGroup) {
+                    for (const child of nauticalBuoysGroup.children || []) {
+                        const cz = child.position?.z ?? 0;
+                        if (cz !== 0) child.visible = isWithinRenderHorizon(cz, z, 220, 70);
+                    }
+                    stepNauticalBuoys(nauticalBuoysGroup, elapsedSec);
+                }
+                for (const child of biomeGroup.children || []) {
+                    if (child === act2ArchGroup || child === act3ArchGroup || child === act4ArchGroup || child === nauticalBuoysGroup) continue;
+                    for (const prop of child.children || []) {
+                        const pz = prop.position?.z ?? 0;
+                        if (pz !== 0) prop.visible = isWithinRenderHorizon(pz, z, 220, 70);
+                    }
+                }
             });
             breakerRegistry.step('raft_anchor_vfx', () => {
                 if (raftAnchorVfxGroup) raftAnchorVfxGroup.visible = false;
@@ -895,6 +1165,12 @@ export function createAAAFeverDirector({
                 if (tetherNode) tetherNode.visible = false;
             });
             breakerRegistry.step('shoreline', () => {
+                if (shorelineHandle?.group?.children) {
+                    for (const sp of shorelineHandle.group.children) {
+                        const sz = sp.position?.z ?? 0;
+                        if (sz !== 0) sp.visible = sz >= z - 240 && sz <= z + 80;
+                    }
+                }
                 animateShorelineLandmarks(shorelineHandle, raft?.craft?.position, elapsedSec);
             });
             breakerRegistry.step('water_wake', () => {

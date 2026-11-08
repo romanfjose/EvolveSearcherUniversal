@@ -511,8 +511,8 @@ export function createQuickBuyHotbar({
         // Ignore if full Armory modal or Title menu modal is currently open and trapping focus
         const armoryOverlay = document.getElementById('armory-overlay');
         if (armoryOverlay && armoryOverlay.classList.contains('open')) return;
-        const titleMenu = document.getElementById('title-menu-root');
-        if (titleMenu && window.getComputedStyle(titleMenu).display !== 'none' && !titleMenu.hidden) return;
+        const titleLobby = document.getElementById('title-lobby-overlay');
+        if (titleLobby && window.getComputedStyle(titleLobby).display !== 'none' && window.getComputedStyle(titleLobby).opacity !== '0') return;
 
         const k = e.key;
         if (['1', '2', '3', '4'].includes(k)) {

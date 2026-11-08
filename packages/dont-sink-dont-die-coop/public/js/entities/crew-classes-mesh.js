@@ -641,3 +641,123 @@ export function createCrewClassMesh(THREE, classId = 'helmsman', options = {}) {
         state: rigState,
     };
 }
+
+/**
+ * Builds a distinct 3D procedural Silly Hat mesh for the 6 selectable lobby hats:
+ * - 'captain_tricorn'
+ * - 'viking_horns'
+ * - 'traffic_cone'
+ * - 'giant_frog_hat'
+ * - 'wizard_beard'
+ * - 'disco_afro'
+ */
+export function createSillyHatMesh(THREE, hatId = 'captain_tricorn') {
+    const cleanId = (hatId || 'captain_tricorn').toLowerCase().trim();
+    const mkMat = (params) => (THREE.MeshStandardMaterial ? new THREE.MeshStandardMaterial(params) : new THREE.MeshBasicMaterial(params));
+
+    const group = new THREE.Group();
+    group.name = `SillyHat_${cleanId}`;
+    group.position.set(0, 0.26, 0);
+
+    if (cleanId === 'traffic_cone') {
+        const orangeMat = mkMat({ color: 0xf97316, roughness: 0.45 });
+        const whiteMat = mkMat({ color: 0xffffff, emissive: 0xe2e8f0, emissiveIntensity: 0.25, roughness: 0.3 });
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.08, 0.68), orangeMat);
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.78, 12), orangeMat);
+        cone.position.y = 0.42;
+        const stripe1 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.12, 12), whiteMat);
+        stripe1.position.y = 0.32;
+        const stripe2 = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, 0.10, 12), whiteMat);
+        stripe2.position.y = 0.56;
+        group.add(base, cone, stripe1, stripe2);
+        return group;
+    }
+
+    if (cleanId === 'giant_frog_hat') {
+        const frogGreen = mkMat({ color: 0x22c55e, roughness: 0.5 });
+        const bellyYellow = mkMat({ color: 0xfef08a, roughness: 0.6 });
+        const whiteEye = mkMat({ color: 0xffffff, roughness: 0.2 });
+        const pupilDark = mkMat({ color: 0x0f172a, roughness: 0.2 });
+
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 10), frogGreen);
+        dome.scale.set(1.15, 0.78, 1.12);
+        dome.position.y = 0.06;
+        const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.42, 0.08, 12), bellyYellow);
+        lip.position.y = -0.06;
+        group.add(dome, lip);
+
+        for (const sx of [-0.22, 0.22]) {
+            const eyeStalk = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), frogGreen);
+            eyeStalk.position.set(sx, 0.30, -0.10);
+            const eyeball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), whiteEye);
+            eyeball.position.set(sx, 0.32, -0.20);
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilDark);
+            pupil.position.set(sx, 0.32, -0.29);
+            group.add(eyeStalk, eyeball, pupil);
+        }
+        return group;
+    }
+
+    if (cleanId === 'wizard_beard') {
+        const indigoMat = mkMat({ color: 0x4338ca, roughness: 0.5 });
+        const goldStarMat = mkMat({ color: 0xfacc15, emissive: 0xd97706, emissiveIntensity: 0.3, roughness: 0.3 });
+        const silverBeardMat = mkMat({ color: 0xe2e8f0, roughness: 0.75 });
+
+        const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 14), indigoMat);
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.34, 0.09, 12), goldStarMat);
+        band.position.y = 0.06;
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.85, 12), indigoMat);
+        cone.position.set(0, 0.48, 0.04);
+        cone.rotation.x = -0.15;
+
+        const beardTop = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.55, 8), silverBeardMat);
+        beardTop.rotation.x = Math.PI;
+        beardTop.position.set(0, -0.46, -0.28);
+        const mustacheL = new THREE.Mesh(new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.05, 0.22, 4, 6) : new THREE.BoxGeometry(0.24, 0.08, 0.08), silverBeardMat);
+        mustacheL.position.set(-0.12, -0.24, -0.32);
+        mustacheL.rotation.z = 0.35;
+        const mustacheR = new THREE.Mesh(new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.05, 0.22, 4, 6) : new THREE.BoxGeometry(0.24, 0.08, 0.08), silverBeardMat);
+        mustacheR.position.set(0.12, -0.24, -0.32);
+        mustacheR.rotation.z = -0.35;
+
+        group.add(brim, band, cone, beardTop, mustacheL, mustacheR);
+        return group;
+    }
+
+    if (cleanId === 'disco_afro') {
+        const afroMat = mkMat({ color: 0x18181b, roughness: 0.85 });
+        const goldPickMat = mkMat({ color: 0xfacc15, metalness: 0.7, roughness: 0.25 });
+        const mainPuff = new THREE.Mesh(new THREE.SphereGeometry(0.54, 14, 12), afroMat);
+        mainPuff.position.set(0, 0.16, 0.02);
+        group.add(mainPuff);
+
+        const offsets = [
+            [-0.28, 0.18, 0], [0.28, 0.18, 0], [0, 0.34, 0], [0, 0.16, 0.26],
+        ];
+        for (const [ox, oy, oz] of offsets) {
+            const lobe = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), afroMat);
+            lobe.position.set(ox, oy, oz);
+            group.add(lobe);
+        }
+        const pickHandle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.26, 0.04), goldPickMat);
+        pickHandle.position.set(0.48, 0.36, 0);
+        pickHandle.rotation.z = -0.45;
+        group.add(pickHandle);
+        return group;
+    }
+
+    if (cleanId === 'viking_horns') {
+        const bruiserRig = createCrewClassMesh(THREE, 'bruiser');
+        if (bruiserRig.cosmetics.hat) {
+            bruiserRig.cosmetics.hat.parent?.remove(bruiserRig.cosmetics.hat);
+            return bruiserRig.cosmetics.hat;
+        }
+    }
+
+    const helmsmanRig = createCrewClassMesh(THREE, 'helmsman');
+    if (helmsmanRig.cosmetics.hat) {
+        helmsmanRig.cosmetics.hat.parent?.remove(helmsmanRig.cosmetics.hat);
+        return helmsmanRig.cosmetics.hat;
+    }
+    return group;
+}

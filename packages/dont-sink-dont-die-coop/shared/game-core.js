@@ -104,8 +104,8 @@ export function riverCurrentMultiplier(z) {
 }
 
 /** Downriver force (negative z) on a raft at (x, z); zero outside the channel. */
-export function riverCurrentForce(x, z) {
-    if (!(x > -RIVER.channelHalfWidth && x < RIVER.channelHalfWidth)) return 0;
+export function riverCurrentForce(x, z, halfWidth = RIVER.channelHalfWidth) {
+    if (!(x > -halfWidth && x < halfWidth)) return 0;
     return -PHYSICS.baseCurrent * riverCurrentMultiplier(z);
 }
 
@@ -154,7 +154,10 @@ export function driveWatercraft(craft, input, dt) {
         const f = headingOf(craft.yaw);
         const r = { x: -f.z, z: f.x };
         const currentScale = Number.isFinite(input.currentScale) ? input.currentScale : 1;
-        const current = onWater && !input.onSolid ? (riverCurrentForce(p.x, p.z) * currentScale) / PLAYER.mass : 0; // world −z
+        const halfWidth = Number.isFinite(input.channelHalfWidth)
+            ? input.channelHalfWidth
+            : (Number.isFinite(craft.channelHalfWidth) ? craft.channelHalfWidth : RIVER.channelHalfWidth);
+        const current = onWater && !input.onSolid ? (riverCurrentForce(p.x, p.z, halfWidth) * currentScale) / PLAYER.mass : 0; // world −z
         const aFwd = watercraftThrust(input, input.upgrades, input.attacking) / PLAYER.mass + current * f.z;
         const aLat = current * r.z;
         const mooringBrake = input.onSolid && !input.w && !input.s ? 4.5 : 1;
@@ -286,20 +289,53 @@ export function isInShopZone(pos) {
 
 // ---------- upgrades ----------
 
+export const TIERED_UPGRADES = {
+    motor_1: { slot: 'motor', id: 'motor_1', cost: 10, motorBoost: 100, turnPenalty: 0.3 },
+    motor_2: { slot: 'motor', id: 'motor_2', cost: 25, motorBoost: 180, turnPenalty: 0.18 },
+    motor_3: { slot: 'motor', id: 'motor_3', cost: 45, motorBoost: 270, turnPenalty: 0.09 },
+    motor_mk2: { slot: 'motor', id: 'motor_2', cost: 25, motorBoost: 180, turnPenalty: 0.18 },
+    motor_mk3: { slot: 'motor', id: 'motor_3', cost: 45, motorBoost: 270, turnPenalty: 0.09 },
+    weapon_1: { slot: 'weapon', id: 'weapon_1', cost: 15, damageBonus: 20 },
+    weapon_2: { slot: 'weapon', id: 'weapon_2', cost: 30, damageBonus: 35 },
+    weapon_3: { slot: 'weapon', id: 'weapon_3', cost: 55, damageBonus: 55 },
+    weapon_mk2: { slot: 'weapon', id: 'weapon_2', cost: 30, damageBonus: 35 },
+    weapon_mk3: { slot: 'weapon', id: 'weapon_3', cost: 55, damageBonus: 55 },
+    armor_1: { slot: 'armor', id: 'armor_1', cost: 20, maxHealthBonus: 50 },
+    armor_2: { slot: 'armor', id: 'armor_2', cost: 35, maxHealthBonus: 90 },
+    armor_3: { slot: 'armor', id: 'armor_3', cost: 60, maxHealthBonus: 140 },
+    armor_mk2: { slot: 'armor', id: 'armor_2', cost: 35, maxHealthBonus: 90 },
+    armor_mk3: { slot: 'armor', id: 'armor_3', cost: 60, maxHealthBonus: 140 },
+};
+
 export function upgradeStats(upgrades = []) {
     const has = (t) => upgrades.includes(t);
+    let damageBonus = has('weapon') || has('weapon_1') ? UPGRADES.weapon.damageBonus : 0;
+    if (has('weapon_2') || has('weapon_mk2')) damageBonus = 35;
+    if (has('weapon_3') || has('weapon_mk3')) damageBonus = 55;
+
+    let maxHealthBonus = has('armor') || has('armor_1') ? UPGRADES.armor.maxHealthBonus : 0;
+    if (has('armor_2') || has('armor_mk2')) maxHealthBonus = 90;
+    if (has('armor_3') || has('armor_mk3')) maxHealthBonus = 140;
+
+    let motorBoost = has('motor') || has('motor_1') ? PHYSICS.motorBoost : 0;
+    let turnPenalty = has('motor') || has('motor_1') ? UPGRADES.motor.turnPenalty : 0;
+    if (has('motor_2') || has('motor_mk2')) { motorBoost = 180; turnPenalty = 0.18; }
+    if (has('motor_3') || has('motor_mk3')) { motorBoost = 270; turnPenalty = 0.09; }
+
     return {
-        attackDamage: PLAYER.baseDamage + (has('weapon') ? UPGRADES.weapon.damageBonus : 0),
-        maxHealthBonus: has('armor') ? UPGRADES.armor.maxHealthBonus : 0,
-        motorBoost: has('motor') ? PHYSICS.motorBoost : 0,
-        turnRate: PHYSICS.turnRate * (has('motor') ? 1 - UPGRADES.motor.turnPenalty : 1),
+        attackDamage: PLAYER.baseDamage + damageBonus,
+        maxHealthBonus,
+        motorBoost,
+        turnRate: PHYSICS.turnRate * (1 - turnPenalty),
     };
 }
 
 export function canPurchase(player, type) {
-    const upg = Object.hasOwn(UPGRADES, type) ? UPGRADES[type] : null;
+    const upg = Object.hasOwn(UPGRADES, type)
+        ? UPGRADES[type]
+        : (Object.hasOwn(TIERED_UPGRADES, type) ? TIERED_UPGRADES[type] : null);
     if (!player || !upg) return { ok: false, reason: 'unknown-upgrade' };
-    if (player.upgrades.includes(type)) return { ok: false, reason: 'owned' };
+    if (player.upgrades.includes(type) || (upg.id && player.upgrades.includes(upg.id))) return { ok: false, reason: 'owned' };
     if (player.coins < upg.cost) return { ok: false, reason: 'insufficient-coins' };
     return { ok: true, reason: null };
 }
@@ -568,18 +604,27 @@ export function enemyHitNpc(state, npcId, enemyId, damage) {
 export function buyUpgrade(state, playerId, type) {
     const p = state.players[playerId];
     if (!canPurchase(p, type).ok) return [];
-    const upg = UPGRADES[type];
+    const upg = Object.hasOwn(UPGRADES, type) ? UPGRADES[type] : TIERED_UPGRADES[type];
+    const prevMaxBonus = upgradeStats(p.upgrades).maxHealthBonus;
     p.coins -= upg.cost;
-    p.upgrades.push(type);
+    if (upg.slot && !p.upgrades.includes(upg.slot)) {
+        p.upgrades.push(upg.slot);
+    }
+    const canonicalId = upg.id || type;
+    if (!p.upgrades.includes(canonicalId)) {
+        p.upgrades.push(canonicalId);
+    }
     const events = [];
-    if (type === 'armor') {
-        p.maxHealth += upg.maxHealthBonus;
-        p.health += upg.maxHealthBonus;
+    const newMaxBonus = upgradeStats(p.upgrades).maxHealthBonus;
+    const hpDelta = newMaxBonus - prevMaxBonus;
+    if (hpDelta > 0) {
+        p.maxHealth += hpDelta;
+        p.health += hpDelta;
         events.push(ev('playerHealthUpdate', { id: p.id, health: p.health, maxHealth: p.maxHealth }));
     }
     events.push(
         ev('playerStatsUpdate', p, { to: p.id }),
-        ev('upgradePurchased', type, { to: p.id }),
+        ev('upgradePurchased', canonicalId, { to: p.id }),
         ev('playerUpgraded', { id: p.id, upgrades: p.upgrades, color: p.color }, { except: p.id }),
     );
     return events;

@@ -453,12 +453,33 @@ const botAlivenessStates = {};
 let myRaft = null; // { vis, body }
 let isDead = false;
 let myHealth = 100;
+let baseFov = 72;
+let cameraShakeMultiplier = 1.0;
 const raftSize = { w: 2, h: 0.5, d: 3 };
 const SWING_S = 0.36;
 const yAxis = new THREE.Vector3(0, 1, 0);
 const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffccaa });
 const motorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2f36, metalness: 0.4, roughness: 0.5 });
 const propMaterial = new THREE.MeshStandardMaterial({ color: 0xc9d2dc, metalness: 0.7, roughness: 0.3 });
+
+function getAllPlayersSnapshot() {
+    if (socket?.state?.players) return socket.state.players;
+    const map = {};
+    if (socket?.id) {
+        map[socket.id] = { id: socket.id, name: 'You', isBot: false, coins: myStats.coins, upgrades: myStats.upgrades, isDead };
+    }
+    Object.entries(otherPlayers).forEach(([id, vis], idx) => {
+        map[id] = {
+            id,
+            name: vis.playerName || `Bot ${idx + 1}`,
+            isBot: Boolean(vis.isBot),
+            coins: vis.coins ?? 50,
+            upgrades: vis.upgrades || [],
+            isDead: !vis.group?.visible,
+        };
+    });
+    return map;
+}
 
 // --- Unified AAA Fever-Dream Director (All 25 Wave 1 & Wave 2 Systems) ---
 const feverDirector = createAAAFeverDirector({
@@ -477,11 +498,67 @@ const feverDirector = createAAAFeverDirector({
     popAt,
     getMyRaft: () => myRaft,
     getOtherPlayers: () => otherPlayers,
+    getAllPlayers: getAllPlayersSnapshot,
     getEnemiesData: () => enemiesData,
     enemyMeshes,
     getMyStats: () => ({ ...myStats, health: myHealth, maxHealth: myMaxHealth }),
     getIsDead: () => isDead,
     riverWidth,
+    onFovChanged: (newFov) => {
+        if (Number.isFinite(newFov)) baseFov = Math.max(50, Math.min(110, newFov));
+    },
+    onCameraShakeChanged: (newShake) => {
+        if (Number.isFinite(newShake)) cameraShakeMultiplier = Math.max(0, Math.min(2, newShake));
+    },
+    onRunLaunch: (cfg = {}) => {
+        isDead = false;
+        gameWon = false;
+        const winEl = document.getElementById('win');
+        if (winEl) winEl.hidden = true;
+        hud.setStatus('');
+        inIntroSequence = true;
+        introTime = 0;
+
+        for (const cp of checkpoints) {
+            cp.active = true;
+        }
+        if (feverDirector?.krakenState) {
+            feverDirector.krakenState.isSpawned = false;
+            feverDirector.krakenState.isDefeated = false;
+            feverDirector.krakenState.health = feverDirector.krakenState.maxHealth || 1500;
+        }
+        if (feverDirector?.krakenMesh) {
+            feverDirector.krakenMesh.visible = false;
+        }
+
+        // Clear existing remote player meshes before reconfiguring loopback
+        for (const id of Object.keys(otherPlayers)) {
+            if (otherPlayers[id]?.group) {
+                scene.remove(otherPlayers[id].group);
+                disposeObject3DTree(otherPlayers[id].group);
+            }
+            delete otherPlayers[id];
+            delete botAlivenessStates[id];
+        }
+
+        const startCoins = cfg.mode === 'boss_rush' ? 125 : 50;
+        myStats.coins = startCoins;
+        myStats.upgrades = [];
+        myHealth = 100;
+        myMaxHealth = 100;
+        hud.setStats(myStats);
+        hud.setHealth(myHealth, myMaxHealth);
+
+        socket.reconfigure?.({
+            bots: cfg.botCount ?? 2,
+            seed: cfg.numericSeed ?? 1,
+            playerName: cfg.playerName || 'You',
+            classId: cfg.classId || 'helmsman',
+            hatId: cfg.hatId || 'captain_tricorn',
+            mode: cfg.mode || 'campaign',
+            startCoins,
+        });
+    },
     onGrantCoins: (delta) => {
         const d = Number(delta);
         if (!Number.isFinite(d)) return;
@@ -791,11 +868,18 @@ function reRenderMyRaft(p) {
         angularVelocity: { x: 0, y: 0, z: 0 },
         yaw: yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 }),
         quaternion: new THREE.Quaternion(p.quaternion?.x ?? 0, p.quaternion?.y ?? 0, p.quaternion?.z ?? 0, p.quaternion?.w ?? 1),
+        channelHalfWidth: playableHalfWidth,
     };
+    craft.channelHalfWidth = playableHalfWidth;
     vis.group.position.copy(craft.position);
     vis.group.quaternion.setFromAxisAngle(yAxis, craft.yaw);
     vis.group.visible = !isDead;
     myRaft = { vis, craft };
+    feverDirector?.applyCrewCosmetics?.(
+        feverDirector.getSelectedClass?.() || p.classId || 'helmsman',
+        feverDirector.getSelectedHat?.() || p.hatId || 'captain_tricorn',
+        myRaft
+    );
 }
 
 function setRemoteTarget(vis, p) {
@@ -803,22 +887,40 @@ function setRemoteTarget(vis, p) {
 }
 
 function createRemote(p) {
+    if (otherPlayers[p.id]?.group) {
+        scene.remove(otherPlayers[p.id].group);
+        disposeObject3DTree(otherPlayers[p.id].group);
+    }
     const vis = createRaftMesh(p.color, p.upgrades);
     vis.group.position.set(p.position.x, p.position.y, p.position.z);
     vis.anim.yaw = yawOfQuaternion(p.quaternion ?? { y: 0, w: 1 });
     vis.group.visible = !p.isDead;
     vis.isBot = Boolean(p.isBot || p.id?.startsWith('bot'));
+    vis.playerName = p.name;
+    vis.classId = p.classId || 'bruiser';
+    vis.hatId = p.hatId || 'viking_horns';
+    vis.upgrades = [...(p.upgrades || [])];
+    vis.coins = p.coins ?? 50;
     setRemoteTarget(vis, p);
     otherPlayers[p.id] = vis;
     if (vis.isBot) {
         botAlivenessStates[p.id] = createBotAlivenessState(p.id);
     }
+    feverDirector?.applyCrewCosmetics?.(vis.classId, vis.hatId, { vis });
     return vis;
 }
 
 let onSolid = false;
 
 socket.on('currentPlayers', (players) => {
+    for (const oldId of Object.keys(otherPlayers)) {
+        if (!players[oldId]) {
+            scene.remove(otherPlayers[oldId].group);
+            disposeObject3DTree(otherPlayers[oldId].group);
+            delete otherPlayers[oldId];
+            delete botAlivenessStates[oldId];
+        }
+    }
     let botSlot = 0;
     Object.keys(players).forEach((id) => {
         const p = players[id];
@@ -850,6 +952,7 @@ socket.on('currentPlayers', (players) => {
             angularVelocity: { x: 0, y: 0, z: 0 },
             yaw,
             quaternion: new THREE.Quaternion().setFromAxisAngle(yAxis, yaw),
+            channelHalfWidth: playableHalfWidth,
         };
         myRaft = { vis: null, craft };
         reRenderMyRaft({ ...p, position: startPos });
@@ -932,18 +1035,24 @@ socket.on('playerUpgraded', (d) => {
     vis.group.position.copy(old.group.position);
     vis.group.quaternion.copy(old.group.quaternion);
     vis.group.visible = old.group.visible;
+    vis.isBot = old.isBot;
+    vis.playerName = old.playerName;
+    vis.classId = old.classId || 'bruiser';
+    vis.hatId = old.hatId || 'viking_horns';
+    vis.upgrades = [...(d.upgrades || [])];
     Object.assign(vis.anim, old.anim);
     vis.target = old.target;
     scene.remove(old.group);
     disposeObject3DTree(old.group);
     otherPlayers[d.id] = vis;
+    feverDirector?.applyCrewCosmetics?.(vis.classId, vis.hatId, { vis });
 });
 
 socket.on('playerDied', (id) => {
     if (id === socket.id) {
         isDead = true;
-        hud.setStatus('DEAD — spectating', 'var(--bad)');
-        hud.toast('YOU SANK — reach a checkpoint, crew!');
+        hud.setStatus('DEAD — Press [R] to Retry or wait for checkpoint', 'var(--bad)');
+        hud.toast('YOU SANK — Press [R] for Instant Retry or wait for crew checkpoint!');
         sfx.down();
         if (myRaft) myRaft.vis.group.visible = false;
     } else if (otherPlayers[id]) {
@@ -1158,16 +1267,19 @@ function triggerAttack(preferredSide = null) {
         }
     }
     feverDirector.onPlayerAttack();
+    const clsPerks = feverDirector.getClassPerks?.() || {};
+    const swingArcMult = clsPerks.swingArcMultiplier || 1.0;
+    const kbPerkMult = clsPerks.meleeKnockbackMultiplier || 1.0;
     if (enemiesData) {
         for (const key in enemiesData) {
             const eMesh = enemyMeshes[key];
-            if (enemiesData[key].health > 0 && eMesh && myPos.distanceTo(eMesh.position) < PLAYER.attackRange + 1.4) {
+            if (enemiesData[key].health > 0 && eMesh && myPos.distanceTo(eMesh.position) < (PLAYER.attackRange + 1.4) * swingArcMult) {
                 socket.emit('playerHitEnemy', { enemyId: key });
                 // Helmet 05 (Physical Impact Juice): Push the enemy physically away on melee strike + flash mesh + camera punch
                 const dx = eMesh.position.x - myPos.x;
                 const dz = eMesh.position.z - myPos.z;
                 const dLen = Math.hypot(dx, dz) || 1;
-                const kbDist = performance.now() < (enemyTelegraphs[key]?.staggerUntil || 0) ? 3.2 : 2.1;
+                const kbDist = (performance.now() < (enemyTelegraphs[key]?.staggerUntil || 0) ? 3.2 : 2.1) * kbPerkMult;
                 eMesh.position.x += (dx / dLen) * kbDist;
                 eMesh.position.z += (dz / dLen) * kbDist;
                 enemiesData[key].position.x = eMesh.position.x;
@@ -1215,6 +1327,50 @@ window.addEventListener('keydown', (e) => {
         if (!isBlocking) feverDirector.onBlockPressed(performance.now());
         isBlocking = true;
     }
+    if (k === 'r' && (isDead || gameWon) && !feverDirector.armoryShop.isOpen() && !feverDirector.titleMenu?.isTitleVisible?.()) {
+        e.preventDefault();
+        const cfg = feverDirector.titleMenu?.getSettings?.() || {};
+        feverDirector.titleMenu?.closeSettingsDrawer?.();
+        socket.setPaused?.(false);
+        isDead = false;
+        gameWon = false;
+        const winEl = document.getElementById('win');
+        if (winEl) winEl.hidden = true;
+        hud.setStatus('');
+        for (const cp of checkpoints) cp.active = true;
+        if (feverDirector?.krakenState) {
+            feverDirector.krakenState.isSpawned = false;
+            feverDirector.krakenState.isDefeated = false;
+            feverDirector.krakenState.health = feverDirector.krakenState.maxHealth || 1500;
+        }
+        if (feverDirector?.krakenMesh) feverDirector.krakenMesh.visible = false;
+        for (const id of Object.keys(otherPlayers)) {
+            if (otherPlayers[id]?.group) {
+                scene.remove(otherPlayers[id].group);
+                disposeObject3DTree(otherPlayers[id].group);
+            }
+            delete otherPlayers[id];
+            delete botAlivenessStates[id];
+        }
+        const startCoins = cfg.mode === 'boss_rush' ? 125 : 50;
+        myStats.coins = startCoins;
+        myStats.upgrades = [];
+        myHealth = 100;
+        myMaxHealth = 100;
+        hud.setStats(myStats);
+        hud.setHealth(myHealth, myMaxHealth);
+        socket.reconfigure?.({
+            bots: cfg.botCount ?? 2,
+            seed: Date.now() >>> 0,
+            playerName: cfg.playerName || 'You',
+            classId: cfg.classId || 'helmsman',
+            hatId: cfg.hatId || 'captain_tricorn',
+            mode: cfg.mode || 'campaign',
+            startCoins,
+        });
+        hud.toast('🔄 INSTANT RUN RESET!', 1500);
+        return;
+    }
     if (k === 'e') {
         if (feverDirector.armoryShop.isOpen()) {
             feverDirector.armoryShop.close();
@@ -1222,8 +1378,10 @@ window.addEventListener('keydown', (e) => {
         } else if (myRaft?.craft) {
             try { document.exitPointerLock?.(); } catch (_err) { /* ignore */ }
             hud.setStats(myStats);
+            const allP = getAllPlayersSnapshot();
             feverDirector.armoryShop.updatePlayerData({ coins: myStats.coins, upgrades: myStats.upgrades, isDead });
-            feverDirector.armoryShop.open();
+            feverDirector.armoryShop.updateCrewPlayers(allP);
+            feverDirector.armoryShop.open({ coins: myStats.coins, upgrades: myStats.upgrades, isDead }, allP);
             shopOpen = true;
         }
     }
@@ -1297,22 +1455,28 @@ function fixedStep() {
 
     // Extra responsive steering + Rhythmic Dual-Oar Pull Physics (pre-motor) vs. Continuous Motor/Walk (post-motor / onSolid)
     if (live && !mageGrab.active) {
+        const clsDef = feverDirector.getCrewClassDef?.();
+        const turnPerkMult = clsDef?.perks?.turnResponsivenessMultiplier || 1.0;
+        const motorPerkMult = clsDef?.perks?.motorSpeedMultiplier || 1.0;
         if (keys.a || keys.d) {
             const steerSign = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
-            craft.yaw += steerSign * (onSolid ? 0.85 : 0.45) * FIXED_DT;
+            craft.yaw += steerSign * (onSolid ? 0.85 : 0.45 * turnPerkMult) * FIXED_DT;
         }
         if ((hasMotor || onSolid) && keys.w) {
             const f = headingOf(craft.yaw);
-            const thrustAccel = onSolid ? 4.4 : 4.2;
+            const thrustAccel = onSolid ? 4.4 : 4.2 * motorPerkMult;
             craft.velocity.x += f.x * thrustAccel * FIXED_DT;
             craft.velocity.z += f.z * thrustAccel * FIXED_DT;
         } else if (!hasMotor && !onSolid && craft.position.y <= WATER_SURFACE_Y + PHYSICS.surfaceSnap) {
             if (oarStroke.chokedTimer > 0) {
                 oarStroke.chokedTimer = Math.max(0, oarStroke.chokedTimer - FIXED_DT);
             }
+            const tarotMults = feverDirector.getTarotMultipliers?.() || {};
+            const oarThrustMult = tarotMults.oarThrustMultiplier || 1.0;
+            const oarCadenceMult = tarotMults.oarCadenceMultiplier || 1.0;
             let pullCurve = 0;
             if (oarStroke.active) {
-                oarStroke.elapsed += FIXED_DT;
+                oarStroke.elapsed += FIXED_DT * oarCadenceMult;
                 if (
                     oarStroke.chokedTimer <= 0 &&
                     oarStroke.elapsed >= oarStroke.pullStart &&
@@ -1357,7 +1521,7 @@ function fixedStep() {
             const driftL = driftVz * r.z;
             let vF = prevVx * f.x + prevVz * f.z;
             let vL = prevVx * r.x + prevVz * r.z;
-            const pullAccel = (isAttacking ? 12.5 : 22.0) * pullCurve;
+            const pullAccel = (isAttacking ? 12.5 : 22.0) * pullCurve * oarThrustMult;
             const backAccel = keys.s ? -5.8 : 0;
             const kWater = 1.35;
             const kKeel = 6.0;
@@ -1523,7 +1687,8 @@ function fixedStep() {
 
     // Sanctuary Platform & Harbor Haven passive hull repair (+3 HP/sec while resting on a platform or in the Harbor City)
     if (live && (onSolid || inCalmHarbor) && myHealth < myMaxHealth) {
-        sanctuaryHealAccum += FIXED_DT * 3.0;
+        const healMult = feverDirector.getClassPerks?.()?.reviveAuraMultiplier || 1.0;
+        sanctuaryHealAccum += FIXED_DT * 3.0 * healMult;
         if (sanctuaryHealAccum >= 1) {
             const healPts = Math.floor(sanctuaryHealAccum);
             sanctuaryHealAccum -= healPts;
@@ -1532,15 +1697,34 @@ function fixedStep() {
         }
     }
 
-    // Helmet 05 (Wingman Bots): Keep AI companions in clean wingman formation slightly behind/beside the player, matching the player's tempo
+    // Helmet 05 (Wingman Bots): Keep AI companions in clean wingman formation or tactical order formation ([Z]/[X]/[C]/[V])
     if (live) {
         const mates = Object.values(otherPlayers);
+        const activeOrderId = feverDirector.botOrderState?.activeOrder?.id || null;
         for (let i = 0; i < mates.length; i++) {
             const vis = mates[i];
             if (!vis?.target) continue;
-            const wingX = craft.position.x + (i % 2 === 0 ? -4.8 : 4.8);
-            const wingZ = craft.position.z - (onSolid || dockedAtHarborPier ? 2.5 : 4.2 + i * 2.5);
-            if (onSolid || dockedAtHarborPier || !keys.w || Math.abs(vis.target.z - craft.position.z) > 16) {
+            let wingX = craft.position.x + (i % 2 === 0 ? -4.8 : 4.8);
+            let wingZ = craft.position.z - (onSolid || dockedAtHarborPier ? 2.5 : 4.2 + i * 2.5);
+            if (activeOrderId === 'form-up') {
+                wingX = craft.position.x + (i % 2 === 0 ? -3.2 : 3.2);
+                wingZ = craft.position.z + 3.0;
+            } else if (activeOrderId === 'focus-fire') {
+                const liveEnemy = Object.values(enemiesData || {}).find((e) => e && e.health > 0);
+                if (liveEnemy) {
+                    wingX = liveEnemy.position.x + (i % 2 === 0 ? -2.2 : 2.2);
+                    wingZ = liveEnemy.position.z + 1.5;
+                } else {
+                    wingZ = craft.position.z - 8.5;
+                }
+            } else if (activeOrderId === 'scavenge') {
+                wingX = i % 2 === 0 ? -16.0 : 16.0;
+                wingZ = craft.position.z - 2.0;
+            } else if (activeOrderId === 'rush-checkpoint') {
+                wingX = craft.position.x + (i % 2 === 0 ? -4.5 : 4.5);
+                wingZ = craft.position.z - 11.0;
+            }
+            if (activeOrderId || onSolid || dockedAtHarborPier || !keys.w || Math.abs(vis.target.z - craft.position.z) > 16) {
                 vis.target.z = THREE.MathUtils.lerp(vis.target.z, wingZ, FIXED_DT * 3.8);
                 vis.target.x = THREE.MathUtils.lerp(vis.target.x, THREE.MathUtils.clamp(wingX, -playableHalfWidth + 6, playableHalfWidth - 6), FIXED_DT * 3.0);
             }
@@ -1672,7 +1856,7 @@ function updateLocalRaft(dt, now) {
             }
         }
     }
-    if (!gameWon && craft.position.z < finishLineZ) {
+    if (!gameWon && craft.position.z < finishLineZ && feverDirector.getActiveMode?.() !== 'endless') {
         gameWon = true;
         socket.emit('crossedFinishLine');
     }
@@ -1763,12 +1947,13 @@ function updateCamera(dt) {
     camera.lookAt(cam.look);
 
     const rowFovBoost = computeRowingCameraImpulse(oarStroke, speed).fovBoost || 0;
-    const fov = 72 + Math.min(12, speed * 0.5) + rowFovBoost;
+    const fov = baseFov + Math.min(12, speed * 0.5) + rowFovBoost;
     if (Math.abs(fov - camera.fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
 
     if (cameraShake > 0) {
-        camera.position.x += (Math.random() - 0.5) * cameraShake;
-        camera.position.y += (Math.random() - 0.5) * cameraShake;
+        const effShake = cameraShake * cameraShakeMultiplier;
+        camera.position.x += (Math.random() - 0.5) * effShake;
+        camera.position.y += (Math.random() - 0.5) * effShake;
         cameraShake = Math.max(0, cameraShake - dt * 2);
     }
 }
@@ -1820,9 +2005,13 @@ function animate() {
 
     animateAAAEnemies(enemyMeshes, enemiesData, t);
 
-    // Helmet 06: Update physical spring-damper steps for wooden docks and foliage trees
+    // Helmet 06: Update physical spring-damper steps & horizon distance culling for wooden docks and foliage trees
+    const curRaftZ = myRaft?.craft?.position?.z ?? 0;
     for (let i = 0; i < obstacles.length; i++) {
         const obs = obstacles[i];
+        const inHorizon = obs.z >= curRaftZ - 230 && obs.z <= curRaftZ + 75;
+        if (obs.mesh) obs.mesh.visible = inHorizon;
+        if (!inHorizon) continue;
         if (obs.type === 'plank') {
             stepPlankPhysics(obs.mesh, delta);
         } else if (obs.type === 'tree') {
@@ -1846,7 +2035,13 @@ function animate() {
 
     if (myRaft?.vis && !feverDirector.photoAndAwards.isActive()) updateCamera(delta);
     updateHud(now);
-    renderer.render(scene, camera);
+    const splitMgr = feverDirector.getSplitScreenManager?.();
+    if (feverDirector.getActiveMode?.() === 'splitscreen' && splitMgr) {
+        splitMgr.render();
+    } else {
+        renderer.setScissorTest?.(false);
+        renderer.render(scene, camera);
+    }
 }
 
 window.addEventListener('resize', () => {

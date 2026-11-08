@@ -20,6 +20,7 @@ export function createSfx(options = {}) {
     let ctx = options.audioContext || null;
     let muted = Boolean(options.muted);
     let sfxVolume = Number.isFinite(options.volume) ? options.volume : 1.0;
+    let squeakyVolume = Number.isFinite(options.squeakyVolume) ? options.squeakyVolume : 1.25;
 
     // Cache pre-generated 1-second white noise buffer for crisp procedural cracks, splinters & turbulence
     let noiseBuffer = null;
@@ -120,9 +121,17 @@ export function createSfx(options = {}) {
     return {
         getAudioContext: () => ctx,
         isMuted: () => muted,
+        setMuted(val) {
+            muted = Boolean(val);
+            return muted;
+        },
         getVolume: () => sfxVolume,
         setVolume(vol) {
             if (Number.isFinite(vol)) sfxVolume = Math.max(0, Math.min(2, vol));
+        },
+        getSqueakyVolume: () => squeakyVolume,
+        setSqueakyVolume(vol) {
+            if (Number.isFinite(vol)) squeakyVolume = Math.max(0, Math.min(2, vol));
         },
         unlock() {
             if (typeof AudioContext !== 'undefined') {
@@ -280,8 +289,9 @@ export function createSfx(options = {}) {
 
         hit(squeaky, volume = 1) {
             if (squeaky) {
-                tone({ from: 420, to: 580, dur: 0.08, type: 'sine', gain: 0.09 * volume, lpFreq: 850 });
-                tone({ from: 580, to: 380, dur: 0.07, type: 'sine', gain: 0.07 * volume, delay: 0.06, lpFreq: 750 });
+                const sqVol = volume * squeakyVolume;
+                tone({ from: 420, to: 580, dur: 0.08, type: 'sine', gain: 0.09 * sqVol, lpFreq: 850 });
+                tone({ from: 580, to: 380, dur: 0.07, type: 'sine', gain: 0.07 * sqVol, delay: 0.06, lpFreq: 750 });
             } else {
                 tone({ from: 190, to: 68, dur: 0.11, type: 'triangle', gain: 0.18 * volume, lpFreq: 520 });
             }

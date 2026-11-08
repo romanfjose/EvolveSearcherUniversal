@@ -14,9 +14,17 @@ export function createNetSocket({ timeoutMs = 2500 } = {}) {
     const facade = {
         mode: 'connecting', bots, seed,
         get id() { return impl?.id; },
+        get state() { return impl?.state; },
         on(event, cb) { listeners.push([event, cb]); impl?.on(event, cb); return facade; },
         emit(event, data) { impl?.emit(event, data); return facade; },
         onMode(cb) { modeListeners.push(cb); cb(facade.mode); return facade; },
+        setPaused(paused) { impl?.setPaused?.(paused); return facade; },
+        reconfigure(opts = {}) {
+            if (opts.bots !== undefined) facade.bots = opts.bots;
+            if (opts.seed !== undefined) facade.seed = opts.seed;
+            impl?.reconfigure?.(opts);
+            return facade;
+        },
     };
     const setMode = (mode) => { facade.mode = mode; for (const cb of modeListeners) cb(mode); };
 

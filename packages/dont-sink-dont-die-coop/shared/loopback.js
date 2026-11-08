@@ -13,9 +13,11 @@ export function createLoopbackSocket({
     timers = globalThis,
 } = {}) {
     const id = LOCAL_PLAYER_ID;
-    const state = createGameState({ seed });
+    let state = createGameState({ seed });
     const handlers = new Map();
     let interval = null;
+    let paused = false;
+    let currentBots = bots;
 
     const deliver = (events) => {
         for (const e of events) {
@@ -28,7 +30,15 @@ export function createLoopbackSocket({
     };
 
     const socket = {
-        id, state, offline: true, connected: false,
+        id,
+        get state() { return state; },
+        offline: true,
+        connected: false,
+        get paused() { return paused; },
+        setPaused(val) {
+            paused = Boolean(val);
+            return socket;
+        },
         on(event, cb) {
             if (!handlers.has(event)) handlers.set(event, []);
             handlers.get(event).push(cb);
@@ -47,13 +57,74 @@ export function createLoopbackSocket({
             for (let i = 0; i < ticks; i++) deliver(tick(state, tickMs));
             return socket;
         },
+        reconfigure({
+            bots: newBots = currentBots,
+            seed: newSeed = seed,
+            playerName = 'You',
+            classId = 'helmsman',
+            hatId = 'captain_tricorn',
+            mode = 'campaign',
+            startCoins = null,
+        } = {}) {
+            currentBots = Math.min(3, Math.max(0, Number.isFinite(Number(newBots)) ? Math.round(Number(newBots)) : currentBots));
+            const cleanSeed = typeof newSeed === 'number' && Number.isFinite(newSeed) ? (newSeed >>> 0) : 1;
+            const oldIds = Object.keys(state.players).filter((pid) => pid !== id);
+            state = createGameState({ seed: cleanSeed });
+            state.mode = mode;
+            addPlayer(state, id, { name: playerName || 'You' });
+            if (state.players[id]) {
+                state.players[id].classId = classId;
+                state.players[id].hatId = hatId;
+                if (Number.isFinite(startCoins)) {
+                    state.players[id].coins = startCoins;
+                }
+            }
+            const botClasses = ['bruiser', 'tinkerer', 'mystic'];
+            const botHats = ['viking_horns', 'traffic_cone', 'wizard_beard'];
+            for (let i = 0; i < currentBots; i++) {
+                const bid = `bot-${i + 1}`;
+                addPlayer(state, bid, { isBot: true });
+                if (state.players[bid]) {
+                    state.players[bid].classId = botClasses[i % botClasses.length];
+                    state.players[bid].hatId = botHats[i % botHats.length];
+                }
+            }
+            // Remove any stale bots from previous configuration
+            for (const oldId of oldIds) {
+                if (!state.players[oldId]) {
+                    deliver([{ event: 'playerDisconnected', data: oldId }]);
+                }
+            }
+            if ( mode === 'boss_rush' ) {
+                state.gameStarted = true;
+            }
+            deliver([
+                { event: 'currentPlayers', data: state.players, to: id },
+                { event: 'enemiesUpdate', data: state.enemies },
+                { event: 'npcsUpdate', data: state.npcs },
+                { event: 'playerStatsUpdate', data: state.players[id], to: id },
+                { event: 'playerHealthUpdate', data: { id, health: state.players[id].health, maxHealth: state.players[id].maxHealth } },
+                { event: 'waveChanged', data: { wave: state.wave, maxWave: 10 } },
+            ]);
+            return socket;
+        },
         connect() {
             if (socket.connected) return socket;
             socket.connected = true;
             deliver(addPlayer(state, id, { name: 'You' }));
-            for (let i = 0; i < bots; i++) deliver(addPlayer(state, `bot-${i + 1}`, { isBot: true }));
+            const botClasses = ['bruiser', 'tinkerer', 'mystic'];
+            const botHats = ['viking_horns', 'traffic_cone', 'wizard_beard'];
+            for (let i = 0; i < currentBots; i++) {
+                const bid = `bot-${i + 1}`;
+                const evs = addPlayer(state, bid, { isBot: true });
+                if (state.players[bid]) {
+                    state.players[bid].classId = botClasses[i % botClasses.length];
+                    state.players[bid].hatId = botHats[i % botHats.length];
+                }
+                deliver(evs);
+            }
             deliver([{ event: 'connect', data: null }]);
-            if (realtime) interval = timers.setInterval(() => socket.step(), tickMs);
+            if (realtime) interval = timers.setInterval(() => { if (!paused) socket.step(); }, tickMs);
             return socket;
         },
         disconnect() {

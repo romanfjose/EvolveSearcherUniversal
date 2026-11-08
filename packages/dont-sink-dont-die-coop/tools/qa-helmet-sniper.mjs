@@ -311,20 +311,38 @@ async function runQaHelmet() {
             const rp = raft?.vis?.rightPaddle;
             const hasDualOars = Boolean(lp && rp && lp !== rp && lp.position.x < -0.5 && rp.position.x > 0.5);
 
-            // Test Left Oar Attack vs Right Oar Attack
+            // Test Left Oar Attack vs Right Oar Attack (wait for actual animation frame inside swing arc)
             qa.triggerAttack('left');
             const leftSwingSide = raft.vis.anim.swingSide;
-            await new Promise((r) => setTimeout(r, 120));
-            const leftOarLifted = lp.position.y > raft.vis.leftPaddleHome.y + 0.15;
-            const rightOarStayed = Math.abs(rp.position.y - raft.vis.rightPaddleHome.y) < 0.35;
+            let leftOarLifted = false;
+            let rightOarStayed = true;
+            const tL = performance.now();
+            while (raft.vis.anim.swing > 0 && performance.now() - tL < 600) {
+                await new Promise((r) => requestAnimationFrame(r));
+                if (lp.position.y > raft.vis.leftPaddleHome.y + 0.12) {
+                    leftOarLifted = true;
+                    rightOarStayed = Math.abs(rp.position.y - raft.vis.rightPaddleHome.y) < 0.35;
+                    break;
+                }
+            }
 
-            await new Promise((r) => setTimeout(r, 300));
+            while (raft.vis.anim.swing > 0 && performance.now() - tL < 900) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
             qa.triggerAttack('right');
             const rightSwingSide = raft.vis.anim.swingSide;
-            await new Promise((r) => setTimeout(r, 120));
-            const rightOarLifted = rp.position.y > raft.vis.rightPaddleHome.y + 0.15;
-
-            await new Promise((r) => setTimeout(r, 300));
+            let rightOarLifted = false;
+            const tR = performance.now();
+            while (raft.vis.anim.swing > 0 && performance.now() - tR < 600) {
+                await new Promise((r) => requestAnimationFrame(r));
+                if (rp.position.y > raft.vis.rightPaddleHome.y + 0.12) {
+                    rightOarLifted = true;
+                    break;
+                }
+            }
+            while (raft.vis.anim.swing > 0 && performance.now() - tR < 900) {
+                await new Promise((r) => requestAnimationFrame(r));
+            }
             // Test Timed [W] Oar Pull vs Fast-Press Cancel (Choke)
             raft.craft.position.set(0, 0.25, -18);
             raft.craft.velocity.set(0, 0, -1.0);
@@ -376,11 +394,18 @@ async function runQaHelmet() {
         const shopCheck = await page.evaluate(() => {
             const qa = window.__GAME_QA__;
             const st = qa?.getMyStats?.() || {};
+            const myRaft = qa?.getMyRaft?.();
             const armoryCoinText = document.getElementById('armory-coin-val')?.textContent?.trim() || '';
+            const hasSchematicSvg = Boolean(document.querySelector('#armory-3d-box svg'));
+            const botQueueText = document.getElementById('armory-bot-list')?.textContent?.trim() || '';
+            const cosmeticsAfterBuy = myRaft?.vis?.cosmeticNodes?.length || 0;
             return {
                 coinsAfterBuy: st.coins,
                 upgradesAfterBuy: st.upgrades || [],
                 armoryCoinText,
+                hasSchematicSvg,
+                botQueueText,
+                cosmeticsAfterBuy,
                 pointerLocked: document.pointerLockElement !== null,
             };
         });
@@ -620,8 +645,8 @@ async function runQaHelmet() {
             if (!audit.lowOverShoulderCamera || !audit.playerCenteredLock) {
                 failures.push(`Helmet 01 Camera check failed (altitude=${audit.cameraAltitude}m, lateralOffset=${audit.cameraLateralOffset}m)`);
             }
-            if (!shopCheck.upgradesAfterBuy.includes('motor')) {
-                failures.push(`Shop hotkey [1] failed to purchase motor: ${JSON.stringify(shopCheck)}`);
+            if (!shopCheck.upgradesAfterBuy.includes('motor') || !shopCheck.hasSchematicSvg || shopCheck.cosmeticsAfterBuy === 0) {
+                failures.push(`Shop hotkey [1] / SVG schematic / Post-upgrade cosmetics check failed: ${JSON.stringify(shopCheck)}`);
             }
             if (!whirlpoolAfter.spunAndPulled) {
                 failures.push(`Whirlpool failed to spin/pull raft: ${JSON.stringify(whirlpoolAfter)}`);

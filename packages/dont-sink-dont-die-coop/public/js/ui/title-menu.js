@@ -383,10 +383,23 @@ export function createTitleMenuDirector({
         if (typeof window !== 'undefined') {
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
+                    if (typeof document !== 'undefined') {
+                        const armoryEl = document.getElementById('armory-overlay');
+                        if (armoryEl && armoryEl.classList.contains('open')) return;
+                        if (armoryEl?.dataset?.justClosedAt && Date.now() - Number(armoryEl.dataset.justClosedAt) < 120) return;
+                        const photoEl = document.getElementById('photo-mode-overlay');
+                        if (photoEl && photoEl.style.display && photoEl.style.display !== 'none') return;
+                    }
                     toggleSettingsDrawer();
                     e.preventDefault();
                 }
             });
+            try {
+                const params = new URLSearchParams(window.location?.search || '');
+                if (params.get('autostart') === '1') {
+                    setTimeout(() => startGame(), 0);
+                }
+            } catch { /* ignore */ }
         }
     }
 
